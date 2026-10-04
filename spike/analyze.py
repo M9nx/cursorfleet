@@ -150,6 +150,8 @@ PARENT_ONLY_KEYS = frozenset({"parent_conversation_id"})
 # Deterministic-link candidate: observed on inner tool hooks; not EXACT and not
 # parent-only until row 8 concurrent repetitions verify the relationship.
 LINK_CANDIDATE_KEYS = frozenset({"parent_tool_call_id"})
+# session_id correlates a session, not an agent instance. Never a Q1 identity bucket.
+SESSION_LEVEL_KEYS = frozenset({"session_id"})
 HINT_NOTE = "hint only; requires manual classification per docs/empirical-test-plan.md row 8"
 PAIR_SUBAGENT_ID = "subagent_id"
 PAIR_TYPE_ORDER = "type_order"
@@ -167,6 +169,100 @@ def _dict(x):
 def _sid(v):
     """A usable id string, else None (missing, null, '<invalid>', or any odd type)."""
     return v if isinstance(v, str) and v and v != "<invalid>" else None
+
+
+def empty_link():
+    """Evidence for one id relationship. Missing values are unavailable, not 0 matches."""
+    return {
+        "observed": 0,
+        "comparable": 0,
+        "matches": 0,
+        "mismatches": 0,
+        "unavailable": 0,
+        "collisions": 0,
+    }
+
+
+def pairwise_link(pairs):
+    """Same-record left ↔ right. A missing side is unavailable, never a 0-match refutation."""
+    ev = empty_link()
+    items = list(pairs)
+    ev["observed"] = len(items)
+    match_values = Counter()
+    for left, right in items:
+        if left is None or right is None:
+            ev["unavailable"] += 1
+            continue
+        ev["comparable"] += 1
+        if left == right:
+            ev["matches"] += 1
+            match_values[left] += 1
+        else:
+            ev["mismatches"] += 1
+    colliding = {v for v, n in match_values.items() if n > 1}
+    if colliding:
+        ev["collisions"] = sum(match_values[v] for v in colliding)
+        ev["matches"] -= ev["collisions"]
+    return ev
+
+
+def membership_link(left_values, right_values):
+    """Each left id against the multiset of right ids.
+
+    Missing left, or no usable right ids at all, is unavailable. A left that
+    equals exactly one right is a match; equals none is a mismatch; equals
+    two or more is a collision. Never treat unavailable as 0 matches.
+    """
+    ev = empty_link()
+    lefts = list(left_values)
+    rights = [v for v in right_values if v is not None]
+    ev["observed"] = len(lefts)
+    counts = Counter(rights)
+    no_rights = not counts
+    for left in lefts:
+        if left is None or no_rights:
+            ev["unavailable"] += 1
+            continue
+        ev["comparable"] += 1
+        n = counts[left]
+        if n == 1:
+            ev["matches"] += 1
+        elif n == 0:
+            ev["mismatches"] += 1
+        else:
+            ev["collisions"] += 1
+    return ev
+
+
+def session_correlation(recs):
+    """session_id is session-level correlation, not Q1 agent identity."""
+    sessions = [r for r in recs if r.get("hook_event_name") == "sessionStart"]
+    tools = [r for r in recs if r.get("hook_event_name") in TOOL_EVENTS]
+    start_sids = [_sid(_dict(r.get("ids")).get("session_id")) for r in sessions]
+    return {
+        "note": (
+            "session_id is session-level correlation, not agent identity "
+            "(not direct, role-only, parent-only, or unclassified)."
+        ),
+        "sessionStart_session_id_vs_conversation_id": pairwise_link(
+            (
+                _sid(_dict(r.get("ids")).get("session_id")),
+                _sid(_dict(r.get("ids")).get("conversation_id")),
+            )
+            for r in sessions
+        ),
+        "tool_session_id_vs_sessionStart_session_id": membership_link(
+            [_sid(_dict(r.get("ids")).get("session_id")) for r in tools],
+            start_sids,
+        ),
+        "tool_session_id_vs_tool_conversation_id": pairwise_link(
+            (
+                _sid(_dict(r.get("ids")).get("session_id")),
+                _sid(_dict(r.get("ids")).get("conversation_id")),
+            )
+            for r in tools
+        ),
+    }
 
 
 def _when(r):
@@ -188,6 +284,8 @@ def classify_key(name, event):
     if not isinstance(name, str) or name.startswith("<"):
         return None
     low = name.lower()
+    if low in SESSION_LEVEL_KEYS:
+        return None
     if low in LINK_CANDIDATE_KEYS:
         return "unclassified_identity_candidates"
     if low in PARENT_ONLY_KEYS or (low != "parent_tool_call_id" and "parent" in low):
@@ -328,7 +426,6 @@ def identity_analysis(recs):
     tools = [r for r in recs if r.get("hook_event_name") in TOOL_EVENTS]
     parents = {_sid(_dict(r.get("ids")).get("parent_conversation_id")) for r in starts} - {None}
     sub_ids = {_sid(_dict(r.get("ids")).get("subagent_id")) for r in starts} - {None}
-    call_ids = {_sid(_dict(r.get("ids")).get("tool_call_id")) for r in starts} - {None}
     child_cids = {_sid(_dict(r.get("ids")).get("child_conversation_id")) for r in stops} - {None}
     res = {"subagent_starts": len(starts), "subagent_stops": len(stops), "tool_events": len(tools)}
 
@@ -426,29 +523,46 @@ def identity_analysis(recs):
     if parent_cid_in_win:
         buckets["parent_only_identity"]["conversation_id==parent_conversation_id"] += parent_cid_in_win
 
-    # (d) relationship counters (equalities). None of these is an EXACT verdict.
-    task_ids = {_sid(_dict(r.get("ids")).get("tool_use_id")) for r in tools if _is_task(r)} - {None}
-    res["task_tool_use_ids_matching_subagentStart_tool_call_id"] = len(task_ids & call_ids)
-    res["task_tool_events"] = sum(1 for r in tools if _is_task(r))
-    res["task_tool_use_id_eq_subagentStart_tool_call_id"] = sum(
-        1 for r in tools
-        if _is_task(r) and _sid(_dict(r.get("ids")).get("tool_use_id")) in call_ids
-    )
+    # (d) linkage evidence. Missing values are unavailable, never a 0-match refutation.
+    # None of these relationships is an EXACT verdict.
+    task_recs = [r for r in tools if _is_task(r)]
     inner = [r for r in tools if not _is_task(r)]
-    res["inner_tool_parent_tool_call_id_eq_subagentStart_tool_call_id"] = sum(
-        1 for r in inner
-        if _sid(_dict(r.get("ids")).get("parent_tool_call_id")) in call_ids
+    res["task_tool_events"] = len(task_recs)
+    start_sids = [_sid(_dict(r.get("ids")).get("subagent_id")) for r in starts]
+    start_calls = [_sid(_dict(r.get("ids")).get("tool_call_id")) for r in starts]
+    stop_sids = [_sid(_dict(r.get("ids")).get("subagent_id")) for r in stops]
+    stop_childs = [_sid(_dict(r.get("ids")).get("child_conversation_id")) for r in stops]
+    res["linkage"] = {
+        "task_tool_use_id_vs_subagentStart_tool_call_id": membership_link(
+            [_sid(_dict(r.get("ids")).get("tool_use_id")) for r in task_recs],
+            start_calls,
+        ),
+        "subagentStart_subagent_id_vs_subagentStart_tool_call_id": pairwise_link(
+            zip(start_sids, start_calls)
+        ),
+        "innerTool_parent_tool_call_id_vs_subagentStart_tool_call_id": membership_link(
+            [_sid(_dict(r.get("ids")).get("parent_tool_call_id")) for r in inner],
+            start_calls,
+        ),
+        "subagentStop_subagent_id_vs_subagentStart_subagent_id": membership_link(
+            stop_sids, start_sids
+        ),
+        "subagentStop_subagent_id_vs_subagentStart_tool_call_id": membership_link(
+            stop_sids, start_calls
+        ),
+        "innerTool_conversation_id_vs_subagentStop_child_conversation_id": membership_link(
+            [_sid(_dict(r.get("ids")).get("conversation_id")) for r in inner],
+            stop_childs,
+        ),
+    }
+    res["linkage_note"] = (
+        "Missing values are unavailable, never a 0-match refutation. "
+        "subagentStop.subagent_id and child_conversation_id are optional, "
+        "empirically observed for Cursor 3.22.7, never required. "
+        "Old captures that lack parent_tool_call_id or child_conversation_id "
+        "make those relationships unavailable."
     )
-    res["subagentStop_subagent_id_eq_subagentStart_subagent_id"] = sum(
-        1 for r in stops if _sid(_dict(r.get("ids")).get("subagent_id")) in sub_ids
-    )
-    res["subagentStop_subagent_id_eq_subagentStart_tool_call_id"] = sum(
-        1 for r in stops if _sid(_dict(r.get("ids")).get("subagent_id")) in call_ids
-    )
-    res["inner_tool_conversation_id_eq_subagentStop_child_conversation_id"] = sum(
-        1 for r in inner
-        if _sid(_dict(r.get("ids")).get("conversation_id")) in child_cids
-    )
+    res["session_correlation"] = session_correlation(recs)
 
     for b in BUCKETS:
         res[b] = dict(buckets[b])
@@ -635,9 +749,30 @@ def render(a):
     w("  parent_tool_call_id is an unclassified deterministic-link candidate, not EXACT")
     w("  and not parent-only until row 8 repetitions verify it. Classify by hand per")
     w("  docs/empirical-test-plan.md row 8; the verdict below is not a result.")
+    w("  session_id is session-level correlation and is not an agent-identity candidate.")
+    skip = BUCKETS + (
+        "verdict", "verdict_code", "linkage", "linkage_note", "session_correlation",
+    )
     for k, v in ai.items():
-        if k not in BUCKETS and k not in ("verdict", "verdict_code"):
+        if k not in skip:
             w("  %s: %s" % (k, v))
+    w("  linkage (missing = unavailable, never a 0-match refutation):")
+    for name, ev in (ai.get("linkage") or {}).items():
+        w("    %s: observed=%d comparable=%d matches=%d mismatches=%d unavailable=%d collisions=%d"
+          % (name, ev["observed"], ev["comparable"], ev["matches"], ev["mismatches"],
+             ev["unavailable"], ev["collisions"]))
+    if ai.get("linkage_note"):
+        w("    note: %s" % ai["linkage_note"])
+    sc = ai.get("session_correlation") or {}
+    w("  session_correlation (not Q1 identity):")
+    if sc.get("note"):
+        w("    note: %s" % sc["note"])
+    for name, ev in sc.items():
+        if name == "note" or not isinstance(ev, dict):
+            continue
+        w("    %s: observed=%d comparable=%d matches=%d mismatches=%d unavailable=%d collisions=%d"
+          % (name, ev["observed"], ev["comparable"], ev["matches"], ev["mismatches"],
+             ev["unavailable"], ev["collisions"]))
     for b in BUCKETS:
         w("  %s: %s" % (b, ai[b] or "(none)"))
     w("  VERDICT: %s" % ai["verdict"])
