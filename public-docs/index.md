@@ -21,4 +21,47 @@
 </div>
 </div>
 </section>
+
+<section class="cf-home-section cf-home-capabilities" aria-labelledby="cf-home-cap-title">
+<div class="cf-home-container">
+<h2 id="cf-home-cap-title" class="cf-home-section__title">What CursorFleet provides</h2>
+<ul class="cf-home-capabilities__grid">
+<li class="cf-home-card">
+<span class="cf-home-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="3"/><path d="M3 12h3m12 0h3M12 3v3m0 12v3"/></svg></span>
+<h3 class="cf-home-card__title">Observe</h3>
+<p class="cf-home-card__body">See agent activity and workflow state from one local interface.</p>
+</li>
+<li class="cf-home-card">
+<span class="cf-home-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 12h6l2-4 4 8 2-4h2"/></svg></span>
+<h3 class="cf-home-card__title">Follow</h3>
+<p class="cf-home-card__body">Understand parallel tasks, handoffs, and progress without jumping between sessions.</p>
+</li>
+<li class="cf-home-card">
+<span class="cf-home-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h10M7 13h6"/></svg></span>
+<h3 class="cf-home-card__title">Stay local</h3>
+<p class="cf-home-card__body">CursorFleet observes local workflows and does not need to become the agent orchestrator.</p>
+</li>
+</ul>
+</div>
+</section>
+
+<section class="cf-home-section cf-home-preview" aria-labelledby="cf-home-preview-title">
+<div class="cf-home-container cf-home-preview__layout">
+<div class="cf-home-preview__copy">
+<h2 id="cf-home-preview-title" class="cf-home-section__title">One terminal. Your whole agent team.</h2>
+<p class="cf-home-preview__desc">The Textual dashboard reads local hook telemetry and read-only git context. It is observe-only, provisional, and under active validation against live Cursor.</p>
+<p class="cf-home-preview__hint"><a href="tui/overview/">TUI overview</a> · <a href="tui/current-status/">Current status</a></p>
+</div>
+<div class="cf-home-terminal" role="img" aria-label="Illustrative terminal layout based on documented TUI lanes; not a live screenshot.">
+<div class="cf-home-terminal__bar">cursorfleet tui · observe-only · lanes</div>
+<pre class="cf-home-terminal__body"><code>OVERVIEW
+────────────────────────────────────────
+WORKING     cf-writer    hooks + spool
+PLANNING    cf-reviewer  read-only git
+UNKNOWN     (no telemetry yet)
+
+<span class="cf-home-terminal__dim">j/k move · Enter detail · q quit</span></code></pre>
+</div>
+</div>
+</section>
 </div>
