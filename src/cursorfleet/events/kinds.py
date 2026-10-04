@@ -26,7 +26,8 @@ class EventKind(StrEnum):
     TOOL_COMPLETED = "tool.completed"
     TOOL_FAILED = "tool.failed"
     FILE_CHANGED = "file.changed"
-    TEST_COMPLETED = "test.completed"
+    TEST_COMPLETED = "test.completed"  # legacy spool lines; prefer VERIFICATION_OBSERVED
+    VERIFICATION_OBSERVED = "verification.observed"
     SUBAGENT_STARTED = "subagent.started"
     SUBAGENT_STOPPED = "subagent.stopped"
     CONTEXT_COMPACTED = "context.compacted"
@@ -118,3 +119,14 @@ SELF_REPORT_ONLY_KINDS: frozenset[EventKind] = frozenset(
 
 # Kinds an agent may declare. Tool, file and subagent facts cannot be self-reported.
 SELF_REPORTABLE_KINDS: frozenset[EventKind] = SELF_REPORT_ONLY_KINDS | {EventKind.STATUS_CHANGED}
+
+VERIFICATION_KINDS: frozenset[EventKind] = frozenset(
+    {EventKind.TEST_COMPLETED, EventKind.VERIFICATION_OBSERVED}
+)
+
+
+def normalize_event_kind(kind: EventKind) -> EventKind:
+    """Map legacy verification kinds to the canonical enum member."""
+    if kind is EventKind.TEST_COMPLETED:
+        return EventKind.VERIFICATION_OBSERVED
+    return kind

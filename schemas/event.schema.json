@@ -35,6 +35,7 @@
         "tool.failed",
         "file.changed",
         "test.completed",
+        "verification.observed",
         "subagent.started",
         "subagent.stopped",
         "context.compacted",

@@ -50,7 +50,7 @@ PROBLEM_TEXT: dict[str, str] = {
     "artifact.frontmatter": "frontmatter is missing or not in the strict subset",
     "artifact.missing_key": "a required frontmatter key is missing",
     "artifact.unknown_key": "frontmatter has a key outside the schema",
-    "artifact.schema": "schema is not cursorfleet.artifact/1",
+    "artifact.schema": "schema is not a supported cursorfleet.artifact version",
     "artifact.kind": "kind is not plan/handoff/blocker/context",
     "artifact.location": "artifact must live in <work dir>/<task>/<file>.md",
     "artifact.task": "task is not a slug equal to the directory name",

@@ -16,12 +16,19 @@ from cursorfleet.events.ids import SAFE_ID_PATTERN
 from cursorfleet.events.pathcheck import check_relative_posix
 from cursorfleet.workflow.frontmatter import Document, FrontmatterError, parse_frontmatter
 
-ARTIFACT_SCHEMA = "cursorfleet.artifact/1"
+ARTIFACT_SCHEMA_LEGACY = "cursorfleet.artifact/1"
+ARTIFACT_SCHEMA = "cursorfleet.artifact/0.1"
+ARTIFACT_SCHEMAS: frozenset[str] = frozenset({ARTIFACT_SCHEMA, ARTIFACT_SCHEMA_LEGACY})
 ARTIFACT_KINDS: frozenset[str] = frozenset(
     {"plan.created", "handoff.created", "blocker.raised", "context.loaded"}
 )
-REQUIRED_KEYS: frozenset[str] = frozenset({"schema", "kind", "task", "author_role", "created"})
-OPTIONAL_KEYS: frozenset[str] = frozenset({"to_role", "issue_ref", "context_refs"})
+REQUIRED_KEYS_LEGACY: frozenset[str] = frozenset(
+    {"schema", "kind", "task", "author_role", "created"}
+)
+REQUIRED_KEYS: frozenset[str] = frozenset(
+    {"schema", "kind", "task", "artifact_id", "revision", "author_role", "created"}
+)
+OPTIONAL_KEYS: frozenset[str] = frozenset({"to_role", "issue_ref", "context_refs", "digest"})
 MAX_ARTIFACT_BYTES = 64 * 1024
 MAX_CONTEXT_REFS = 50
 MAX_ISSUE_REF_CHARS = 128
@@ -58,16 +65,21 @@ def validate_artifact_text(text: str, rel_path: str) -> list[ArtifactProblem]:  
     except FrontmatterError as exc:
         return [ArtifactProblem("artifact.frontmatter", str(exc))]
     meta = doc.meta
+    schema = meta.get("schema") if isinstance(meta.get("schema"), str) else None
+    required = REQUIRED_KEYS if schema == ARTIFACT_SCHEMA else REQUIRED_KEYS_LEGACY
+    allowed_keys = required | OPTIONAL_KEYS
 
-    missing = sorted(REQUIRED_KEYS - meta.keys())
+    missing = sorted(required - meta.keys())
     if missing:
         problems.append(ArtifactProblem("artifact.missing_key", f"missing: {', '.join(missing)}"))
-    unknown = sorted(meta.keys() - REQUIRED_KEYS - OPTIONAL_KEYS)
+    unknown = sorted(meta.keys() - allowed_keys)
     if unknown:
         problems.append(ArtifactProblem("artifact.unknown_key", f"unknown: {', '.join(unknown)}"))
 
-    if "schema" in meta and meta["schema"] != ARTIFACT_SCHEMA:
-        problems.append(ArtifactProblem("artifact.schema", f"schema must be {ARTIFACT_SCHEMA}"))
+    if schema is not None and schema not in ARTIFACT_SCHEMAS:
+        problems.append(
+            ArtifactProblem("artifact.schema", f"schema must be one of {sorted(ARTIFACT_SCHEMAS)}")
+        )
     if "kind" in meta and meta["kind"] not in ARTIFACT_KINDS:
         allowed = ", ".join(sorted(ARTIFACT_KINDS))
         problems.append(ArtifactProblem("artifact.kind", f"kind must be one of: {allowed}"))

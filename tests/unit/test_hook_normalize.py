@@ -78,15 +78,15 @@ def test_hook_to_kind_mapping() -> None:
         assert got == kinds, hook
 
 
-def test_shell_post_tool_use_derives_test_completed_with_exit_code() -> None:
+def test_shell_post_tool_use_derives_verification_observed_with_exit_code() -> None:
     payload = doc_payload("postToolUse")
     payload["tool_input"] = {"command": "uv run pytest -q"}
     payload["tool_output"] = json.dumps({"exitCode": 1, "stdout": "FAILED secret-output"})
     events = validated("postToolUse", payload)
     kinds = [e.kind for e in events]
     assert kinds[0] == EventKind.TOOL_COMPLETED
-    assert EventKind.TEST_COMPLETED in kinds
-    derived = next(e for e in events if e.kind == EventKind.TEST_COMPLETED)
+    assert EventKind.VERIFICATION_OBSERVED in kinds
+    derived = next(e for e in events if e.kind == EventKind.VERIFICATION_OBSERVED)
     assert derived.source.value == "derived"
     assert events[0].command is not None and events[0].command.exit_code == 1
     assert "secret-output" not in json.dumps([e.model_dump(mode="json") for e in events])
@@ -96,7 +96,7 @@ def test_non_verify_shell_does_not_derive_a_test_event() -> None:
     payload = doc_payload("postToolUse")
     payload["tool_input"] = {"command": "ls -la"}
     kinds = [e.kind for e in validated("postToolUse", payload)]
-    assert EventKind.TEST_COMPLETED not in kinds
+    assert EventKind.VERIFICATION_OBSERVED not in kinds
 
 
 def test_unparsable_tool_output_gives_no_exit_code() -> None:

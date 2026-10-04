@@ -50,6 +50,7 @@ def test_kind_enum_contents() -> None:
         "tool.failed",
         "file.changed",
         "test.completed",
+        "verification.observed",
         "subagent.started",
         "subagent.stopped",
         "context.compacted",

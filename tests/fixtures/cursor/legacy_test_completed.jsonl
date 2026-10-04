@@ -1,0 +1,1 @@
+{"schema_version":"1.0","event_id":"01J9ZK3Q7M8N2P4R6S8T000001","ts":"2026-10-04T12:00:00.000Z","producer":"cursor_hook","producer_version":"0.0.1.dev0","source":"derived","kind":"test.completed","session_id":"sanitized-session","attribution":"unknown","risk":"none","outcome":"ok","command":{"argv0":"pytest"}}

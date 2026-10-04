@@ -1,22 +1,7 @@
-"""Display-only gate signals (v0.1 does NOT enforce anything).
+"""Display-only verification observations (v0.1 does NOT enforce gates).
 
-Each gate is an independent signal with its own state: ``pass``, ``fail``, ``unknown`` or
-``stale``. There is deliberately no aggregate score, count of passing gates or "ready" flag.
-
-Evidence rules:
-
-- Evidence comes only from ``test.completed`` events (a verify-looking shell command with
-  its exit code, observed/derived from Cursor hooks) and ``gate.changed`` events. Anything
-  an agent declares (artifacts, ``reviewed`` flags) is SELF-REPORTED and never counts
-  (ADR 0006).
-- Evidence is bound to the commit SHA recorded on the event. Evidence without a commit is
-  ``unknown`` (it cannot be tied to a state of the code). When the worktree HEAD is known
-  and differs, the gate is ``stale`` (the last result is still shown). When HEAD is not
-  known (git disabled or the worktree is not linked), the gate stays ``unknown``.
-- Classifying a command as unit tests, lint, type check and so on is a HEURISTIC over the
-  sanitized command (``argv0``, subcommand, redacted display string). A chained command
-  (``a && b``) that exits 0 supports every gate it contains; a failing chain says nothing
-  reliable about which step failed, so its gates are ``unknown``.
+Heuristic command classification may be listed here; it never satisfies a gate
+(ADR 0011). PASS/FAIL gate tiles are intentionally not derived from tier 1-3 data.
 """
 
 from __future__ import annotations
@@ -26,7 +11,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
-from cursorfleet.events.kinds import EventKind, GateState, Outcome
+from cursorfleet.events.kinds import VERIFICATION_KINDS, EventKind, Outcome
 from cursorfleet.events.models import Event
 from cursorfleet.state.models import utc
 
@@ -57,22 +42,23 @@ _SECURITY = {"bandit", "semgrep", "trivy", "audit", "pip-audit", "gitleaks", "se
 @dataclass(frozen=True)
 class GateEvidence:
     gate: str
-    state: str  # "pass" | "fail" | "unknown"
+    state: str  # "observed" | "unknown" — never pass/fail for heuristics
     ts: datetime
     commit: str | None
     worktree_id: str | None
     session_id: str
     agent: str | None
-    origin: str  # "test.completed" | "gate.changed"
-    command: str | None = None  # sanitized display, for the detail pane
+    origin: str
+    command: str | None = None
     note: str | None = None
+    exit_outcome: str | None = None  # ok | failed | unknown from hook
 
 
 @dataclass(frozen=True)
 class GateStatus:
     gate: str
     label: str
-    state: str  # pass | fail | unknown | stale
+    state: str  # not_evaluated | observed | unknown | stale
     detail: str
     evidence: GateEvidence | None = None
     head: str | None = None
@@ -85,7 +71,6 @@ _UNIT = frozenset(
 
 
 def _classify_segment(words: list[str]) -> str | None:  # noqa: PLR0911
-    """Gate for one command segment, or None if it is not a recognised verify step."""
     names = words
     joined = " ".join(names)
     if any(n in _LINT for n in names) and "format" not in names:
@@ -108,11 +93,6 @@ def _classify_segment(words: list[str]) -> str | None:  # noqa: PLR0911
 def classify_command(
     argv0: str | None, subcommand: str | None, display: str | None
 ) -> tuple[list[str], bool]:
-    """Return ``(gates, chain_is_all_and)`` for a sanitized command.
-
-    ``chain_is_all_and`` is True when the command has one segment or only ``&&`` joins, so a
-    zero exit code implies every segment succeeded.
-    """
     text = (display or " ".join(p for p in (argv0, subcommand) if p)).lower()
     parts = _SPLIT.split(text)
     segments = parts[0::2]
@@ -125,37 +105,57 @@ def classify_command(
     return gates, all(s == "&&" for s in separators)
 
 
-def _outcome_state(outcome: Outcome | None) -> str:
+def _outcome_label(outcome: Outcome | None) -> str:
     if outcome is Outcome.OK:
-        return "pass"
+        return "ok"
     if outcome is Outcome.FAILED:
-        return "fail"
+        return "failed"
     return "unknown"
 
 
 def evidence_from_events(events: Iterable[Event]) -> list[GateEvidence]:
-    """Turn ``test.completed`` and ``gate.changed`` events into per-gate evidence."""
+    """Heuristic verification observations; never mapped to PASS/FAIL gates."""
     found: list[GateEvidence] = []
     for event in events:
         if event.kind is EventKind.GATE_CHANGED and event.gate is not None:
             if event.gate.name in GATE_LABEL:
-                state = {GateState.PASSING: "pass", GateState.FAILING: "fail"}.get(
-                    event.gate.state, "unknown"
+                found.append(
+                    _evidence(
+                        event,
+                        event.gate.name,
+                        "unknown",
+                        "gate.changed",
+                        note="gate.changed is not tier-4 evidence in v0.1",
+                    )
                 )
-                found.append(_evidence(event, event.gate.name, state, "gate.changed"))
-        elif event.kind is EventKind.TEST_COMPLETED and event.command is not None:
+        elif event.kind in VERIFICATION_KINDS and event.command is not None:
             cmd = event.command
             gates, all_and = classify_command(cmd.argv0, cmd.subcommand, cmd.display)
-            state = _outcome_state(event.outcome)
-            note = None
-            if len(gates) > 1 and not (state == "pass" and all_and):
-                state = "unknown"
-                note = "chained command: a single exit code does not identify which step failed"
+            exit_label = _outcome_label(event.outcome)
+            note = "heuristic observation; not proof of pass or fail"
+            if len(gates) > 1 and not (exit_label == "ok" and all_and):
+                note = (
+                    "chained command: exit code does not identify which step ran; "
+                    + note
+                )
             elif len(gates) > 1:
-                note = "chained command with && only: every step succeeded"
+                note = "chained && command; " + note
             shown = cmd.display or " ".join(p for p in (cmd.argv0, cmd.subcommand) if p)
+            origin = (
+                "verification.observed"
+                if event.kind is EventKind.VERIFICATION_OBSERVED
+                else "test.completed"
+            )
             found.extend(
-                _evidence(event, gate, state, "test.completed", command=shown, note=note)
+                _evidence(
+                    event,
+                    gate,
+                    "observed",
+                    origin,
+                    command=shown,
+                    note=note,
+                    exit_outcome=exit_label,
+                )
                 for gate in gates
             )
     return found
@@ -169,6 +169,7 @@ def _evidence(  # noqa: PLR0913
     *,
     command: str | None = None,
     note: str | None = None,
+    exit_outcome: str | None = None,
 ) -> GateEvidence:
     return GateEvidence(
         gate=gate,
@@ -181,6 +182,7 @@ def _evidence(  # noqa: PLR0913
         origin=origin,
         command=command,
         note=note,
+        exit_outcome=exit_outcome,
     )
 
 
@@ -192,10 +194,9 @@ def _same_commit(evidence_commit: str, head: str) -> bool:
 def evaluate(
     evidence: Iterable[GateEvidence], *, worktree_id: str | None, head: str | None
 ) -> list[GateStatus]:
-    """All ten gates for one worktree. ``head`` is its current HEAD, if known."""
     latest: dict[str, GateEvidence] = {}
     for item in evidence:
-        if item.worktree_id != worktree_id:  # evidence only counts for its own worktree
+        if item.worktree_id != worktree_id:
             continue
         current = latest.get(item.gate)
         if current is None or (item.ts, item.session_id) > (current.ts, current.session_id):
@@ -204,8 +205,8 @@ def evaluate(
     for gate, label in GATES:
         found = latest.get(gate)
         if found is None:
-            why = "no evidence" if gate in OBSERVABLE else "no evidence (not observable by hooks)"
-            rows.append(GateStatus(gate, label, "unknown", why, None, head))
+            why = "not evaluated" if gate in OBSERVABLE else "not evaluated (not observable)"
+            rows.append(GateStatus(gate, label, "not_evaluated", why, None, head))
             continue
         rows.append(_judge(gate, label, found, head))
     return rows
@@ -213,16 +214,22 @@ def evaluate(
 
 def _judge(gate: str, label: str, item: GateEvidence, head: str | None) -> GateStatus:
     sha = item.commit[:8] if item.commit else None
+    exit_bit = f", exit {item.exit_outcome}" if item.exit_outcome else ""
     if item.commit is None:
         return GateStatus(
-            gate, label, "unknown", f"last result {item.state}, not bound to a commit", item, head
+            gate,
+            label,
+            "observed",
+            f"heuristic observation{exit_bit}; not bound to a commit",
+            item,
+            head,
         )
     if head is None:
         return GateStatus(
             gate,
             label,
-            "unknown",
-            f"last result {item.state} @{sha}; current HEAD unknown",
+            "observed",
+            f"heuristic observation{exit_bit} @{sha}; HEAD unknown",
             item,
             head,
         )
@@ -231,17 +238,21 @@ def _judge(gate: str, label: str, item: GateEvidence, head: str | None) -> GateS
             gate,
             label,
             "stale",
-            f"STALE: was {item.state} @{sha}, HEAD is now @{head[:8]}",
+            f"STALE: observation{exit_bit} was @{sha}, HEAD now @{head[:8]}",
             item,
             head,
         )
-    if item.state == "unknown":
-        return GateStatus(gate, label, "unknown", f"result unclear @{sha}", item, head)
-    return GateStatus(gate, label, item.state, f"{item.state} @{sha} (HEAD)", item, head)
+    return GateStatus(
+        gate,
+        label,
+        "observed",
+        f"heuristic observation{exit_bit} @{sha} (HEAD)",
+        item,
+        head,
+    )
 
 
 def evaluate_all(
     evidence: list[GateEvidence], heads: Mapping[str | None, str | None]
 ) -> dict[str | None, list[GateStatus]]:
-    """Statuses per worktree id; ``None`` collects evidence not tied to a known worktree."""
     return {wt: evaluate(evidence, worktree_id=wt, head=head) for wt, head in heads.items()}

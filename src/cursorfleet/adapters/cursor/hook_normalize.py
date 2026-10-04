@@ -345,7 +345,7 @@ def _verify_event(
         return []
     return [
         b.event(
-            "test.completed",
+            "verification.observed",
             source="derived",
             tool_name=name,
             tool_use_id=safe_id(b.payload.get("tool_use_id")),

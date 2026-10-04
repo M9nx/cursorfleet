@@ -9,7 +9,7 @@ max_session_mb = 50
 
 [privacy]
 # Knobs can only reduce what is stored.
-store_command_display = true
+store_command_display = false
 command_display_max_chars = 200
 hash_commands = true
 

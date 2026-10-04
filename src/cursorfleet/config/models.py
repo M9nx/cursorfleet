@@ -68,7 +68,7 @@ class PrivacyConfig(BaseModel):
 
     model_config = _STRICT
 
-    store_command_display: bool = True
+    store_command_display: bool = False
     command_display_max_chars: int = Field(default=COMMAND_DISPLAY_MAX_CHARS, ge=20, le=200)
     hash_commands: bool = True
 

@@ -9,6 +9,8 @@ GOOD = f"""---
 schema: {ARTIFACT_SCHEMA}
 kind: handoff.created
 task: add-login
+artifact_id: handoff-add-login-01
+revision: 1
 author_role: implementer-alpha
 created: 2026-10-04T12:00:00Z
 to_role: reviewer

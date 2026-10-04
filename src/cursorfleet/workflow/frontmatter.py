@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 from dataclasses import dataclass
 
 MAX_FRONTMATTER_BYTES = 16 * 1024
@@ -24,6 +25,7 @@ Value = Scalar | list[Scalar]
 _KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 _INT = re.compile(r"^-?[0-9]{1,15}$")
 _FENCE = "---"
+_TOML_FENCE = "+++"
 _PLAIN_FORBIDDEN_START = set("&*!|>%@`{}[]#,'\"")
 
 
@@ -105,7 +107,58 @@ def _inline_list(raw: str) -> list[Scalar]:
     return [_scalar(item) for item in items]
 
 
-def parse_frontmatter(text: str) -> Document:  # noqa: PLR0912, PLR0915
+def parse_frontmatter(text: str) -> Document:
+    """Parse YAML ``---`` frontmatter (legacy artifacts and Cursor kit files)."""
+    if text.startswith(_TOML_FENCE):
+        return parse_toml_frontmatter(text)
+    return _parse_yaml_frontmatter(text)
+
+
+def parse_toml_frontmatter(text: str) -> Document:  # noqa: PLR0912
+    """Parse TOML ``+++`` frontmatter (cursorfleet.artifact/0.1)."""
+    if not text.startswith(_TOML_FENCE):
+        msg = "TOML frontmatter must start with +++"
+        raise FrontmatterError(msg)
+    if len(text.encode("utf-8")) > MAX_FRONTMATTER_BYTES + 64 * 1024:
+        msg = "artifact too large"
+        raise FrontmatterError(msg)
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    close = None
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() == _TOML_FENCE:
+            close = index
+            break
+    if close is None:
+        msg = "unclosed TOML frontmatter"
+        raise FrontmatterError(msg)
+    block = "\n".join(lines[1:close])
+    try:
+        meta_raw = tomllib.loads(block)
+    except tomllib.TOMLDecodeError as exc:
+        msg = f"invalid TOML frontmatter: {exc}"
+        raise FrontmatterError(msg) from exc
+    if not isinstance(meta_raw, dict):
+        msg = "TOML frontmatter must be a table"
+        raise FrontmatterError(msg)
+    meta: dict[str, Value] = {}
+    for key, value in meta_raw.items():
+        if not _KEY.match(key):
+            msg = f"invalid key {key!r}"
+            raise FrontmatterError(msg)
+        if isinstance(value, bool | int | str):
+            meta[key] = value
+        elif isinstance(value, list):
+            if len(value) > MAX_LIST_ITEMS:
+                msg = "too many list items"
+                raise FrontmatterError(msg)
+            meta[key] = [item for item in value if isinstance(item, bool | int | str)]
+        else:
+            msg = f"unsupported TOML value for {key!r}"
+            raise FrontmatterError(msg)
+    return Document(meta=meta, body="\n".join(lines[close + 1 :]))
+
+
+def _parse_yaml_frontmatter(text: str) -> Document:  # noqa: PLR0912, PLR0915
     """Split ``text`` into frontmatter and body. Raises ``FrontmatterError``."""
     text = text.replace("\r\n", "\n")
     if text.startswith("\ufeff"):

@@ -106,7 +106,8 @@ def _touch_agent(agent: AgentAcc, event: Event) -> None:
     agent.events += 1
     if event.source is not Source.SELF_REPORTED:
         agent.last_live_ts = ts if agent.last_live_ts is None else max(agent.last_live_ts, ts)
-    if _ATTRIBUTION_RANK[event.attribution] > _ATTRIBUTION_RANK[agent.attribution]:
+    rank = _ATTRIBUTION_RANK
+    if agent.events == 1 or rank[event.attribution] < rank[agent.attribution]:
         agent.attribution = event.attribution
     if event.agent_role is not None:
         agent.role = event.agent_role
@@ -278,6 +279,7 @@ _HANDLERS: dict[EventKind, Callable[[SessionAcc, AgentAcc, Event], None]] = {
     EventKind.TOOL_COMPLETED: _on_tool_completed,
     EventKind.TOOL_FAILED: _on_tool_failed,
     EventKind.TEST_COMPLETED: _on_test,
+    EventKind.VERIFICATION_OBSERVED: _on_test,
     EventKind.FILE_CHANGED: _on_file_changed,
     EventKind.CONTEXT_COMPACTED: _on_compacted,
     EventKind.PLAN_CREATED: _on_plan,

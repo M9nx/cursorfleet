@@ -95,7 +95,7 @@
       "description": "Knobs can only reduce what is stored; they cannot add content fields.",
       "properties": {
         "store_command_display": {
-          "default": true,
+          "default": false,
           "title": "Store Command Display",
           "type": "boolean"
         },

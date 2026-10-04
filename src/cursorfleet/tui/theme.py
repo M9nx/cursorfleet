@@ -88,8 +88,22 @@ _MONO: dict[str, str] = {
     "unknown": "dim",
 }
 
-GATE_COLOR = {"pass": "green", "fail": "bold red", "stale": "yellow", "unknown": "dim"}
-GATE_MONO = {"pass": "bold", "fail": "bold reverse", "stale": "underline", "unknown": "dim"}
+GATE_COLOR = {
+    "pass": "green",
+    "fail": "bold red",
+    "stale": "yellow",
+    "unknown": "dim",
+    "not_evaluated": "dim",
+    "observed": "cyan",
+}
+GATE_MONO = {
+    "pass": "bold",
+    "fail": "bold reverse",
+    "stale": "underline",
+    "unknown": "dim",
+    "not_evaluated": "dim",
+    "observed": "bold",
+}
 
 UNKNOWN_BUDGET = "unknown (not exposed by Cursor hooks)"
 SELF_REPORTED_NOTE = "SELF-REPORTED (an agent's claim, not evidence)"

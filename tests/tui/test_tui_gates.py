@@ -65,57 +65,56 @@ def test_all_ten_gates_always_listed_and_no_aggregate() -> None:
     rows = evaluate([], worktree_id=WT, head=HEAD_A)
     assert [r.gate for r in rows] == [g for g, _ in GATES]
     assert len(rows) == 10
-    assert {r.state for r in rows} == {"unknown"}
+    assert {r.state for r in rows} == {"not_evaluated"}
     assert not any(hasattr(gates, name) for name in ("overall", "score", "aggregate", "ready"))
 
 
-def test_pass_is_bound_to_head_and_goes_stale_when_head_moves() -> None:
+def test_observation_is_bound_to_head_and_goes_stale_when_head_moves() -> None:
     evidence = evidence_from_events([evt(1, "uv run pytest -q")])
     at_head = {r.gate: r for r in evaluate(evidence, worktree_id=WT, head=HEAD_A)}
-    assert at_head["unit_tests"].state == "pass"
+    assert at_head["unit_tests"].state == "observed"
     moved = {r.gate: r for r in evaluate(evidence, worktree_id=WT, head=HEAD_B)}
     assert moved["unit_tests"].state == "stale"
     assert "STALE" in moved["unit_tests"].detail and "aaaaaaaa" in moved["unit_tests"].detail
-    assert moved["lint"].state == "unknown"  # independent: other gates untouched
+    assert moved["lint"].state == "not_evaluated"
 
 
 def test_abbreviated_commit_still_matches_head() -> None:
     evidence = evidence_from_events([evt(1, "pytest", commit="aaaaaaa")])
     row = next(r for r in evaluate(evidence, worktree_id=WT, head=HEAD_A) if r.gate == "unit_tests")
-    assert row.state == "pass"
+    assert row.state == "observed"
 
 
-def test_failing_run_is_fail_and_latest_wins() -> None:
+def test_latest_observation_wins_without_pass_fail_gate() -> None:
     events = [evt(1, "pytest", "failed", minute=1), evt(2, "pytest", "ok", minute=2)]
     rows = evaluate(evidence_from_events(events), worktree_id=WT, head=HEAD_A)
-    assert next(r for r in rows if r.gate == "unit_tests").state == "pass"
-    events = [evt(1, "pytest", "ok", minute=1), evt(2, "pytest", "failed", minute=2)]
-    rows = evaluate(evidence_from_events(events), worktree_id=WT, head=HEAD_A)
-    assert next(r for r in rows if r.gate == "unit_tests").state == "fail"
+    row = next(r for r in rows if r.gate == "unit_tests")
+    assert row.state == "observed"
+    assert "exit ok" in row.detail
 
 
-def test_evidence_without_commit_or_head_stays_unknown() -> None:
+def test_evidence_without_commit_or_head_still_observed() -> None:
     unbound = evidence_from_events([evt(1, "pytest", commit=None)])
     row = next(r for r in evaluate(unbound, worktree_id=WT, head=HEAD_A) if r.gate == "unit_tests")
-    assert row.state == "unknown" and "not bound to a commit" in row.detail
+    assert row.state == "observed" and "not bound to a commit" in row.detail
     bound = evidence_from_events([evt(1, "pytest")])
     row = next(r for r in evaluate(bound, worktree_id=WT, head=None) if r.gate == "unit_tests")
-    assert row.state == "unknown" and "HEAD unknown" in row.detail
+    assert row.state == "observed" and "HEAD unknown" in row.detail
 
 
 def test_evidence_only_counts_for_its_own_worktree() -> None:
     evidence = evidence_from_events([evt(1, "pytest", worktree="wt-other0000000")])
     row = next(r for r in evaluate(evidence, worktree_id=WT, head=HEAD_A) if r.gate == "unit_tests")
-    assert row.state == "unknown"
+    assert row.state == "not_evaluated"
 
 
 def test_chain_semantics() -> None:
     ok = evidence_from_events([evt(1, "uv run ruff check . && uv run pytest -q")])
-    assert {e.gate: e.state for e in ok} == {"lint": "pass", "unit_tests": "pass"}
+    assert {e.gate: e.state for e in ok} == {"lint": "observed", "unit_tests": "observed"}
     failed = evidence_from_events([evt(1, "ruff check . && pytest", "failed")])
-    assert {e.state for e in failed} == {"unknown"}  # which step failed is not knowable
+    assert {e.state for e in failed} == {"observed"}
     semi = evidence_from_events([evt(1, "ruff check . ; pytest")])
-    assert {e.state for e in semi} == {"unknown"}
+    assert {e.state for e in semi} == {"observed"}
 
 
 def test_gate_changed_events_count_but_unknown_names_do_not() -> None:
@@ -142,7 +141,7 @@ def test_gate_changed_events_count_but_unknown_names_do_not() -> None:
     evidence = evidence_from_events([changed, other])
     assert [e.gate for e in evidence] == ["ci_status"]
     row = next(r for r in evaluate(evidence, worktree_id=WT, head=HEAD_A) if r.gate == "ci_status")
-    assert row.state == "fail"
+    assert row.state == "observed"
 
 
 def test_non_observable_gates_never_pass_from_hooks_alone() -> None:
@@ -156,4 +155,4 @@ def test_non_observable_gates_never_pass_from_hooks_alone() -> None:
         "ci_status",
         "merge_readiness",
     ):
-        assert states[gate] == "unknown"
+        assert states[gate] == "not_evaluated"
