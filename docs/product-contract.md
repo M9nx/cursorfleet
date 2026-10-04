@@ -7,6 +7,26 @@ teams. It is not affiliated with or endorsed by Anysphere or Cursor
 Status markers: **PROVISIONAL** means the behavior depends on Cursor facts not yet
 captured live ([ADR 0001](adr/0001-cursor-capabilities.md), section B).
 
+## Process freeze (2026-10-04)
+
+- New M2 and TUI implementation is **frozen** until the M0a live Cursor spike
+  ([`spike/README.md`](../spike/README.md)) has been run and the ADR 0001 questions are
+  answered ([`empirical-test-plan.md`](empirical-test-plan.md)).
+- Existing M1, M2 and TUI code is **implemented, provisional, unvalidated against live
+  Cursor**. Where it disagrees with the accepted ADRs it is listed in
+  [`follow-ups.md`](follow-ups.md) and is not changed until after the spike.
+- See [`status.md`](status.md).
+
+## Supported surface
+
+- The **local Cursor IDE (desktop)** is the only v0.1 surface, and only once the spike has
+  run on it.
+- The Cursor CLI (`agent`), the Agents Window, Cursor-managed and manual worktrees,
+  subagent identity, parallel subagents and `ask` behaviour are **not claimed**. Each becomes
+  a supported claim only when its row in the empirical test matrix
+  ([ADR 0001](adr/0001-cursor-capabilities.md)) passes.
+- Cloud agents and cloud subagents are never visible in v0.1.
+
 ## What CursorFleet is
 
 - A read-mostly observer: it shows what local Cursor agent sessions did, per
@@ -30,14 +50,23 @@ captured live ([ADR 0001](adr/0001-cursor-capabilities.md), section B).
 
 ## v0.1 scope: Observe
 
-- Passive hooks only (the 12 in `ALLOWED_V01_HOOKS`); the four content-bearing
-  hooks are never registered ([ADR 0004](adr/0004-no-chain-of-thought-and-hook-policy.md)).
+- Passive hooks only: **nine** hooks (`sessionStart`, `sessionEnd`, `preToolUse`,
+  `postToolUse`, `postToolUseFailure`, `subagentStart`, `subagentStop`, `preCompact`,
+  `stop`); shell, file-edit, MCP, prompt, response, thought and Tab hooks are not
+  registered ([ADR 0007](adr/0007-narrower-v01-hook-policy.md), which supersedes
+  [ADR 0004](adr/0004-no-chain-of-thought-and-hook-policy.md)). **The code still registers
+  twelve (including `beforeShellExecution`, `afterShellExecution`, `afterFileEdit`); this is
+  a recorded divergence.**
 - Stdlib-only hook hot path that always fails open, appends to per-session JSONL
   spools; a single-writer indexer builds a rebuildable SQLite projection
   ([architecture](architecture.md), [ADR 0002](adr/0002-storage-layout-and-runtime-directory.md)).
-- Sanitized, versioned event model ([ADR 0003](adr/0003-event-model-and-sanitization.md)).
+- Sanitized event model, schema version `0.1` until the first public release
+  ([ADR 0003](adr/0003-event-model-and-sanitization.md); code still says `1.0`).
 - CLI (`init --cursor`, `doctor`, `validate`, `status --json`, `events purge`)
-  and Textual TUI: overview, agent detail, timeline, worktrees, display-only gates.
+  and Textual TUI: overview, agent detail, timeline, worktrees, and gate tiles that are
+  **heuristic and non-authoritative** (below).
+- Telemetry is best-effort: events can be dropped, so every view can be incomplete
+  ([ADR 0002](adr/0002-storage-layout-and-runtime-directory.md)).
 - Git/worktree collector: read-only, argv lists, timeouts, no fetch.
 - Local sessions only.
 
@@ -52,8 +81,15 @@ captured live ([ADR 0001](adr/0001-cursor-capabilities.md), section B).
   says token use is unknown.
 - No capture of prompts, thinking, responses, file contents or command output.
 - No headless `stream-json` ingestion, no MCP server, no second IDE adapter.
-- No real "done" gate: `stop` cannot block completion, so gate tiles are
-  display-only signals bound to a commit and marked stale when HEAD moves.
+- No real "done" gate: `stop` cannot block completion. Gates need evidence from
+  deterministic runners bound to a commit SHA (v0.3). In v0.1 heuristic observations
+  (for example a command that looks like a test run) never satisfy a gate
+  ([ADR 0003](adr/0003-event-model-and-sanitization.md) rule R1,
+  [ADR 0011](adr/0011-evidence-trust-model.md)). **The current TUI derives PASS/FAIL gate
+  tiles from such observations; that is a recorded violation to be fixed after the spike,
+  and until then the tiles are heuristic and non-authoritative.**
+- No command or output display by default: command text is opt-in
+  ([ADR 0003](adr/0003-event-model-and-sanitization.md); the code currently defaults it on).
 
 ## What Cursor cannot do (so CursorFleet cannot promise it)
 
@@ -100,10 +136,10 @@ From the reviewed plan, section 6. Each has a verification method.
 ## Roadmap
 
 - **v0.1 Observe** (this contract).
-- **v0.2 Guard:** policy engine with allow/warn/ask/deny where Cursor supports
+- **v0.2 Guard** ([ADR 0008](adr/0008-enforcement-boundaries.md)): policy engine with allow/warn/ask/deny where Cursor supports
   it; path-scoped write denial; tamper protection for hooks and policy;
   `failClosed` shim; headless `ingest`; optional MCP server for typed event
   emission. `schemas/policy.schema.json` is reserved for it.
-- **v0.3 Prove:** evidence contracts bound to commit SHA; review, patch,
+- **v0.3 Prove** ([ADR 0011](adr/0011-evidence-trust-model.md)): evidence contracts bound to commit SHA; review, patch,
   re-review state machine; QA in a fresh worktree; external gate command and CI
   status; read-only GitHub issue/PR context.
