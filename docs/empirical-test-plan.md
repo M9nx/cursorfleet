@@ -55,6 +55,7 @@ Date: -
 Cursor version / OS / surface: -
 Evidence path (never inside the repo working tree): -
 Reviewer sign-off: -
+Raw-capture sign-off (perms checked, retention deadline, deleted on, verified by): -
 ADRs affected: <ids>
 ```
 
@@ -1086,6 +1087,92 @@ Gate record (all OPEN):
   (retention), [privacy](privacy.md), [threat-model](threat-model.md), the release.
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0002, 0003, 0004, 0007.
+
+### 16. Raw-capture permissions, retention and cleanup
+
+Applies to every row. "Raw captures" means anything produced by a live run that has not been
+reviewed and reduced to a fixture: the spike's `captures.jsonl`, headless `stream-json`
+output (which carries assistant text and tool output, so it is the most sensitive item),
+screenshots, Cursor transcripts, scratch `hooks.json` files, stress-test output, scanner
+output and the canary registry. The spike kit is designed to record key names, value types,
+ids, enums, counters and timings only, but it has never been run, so treat every capture as
+possibly sensitive until row 15 has scanned it.
+
+Requirements:
+
+- **Location.** Only in `<git-common-dir>/cursorfleet-spike/` (the kit default, inside
+  `.git`, so git never tracks it) or in a dedicated evidence directory outside every
+  repository: `$XDG_STATE_HOME/cursorfleet-evidence/<date>/` on Linux and macOS,
+  `%LOCALAPPDATA%\cursorfleet-evidence\<date>\` on Windows. If anything must sit inside a
+  working tree, list it in `.git/info/exclude` (not a committed `.gitignore`). Never in a
+  cloud-synced folder, never attached to an issue or pull request, never pasted.
+  Copying or zipping the scratch repository directory also copies `.git`, so delete captures
+  first.
+- **POSIX permissions.** Run with `umask 077`; directories `0700`, files `0600`. The kit
+  creates its capture directory with `0700` and the file with `0600` (see
+  `spike/capture_hook.py`); evidence directories rely on the umask. Verify, expecting no
+  output:
+
+  ```sh
+  find "$EVIDENCE" \( -type d ! -perm 0700 \) -o \( -type f ! -perm 0600 \)
+  ```
+
+- **Windows.** The `mode` arguments the kit passes are ignored on Windows. Use a directory
+  under `%LOCALAPPDATA%`, remove inherited access and grant only the current user, then
+  check the listing shows only that user (plus SYSTEM and Administrators):
+
+  ```bat
+  icacls "%EVIDENCE%" /inheritance:r /grant:r "%USERNAME%:(OI)(CI)F"
+  icacls "%EVIDENCE%"
+  ```
+
+  This procedure is best effort and is itself unverified; record the actual `icacls` output
+  in the evidence notes. `cursorfleet doctor` reports what it could verify for its own
+  runtime directory, not for evidence directories.
+- **Retention limit.** At most **7 days** from creation. Record the deadline in the result
+  record. Delete earlier once the reviewer has signed off.
+- **Reviewed fixtures only.** Nothing from a raw capture enters the repository except a
+  fixture under `tests/fixtures/cursor/` that passed this checklist:
+  1. produced from the capture through the allowlist shape only, then read line by line;
+  2. no prompts, responses, file contents, command text beyond argv0, output, env values,
+     emails, user names, host names, home paths, repository URLs or tokens;
+  3. paths workspace-relative or `<external>`; ids replaced with stable fakes;
+  4. the row 15 scanner reports 0 occurrences on the candidate file (including class H);
+  5. a second reviewer has read it and signed the result record;
+  6. committed with a provenance note (Cursor version, OS, date) and no raw content in the
+     commit message.
+- **Cleanup and verification.** At the end of the run (and at the retention deadline):
+
+  ```sh
+  rm -rf "$EVIDENCE" "$(git rev-parse --git-common-dir)/cursorfleet-spike"
+  test ! -e "$EVIDENCE" && echo evidence-gone
+  find "$HOME" /tmp -xdev \( -path '*cursorfleet-spike*' -o -path '*cursorfleet-evidence*' -o -name 'CF-CANARY*' \) 2>/dev/null
+  git status --porcelain
+  git log --all --oneline -G 'CF-CANARY-[A-Za-z0-9]+-[0-9a-f]{8,}'
+  ```
+
+  Expect `evidence-gone`, then no output from the last three commands (run the last two in
+  the scratch repository and in this repository). Also delete the canary registry and the
+  scanner output, and check shell history, the trash folder and editor recent-file lists
+  for pasted captures.
+- **`shred` and `find` caveats.** `shred -u` overwrites in place, which does nothing useful
+  on journaling or copy-on-write filesystems (ext4 journals, btrfs, ZFS, APFS), on SSDs with
+  wear levelling, or where snapshots and backups exist; `find` only proves names, not
+  content. Do not claim secure deletion. The real protections are not recording sensitive
+  values in the first place, full-disk encryption, the permissions above and the 7-day
+  limit.
+- **Sign-off.** The result record template carries a "Raw-capture sign-off" line for every
+  row: permissions checked, retention deadline, deletion date and the reviewer. A row's
+  result is not final until it is filled in.
+
+- Pass: permissions verified, nothing outside the allowed locations (the `find` checks
+  above print nothing), cleanup verified, sign-off recorded. Refute: any capture found in a
+  working tree, in a commit, or past 7 days; treat a committed capture as a security
+  incident (SECURITY.md) and also run row 15.
+- Can change: the spike README cleanup section, [release checklist](release-checklist.md),
+  [privacy](privacy.md) (sharing diagnostics).
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
+  reviewer sign-off: -; raw-capture sign-off: -; ADRs affected: 0002, 0003.
 
 ## After the run
 
