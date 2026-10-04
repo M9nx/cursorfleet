@@ -1230,6 +1230,76 @@ message is clear. ADR 0002 and ADR 0009 do not say; this is a gap, not a result.
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; raw-capture sign-off: -; ADRs affected: 0002.
 
+### 18. Existing-hooks coexistence and the install round trip
+
+Question: does `cursorfleet init --cursor` leave a user's existing hooks, `AGENTS.md` text and
+formatting intact, does `uninstall` restore the tree byte for byte (ADR 0009), and do the
+user's hooks and ours behave together inside Cursor? This row **describes the procedure
+only**; `init` has not been run for this plan.
+
+Pre-existing states (scratch repository, one per variant, each committed before `init`):
+
+| Variant | `.cursor/hooks.json` | `AGENTS.md` |
+| --- | --- | --- |
+| V1 | valid, with a user hook on an event we also register (`preToolUse`, with a `matcher`) and one on an event we do not (`afterFileEdit`), an unknown top-level key, tab indentation, CRLF line endings, no trailing newline | existing text, no CursorFleet block |
+| V2 | absent | absent |
+| V3 | invalid JSON | existing text |
+| V4 | valid, already containing the entry `cursorfleet-hook` from a previous install (adoption) | with an existing managed block |
+| V5 | valid, with a user hook on `beforeSubmitPrompt` (content-bearing, registered by someone else) | existing text |
+
+Round-trip procedure (planned; run in a scratch repository by a later executor):
+
+```sh
+# before: record the state of every file outside .git, and the git status
+find . -path ./.git -prune -o -type f -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/before.sha"
+git status --porcelain > "$EVIDENCE/before.status"
+cursorfleet init --cursor --dry-run        # read the diff; nothing is written
+cursorfleet init --cursor --yes
+cursorfleet validate && cursorfleet doctor
+cursorfleet init --cursor --yes            # second run must report "Already up to date"
+cursorfleet uninstall --yes
+find . -path ./.git -prune -o -type f -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/after.sha"
+diff "$EVIDENCE/before.sha" "$EVIDENCE/after.sha" && echo round-trip-identical
+```
+
+Checks and expectations (design intent per ADR 0009, all unverified):
+
+| Check | Expected |
+| --- | --- |
+| user hook entries after `init` | present, unmodified, in the original order; our entries added only for the ADR 0007 hook set, with the exact command `cursorfleet-hook`, no `matcher`, no `failClosed` |
+| formatting after `init` | indentation, line endings and trailing-newline state of user content preserved |
+| `AGENTS.md` | user text outside the managed block untouched |
+| `init` twice | the second run is a no-op |
+| `uninstall` | tree identical to the "before" state, including `hooks.json` bytes; the directories `init` created are removed |
+| V3 | `init` refuses and does not rewrite the file |
+| V4 | the identical entry is adopted and survives `uninstall` as it was |
+| V5 | `doctor` lists the third-party hook and warns that it is content-bearing; nothing edits it |
+| drift | edit a generated file after `init`: `uninstall` reports it, keeps it, exits 1; with `--force` removes it |
+| user-level hooks | in a throwaway `HOME` containing a user-level `hooks.json`, `doctor` lists it and does not edit it |
+
+Live coexistence (IDE, scratch repository, harmless actions; separate from the file checks):
+
+- A user stub on `preToolUse` (matcher `Read`, scratch file) that writes a marker line, and
+  our hook, both registered for the same event. Record that both ran (marker and capture).
+- A user stub that replies `deny` for the same scratch Read, with ours replying
+  `{"permission":"allow"}`. Docs say deny beats allow when sources merge, so expect the
+  Read to be denied; record what happens. This tests only that our entry does not change
+  the outcome, not Cursor's merge rule in general (see rows 11 and 12 for reply shapes).
+- Hook order and whether an entry's failure affects the other (use row 11 case C5 on the
+  user stub): record, do not assume.
+
+- Pass: every expectation in the table holds for V1 to V5, the round trip prints
+  `round-trip-identical`, and the live checks are recorded. Refute: any user byte changes
+  after `uninstall`; a user hook is reordered, merged or removed; `init` rewrites invalid
+  JSON; a managed entry carries `matcher` or `failClosed`; or our entry changes a user
+  hook's outcome. A refute is a bug in the installer (ADR 0009) and blocks the kit release.
+- Safety notes: scratch repository only; never run `init` against a real project's
+  `hooks.json` for this test; keep an out-of-band terminal; the `deny` stub applies to a
+  scratch file only.
+- Can change: ADR 0009, ADR 0008 (no `failClosed`), [kit](kit.md), the `doctor` warnings.
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
+  reviewer sign-off: -; raw-capture sign-off: -; ADRs affected: 0008, 0009.
+
 ## After the run
 
 - Fill in `spike/questions.md` results and the ADR 0001 matrix (move the row from NOT RUN to
