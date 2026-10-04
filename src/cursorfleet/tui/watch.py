@@ -6,8 +6,10 @@ is skipped when ``watchfiles`` is not installed (``pip install cursorfleet[watch
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 from collections.abc import AsyncIterator, Callable
+from typing import Any, cast
 
 WatchFactory = Callable[[str], AsyncIterator[object]]
 
@@ -20,9 +22,12 @@ def default_watch_factory() -> WatchFactory | None:
     """A factory yielding one item per batch of changes under a directory, or ``None``."""
     if not watchfiles_available():
         return None
-    from watchfiles import awatch  # noqa: PLC0415 - optional dependency, lazy
+    awatch: Any = importlib.import_module("watchfiles").awatch
 
     def factory(path: str) -> AsyncIterator[object]:
-        return awatch(path, debounce=300, step=100, yield_on_timeout=False, raise_interrupt=False)
+        return cast(
+            AsyncIterator[object],
+            awatch(path, debounce=300, step=100, yield_on_timeout=False, raise_interrupt=False),
+        )
 
     return factory
