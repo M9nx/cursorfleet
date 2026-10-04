@@ -1,7 +1,7 @@
 # Zensical keeps every setting under [project] (not MkDocs-style top-level keys).
 # Official keys: https://zensical.org/docs/setup/basics/
 # Explicit nav (sections and titled entries): https://zensical.org/docs/setup/navigation/
-# Default UI only: no extra_css, extra_js, or custom templates.
+# Footer: copyright, social links, prev/next (navigation.footer). No custom templates.
 # Stock light/dark toggle: https://zensical.org/docs/setup/colors/
 
 [[project.theme.palette]]
@@ -19,6 +19,8 @@ site_name = "CursorFleet"
 site_url = "https://m9nx.github.io/cursorfleet/"
 docs_dir = "public-docs"
 site_dir = "site"
+repo_url = "https://github.com/M9nx/cursorfleet"
+copyright = "MIT · CursorFleet by <a href=\"https://github.com/M9nx\" target=\"_blank\" rel=\"noopener\">M9nx</a> · unofficial, not affiliated with Anysphere"
 nav = [
   { "Home" = "index.md" },
   { "Getting Started" = [
@@ -45,3 +47,34 @@ nav = [
   { "Contributing" = "contributing.md" },
   { "Changelog" = "changelog.md" },
 ]
+
+[project.theme]
+features = ["navigation.footer"]
+
+[project.extra]
+generator = false
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/M9nx/cursorfleet"
+name = "Source on GitHub"
+
+[[project.extra.social]]
+icon = "fontawesome/solid/download"
+link = "/cursorfleet/getting-started/installation/"
+name = "Installation"
+
+[[project.extra.social]]
+icon = "fontawesome/solid/rocket"
+link = "/cursorfleet/getting-started/quickstart/"
+name = "Quickstart"
+
+[[project.extra.social]]
+icon = "fontawesome/solid/triangle-exclamation"
+link = "/cursorfleet/known-limitations/"
+name = "Known limitations"
+
+[[project.extra.social]]
+icon = "fontawesome/solid/code-branch"
+link = "/cursorfleet/contributing/"
+name = "Contributing"
