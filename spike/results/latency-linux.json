@@ -1,0 +1,54 @@
+{
+  "kind": "measured-on-this-machine; NOT Cursor-measured",
+  "python": "3.14.7",
+  "implementation": "CPython",
+  "platform": "Linux-6.18.54-1-lts-x86_64-with-glibc2.44",
+  "machine": "x86_64",
+  "cpu_count": 24,
+  "measured_at_epoch_s": 1791063586,
+  "runs_per_variant": 60,
+  "variants_wall_ms": {
+    "floor_pass": {
+      "n": 60,
+      "first_ms": 11.34,
+      "min_ms": 10.18,
+      "p50_ms": 14.37,
+      "p95_ms": 20.41,
+      "max_ms": 23.19,
+      "mean_ms": 14.49
+    },
+    "floor_isolated": {
+      "n": 60,
+      "first_ms": 9.26,
+      "min_ms": 7.43,
+      "p50_ms": 10.57,
+      "p95_ms": 15.06,
+      "max_ms": 17.98,
+      "mean_ms": 10.95
+    },
+    "capture": {
+      "n": 60,
+      "first_ms": 27.7,
+      "min_ms": 21.94,
+      "p50_ms": 24.15,
+      "p95_ms": 27.68,
+      "max_ms": 30.53,
+      "mean_ms": 24.5
+    },
+    "capture_isolated": {
+      "n": 60,
+      "first_ms": 21.95,
+      "min_ms": 20.48,
+      "p50_ms": 22.93,
+      "p95_ms": 26.42,
+      "max_ms": 29.73,
+      "mean_ms": 23.23
+    }
+  },
+  "capture_in_process_ms": {
+    "n": 120,
+    "p50_ms": 7.735,
+    "p95_ms": 8.67,
+    "max_ms": 10.643
+  }
+}
