@@ -158,6 +158,60 @@ def find_git_location(start: str) -> GitLocation | None:  # noqa: PLR0911
 
 
 _FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+INSTALL_MARKER_DIR = ".cursorfleet"
+INSTALL_MARKER_NAME = "config.toml"
+
+
+def _is_link_like(info: os.stat_result) -> bool:
+    """True for a symlink or a Windows reparse point (junction), matching ``untrusted_reason``."""
+    return bool(
+        stat.S_ISLNK(info.st_mode)
+        or getattr(info, "st_file_attributes", 0) & _FILE_ATTRIBUTE_REPARSE_POINT
+    )
+
+
+def has_install_marker(top_level: str) -> bool:
+    """True when ``<top_level>/.cursorfleet/config.toml`` is a regular file (ADR 0002).
+
+    The marker must exist before any runtime directory or event file is created.
+    A symlink or junction on ``.cursorfleet`` or ``config.toml`` (including a
+    link-to-elsewhere) is refused, consistent with runtime path safety.
+    Never creates files. Never raises.
+    """
+    if not top_level:
+        return False
+    try:
+        directory = os.path.join(top_level, INSTALL_MARKER_DIR)
+        marker = os.path.join(directory, INSTALL_MARKER_NAME)
+        dir_info = os.lstat(directory)
+        file_info = os.lstat(marker)
+        real = os.path.realpath(marker)
+        real_info = os.lstat(real)
+        root_real = os.path.realpath(top_level)
+        prefix = root_real if root_real.endswith(os.sep) else root_real + os.sep
+        return (
+            not _is_link_like(dir_info)
+            and stat.S_ISDIR(dir_info.st_mode)
+            and not _is_link_like(file_info)
+            and stat.S_ISREG(file_info.st_mode)
+            and not _is_link_like(real_info)
+            and stat.S_ISREG(real_info.st_mode)
+            and os.path.normcase(real).startswith(os.path.normcase(prefix))
+        )
+    except OSError:
+        return False
+
+
+def resolve_inherited_location(start: str) -> GitLocation | None:
+    """Nearest Git root from ``start`` if it already has the install marker.
+
+    Stops at the first ``.git`` directory or gitfile. Does not walk past an inner
+    repository boundary when that root has no marker. Creates nothing. Never raises.
+    """
+    location = find_git_location(start)
+    if location is None or not has_install_marker(location.top_level):
+        return None
+    return location
 
 
 def untrusted_reason(root: str) -> str | None:  # noqa: PLR0911

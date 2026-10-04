@@ -15,7 +15,7 @@ from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from cursorfleet.events.models import Event
-from m2_helpers import ALL_HOOKS, doc_payload, init_repo, paths_of, run_hook
+from m2_helpers import ALL_HOOKS, doc_payload, init_repo, paths_of, plant_install_marker, run_hook
 
 SPOOL_SETTINGS = settings(
     max_examples=60, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture]
@@ -145,7 +145,7 @@ def test_emails_urls_and_pem_blocks_are_removed(repo: Path) -> None:
 
 def test_display_can_be_turned_off_entirely(repo: Path) -> None:
     cfg = repo / ".cursorfleet"
-    cfg.mkdir()
+    cfg.mkdir(exist_ok=True)
     (cfg / "config.toml").write_text("[privacy]\nstore_command_display = false\n", encoding="utf-8")
     command = "curl --novel-flag unusual-secret-xyz-123456789 example.test"
     run_hook(tool_payload(repo, command))
@@ -219,6 +219,7 @@ def test_runtime_dir_holds_no_prompt_like_content_for_any_hook(repo: Path) -> No
 @pytest.fixture(scope="module")
 def shared_repo(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     root = init_repo(tmp_path_factory.mktemp("prop") / "repo")
+    plant_install_marker(root)
     previous = os.getcwd()
     os.chdir(root)
     try:
@@ -408,7 +409,7 @@ def test_hook_path_imports_no_heavy_or_network_modules(repo: Path) -> None:
 
 def test_hook_with_privacy_config_still_stays_light(repo: Path) -> None:
     cfg = repo / ".cursorfleet"
-    cfg.mkdir()
+    cfg.mkdir(exist_ok=True)
     (cfg / "config.toml").write_text(
         "[privacy]\ncommand_display_max_chars = 80\n", encoding="utf-8"
     )

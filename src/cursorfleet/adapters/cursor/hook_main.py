@@ -8,7 +8,9 @@ Contract (ADR 0004, docs/architecture.md):
 - Imports only the stdlib and small stdlib-only CursorFleet modules (no pydantic,
   typer, textual, sqlite3 or any network module). A test enforces this.
 - Appends sanitized events to ``<git-common-dir>/cursorfleet/spool/...``. It never opens
-  SQLite and records nothing outside a git repository (ADR 0002).
+  SQLite. It records nothing unless the nearest Git root already has the install marker
+  ``.cursorfleet/config.toml`` (ADR 0002). Missing marker, an inner uninitialized
+  repository, an external symlink or an ambiguous multi-root workspace fail open.
 
 PROVISIONAL: if the hook name cannot be determined (garbage stdin and no argv hint) the
 reply is ``{"permission":"allow"}``, because Cursor treats an invalid reply from a
@@ -35,6 +37,8 @@ from cursorfleet.state.runtime import (
     RuntimePaths,
     ensure_runtime_root,
     find_git_location,
+    has_install_marker,
+    resolve_inherited_location,
     runtime_paths,
     untrusted_reason,
     write_private_file,
@@ -226,28 +230,102 @@ def load_hmac_key(paths: RuntimePaths) -> bytes | None:
 # ---------------------------------------------------------------- core
 
 
-def _candidate_starts(payload: dict[str, object], environ: Mapping[str, str]) -> list[str]:
-    starts: list[str] = []
+def _tool_cwd(payload: dict[str, object]) -> str | None:
+    """Cursor tool cwd when the payload names a path that still exists (including a symlink)."""
+    cwd = payload.get("cwd")
+    if not isinstance(cwd, str) or not cwd:
+        return None
     try:
-        starts.append(os.getcwd())
+        return cwd if os.path.lexists(cwd) else None
+    except OSError:
+        return None
+
+
+def _anchor(payload: dict[str, object], environ: Mapping[str, str]) -> str | None:
+    """Single resolution start: tool cwd when available, otherwise ``CURSOR_PROJECT_DIR``.
+
+    Tool cwd is ``payload.cwd`` when that path lexists, else the hook process cwd.
+    ``workspace_roots`` is never a start (ADR 0002 runtime inheritance).
+    """
+    cwd = _tool_cwd(payload)
+    if cwd is not None:
+        return cwd
+    try:
+        return os.getcwd()
     except OSError:
         pass
-    roots = payload.get("workspace_roots")
-    if isinstance(roots, list) and roots and isinstance(roots[0], str):
-        starts.append(roots[0])
     project = environ.get("CURSOR_PROJECT_DIR")
-    if project:
-        starts.append(project)
-    return starts
+    return project if project else None
 
 
-def _workspace_roots(payload: dict[str, object], location: GitLocation) -> list[str]:
-    roots: list[str] = []
+def _ambiguous_workspace_roots(payload: dict[str, object]) -> bool:
     raw = payload.get("workspace_roots")
-    if isinstance(raw, list):
-        roots.extend(r for r in raw[:_MAX_ROOTS] if isinstance(r, str))
-    roots.append(location.top_level)
-    return roots
+    if not isinstance(raw, list):
+        return False
+    seen: set[str] = set()
+    for item in raw[:_MAX_ROOTS]:
+        if not isinstance(item, str) or not item:
+            continue
+        try:
+            real = os.path.normcase(os.path.realpath(item))
+        except (OSError, ValueError):
+            return True
+        seen.add(real)
+        if len(seen) > 1:
+            return True
+    return False
+
+
+def _is_external_symlink_anchor(raw: str) -> bool:
+    """True when a symlink component of ``raw`` escapes the Git root that contains the link."""
+    try:
+        current = raw if os.path.isabs(raw) else os.path.join(os.getcwd(), raw)
+        current = os.path.abspath(current)
+        for _ in range(_MAX_ROOTS * 4):
+            if os.path.islink(current):
+                parent = os.path.dirname(current)
+                parent_loc = find_git_location(parent)
+                if parent_loc is not None:
+                    real = os.path.realpath(current)
+                    top = parent_loc.top_level
+                    prefix = top if top.endswith(os.sep) else top + os.sep
+                    real_n, top_n, prefix_n = (
+                        os.path.normcase(real),
+                        os.path.normcase(top),
+                        os.path.normcase(prefix),
+                    )
+                    if real_n != top_n and not real_n.startswith(prefix_n):
+                        return True
+            parent = os.path.dirname(current)
+            if parent == current:
+                break
+            current = parent
+    except OSError:
+        return True
+    return False
+
+
+def _resolve_runtime_location(
+    payload: dict[str, object], environ: Mapping[str, str]
+) -> GitLocation | None:
+    """Inherited Git root for this hook, or ``None`` (record nothing, fail open).
+
+    Validates the install marker before the caller may create a runtime directory.
+    Never continues past an inner ``.git`` / gitfile / submodule boundary.
+    """
+    if _ambiguous_workspace_roots(payload):
+        return None
+    anchor = _anchor(payload, environ)
+    if anchor is None or _is_external_symlink_anchor(anchor):
+        return None
+    try:
+        real = os.path.realpath(anchor)
+    except (OSError, ValueError):
+        return None
+    location = resolve_inherited_location(real)
+    if location is None or not has_install_marker(location.top_level):
+        return None
+    return location
 
 
 def _dump(event: dict[str, object]) -> str:
@@ -283,13 +361,9 @@ def record(
     from cursorfleet.adapters.cursor import hook_normalize
     from cursorfleet.adapters.cursor.hook_sanitize import PathResolver
 
-    location = None
-    for start in _candidate_starts(payload, environ):
-        location = find_git_location(start)
-        if location is not None:
-            break
+    location = _resolve_runtime_location(payload, environ)
     if location is None:
-        return 0  # not a git repo: record nothing (ADR 0002)
+        return 0  # missing marker, rejected root, or not a git repo: record nothing
     paths = runtime_paths(location.common_dir)
     settings = load_settings(location.top_level, environ)
     branch = commit = None
@@ -299,7 +373,7 @@ def record(
     ctx = hook_normalize.HookContext(
         now_ns=now_ns,
         producer_version=__version__,
-        resolver=PathResolver(_workspace_roots(payload, location)),
+        resolver=PathResolver([location.top_level]),
         worktree_id=worktree_id_for(location.top_level),
         branch=branch,
         commit=commit,

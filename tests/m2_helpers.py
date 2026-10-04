@@ -76,10 +76,23 @@ def init_repo(path: Path, *, commit: bool = True) -> Path:
     return path.resolve()
 
 
+def plant_install_marker(root: Path) -> Path:
+    """Write the v0.1 install marker ``.cursorfleet/config.toml`` (a regular file)."""
+    cfg = root / ".cursorfleet"
+    cfg.mkdir(exist_ok=True)
+    marker = cfg / "config.toml"
+    if not marker.exists():
+        marker.write_text("# cursorfleet test marker\n", encoding="utf-8")
+    return marker
+
+
 @pytest.fixture
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """A fresh git repo that is also the process cwd (so hooks can never hit the real repo)."""
     root = init_repo(tmp_path / "repo")
+    plant_install_marker(root)
+    git(["add", ".cursorfleet/config.toml"], root)
+    git(["commit", "-q", "-m", "cursorfleet marker"], root)
     monkeypatch.chdir(root)
     yield root
 

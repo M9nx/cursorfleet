@@ -204,9 +204,11 @@ def test_detached_head_has_commit_but_no_branch(repo: Path) -> None:
 def test_runtime_lives_in_git_common_dir_not_the_working_tree(repo: Path) -> None:
     run_hook(payload_for("sessionStart", repo))
     assert (repo / ".git" / "cursorfleet" / "spool").is_dir()
-    assert not (repo / "cursorfleet").exists() and not (repo / ".cursorfleet").exists()
+    assert not (repo / "cursorfleet").exists()
+    assert (repo / ".cursorfleet" / "config.toml").is_file()
+    assert {p.name for p in (repo / ".cursorfleet").iterdir()} == {"config.toml"}
     status = git(["status", "--porcelain", "--untracked-files=all"], repo)
-    assert status.strip() == ""  # nothing appeared in the working tree
+    assert status.strip() == ""  # marker is committed; runtime stays under .git/
 
 
 def test_linked_worktree_shares_the_main_spool(repo: Path, tmp_path: Path) -> None:
@@ -239,7 +241,7 @@ def test_posix_permissions_are_private(repo: Path) -> None:
 
 def test_privacy_config_can_disable_display_and_hash(repo: Path) -> None:
     cfg = repo / ".cursorfleet"
-    cfg.mkdir()
+    cfg.mkdir(exist_ok=True)
     (cfg / "config.toml").write_text(
         "[privacy]\nstore_command_display = false\nhash_commands = false\n", encoding="utf-8"
     )
@@ -250,7 +252,7 @@ def test_privacy_config_can_disable_display_and_hash(repo: Path) -> None:
 
 def test_broken_privacy_config_fails_toward_less_storage(repo: Path) -> None:
     cfg = repo / ".cursorfleet"
-    cfg.mkdir()
+    cfg.mkdir(exist_ok=True)
     (cfg / "config.toml").write_text("[privacy\nstore = = =", encoding="utf-8")
     run_hook(payload_for("preToolUse", repo))
     (event,) = spool_events(repo)

@@ -13,7 +13,7 @@ from cursorfleet.state.runtime import RuntimePaths
 from cursorfleet.state.spool import append_event
 from cursorfleet.tui.app import CursorFleetApp
 from cursorfleet.tui.data import DataSource
-from m2_helpers import dump, git, init_repo, make_event, paths_of
+from m2_helpers import dump, git, init_repo, make_event, paths_of, plant_install_marker
 
 NOW = datetime(2026, 10, 4, 12, 5, 0, tzinfo=UTC)
 SECRET = "SYNTH-SECRET-9f8e7d6c5b4a"  # noqa: S105 - synthetic canary, appears nowhere legitimate
@@ -157,7 +157,9 @@ def make_app(repo: Path, *, with_git: bool = True, **kwargs: Any) -> CursorFleet
 
 
 def new_repo(tmp_path: Path, name: str = "repo") -> Path:
-    return init_repo(tmp_path / name)
+    root = init_repo(tmp_path / name)
+    plant_install_marker(root)
+    return root
 
 
 async def settle(app: CursorFleetApp, pilot: Any, rounds: int = 200) -> None:
