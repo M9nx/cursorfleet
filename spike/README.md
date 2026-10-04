@@ -1,0 +1,206 @@
+# CursorFleet M0a spike: Cursor reality capture kit
+
+> **THROWAWAY.** Stdlib-only, not product code. It exists to answer the open
+> questions in [`questions.md`](questions.md) with real Cursor payloads before
+> any CursorFleet schema is frozen. It is **not** the v0.1 hook entrypoint.
+
+**Status:** the kit is built and self-tested. **No live Cursor session has been
+captured yet.** Everything in `docs/adr/0001-cursor-capabilities.md` marked
+UNVERIFIED stays provisional until you run this runbook.
+
+## What the kit does and does not record
+
+`capture_hook.py` appends one sanitized JSON line per hook call to
+`captures.jsonl`. It records event name, timings (wall + monotonic latency),
+pid/ppid, key names and value **types**, and values only for IDs
+(`conversation_id`, `generation_id`, `session_id`, `subagent_id`,
+`subagent_type`, `parent_conversation_id`, `tool_use_id`, `tool_call_id`,
+`tool_name`, `git_branch`, `cursor_version`), small enums, booleans and
+counters. Paths are reduced to a basename plus a git kind
+(`main | linked-worktree | submodule-or-other | none`).
+
+It never writes prompts, thinking, file contents, commands, tool inputs or
+outputs, edits, summaries, emails, transcript paths or full paths. It prints
+`{}` (or `{"permission":"allow"}` for permission hooks) and always exits 0.
+
+Residual risk to know about: nested **key names** (for example the keys of
+`tool_input`) are recorded when they are lowercase snake_case, and `tool_name`,
+`subagent_type` and `git_branch` are recorded verbatim. Skim
+`captures.jsonl` before sharing it. The hooks still *receive* sensitive content
+in memory (`afterShellExecution.output`, `afterFileEdit.edits`,
+`subagentStart.task`); the kit simply discards it. Do not run the spike in a
+repo with real secrets.
+
+The kit deliberately does **not** register `afterAgentThought`,
+`afterAgentResponse`, `beforeSubmitPrompt` or `beforeReadFile`, so thinking,
+response text, prompts and file contents are never delivered to it.
+
+## Prerequisites
+
+- Cursor (note the version: `cursor --version` or Help > About) and optionally
+  the Cursor CLI (`agent`). Cursor CLI install: `curl https://cursor.com/install -fsS | bash`.
+- Python 3.9+ on `PATH` as `python3` (macOS/Linux) or `python` (Windows).
+- A **scratch git repo with at least one commit.** Do not use a real project.
+
+## 0. Run the self-test and benchmark (no Cursor needed)
+
+```sh
+python3 spike/capture_hook.py --selftest      # privacy + latency assertions
+python3 spike/bench_latency.py -n 40          # writes spike/results/latency-<platform>.json
+```
+
+Run the benchmark on every OS you care about (Linux result already recorded in
+`spike/results/latency-linux.json`; macOS and Windows are still open).
+
+## 1. Create the scratch repo and install the hooks
+
+```sh
+mkdir ~/cf-spike-scratch && cd ~/cf-spike-scratch
+git init -q && git commit -q --allow-empty -m "init"
+mkdir -p .cursor/hooks .cursor/agents
+cp /path/to/cursorfleet/spike/capture_hook.py .cursor/hooks/capture_hook.py
+cp /path/to/cursorfleet/spike/hooks.json.example .cursor/hooks.json
+```
+
+Windows (PowerShell): copy `hooks.windows.json.example` instead (it calls
+`python`, not `python3`). If your Python is only available as `py`, edit the
+`command` strings to `py -3 .cursor/hooks/capture_hook.py <event>`. Hook
+commands run through the platform shell; the `<event>` argument is a fallback
+so permission hooks can still answer correctly if stdin is malformed.
+
+Add two custom subagents (names are deliberately distinctive so you can look
+for them in `subagent_type`):
+
+```sh
+cat > .cursor/agents/cf-reviewer.md <<'EOF'
+---
+name: cf-reviewer
+description: Read-only reviewer. Use proactively when asked to review a file.
+readonly: true
+---
+Read the file you are told about and reply with one sentence. Do not edit files.
+EOF
+cat > .cursor/agents/cf-writer.md <<'EOF'
+---
+name: cf-writer
+description: Writes a tiny note file when asked. Use for creating notes.
+---
+Create the file you are told about with one line of text, then reply "done".
+EOF
+git add .cursor && git commit -q -m "spike hooks and agents"
+```
+
+**Commit the `.cursor/` directory.** Cursor-managed worktrees are checkouts of
+the branch, so untracked hook files will not exist there and you would capture
+nothing from worktrees.
+
+Open the folder in Cursor and trust the workspace (project hooks only run in
+trusted workspaces). Check **Customize > Hooks** and the **Hooks** output
+channel to see the hooks load. Cursor reloads `hooks.json` on save; restart
+Cursor if they do not appear. Then label the run:
+
+```sh
+python3 .cursor/hooks/capture_hook.py --set-label ide-main
+python3 .cursor/hooks/capture_hook.py --print-capture-dir   # <git-common-dir>/cursorfleet-spike
+```
+
+The capture directory lives inside `.git/`, so it is shared by every linked
+worktree of this repo and is never tracked. Set `CURSORFLEET_SPIKE_DIR` to
+override (note: the IDE does not inherit your shell env; the `LABEL` file is
+the reliable way to tag runs).
+
+## 2. Run A: custom subagent in the IDE (Q1, Q2)
+
+In Agent chat, with the main (parent) agent:
+
+> Use the cf-reviewer subagent to review README.md (create it with one line first if it doesn't exist), then use the cf-writer subagent to create notes/a.txt.
+
+Run it sequentially so you get clean subagent windows. Let it finish. Also run
+one explicit invocation: `/cf-reviewer review README.md`.
+
+Now analyze:
+
+```sh
+python3 spike/analyze.py            # run from the scratch repo, or pass the path
+```
+
+Read the **Q1** and **Q2** sections: do tool hooks inside a subagent carry
+anything that names the subagent, and does `subagent_type` show `cf-reviewer`,
+`cf-writer`, or only `generalPurpose`?
+
+## 3. Run B: two subagents in parallel with worktree isolation (Q3, Q4, Q5)
+
+```sh
+python3 .cursor/hooks/capture_hook.py --set-label ide-parallel-wt
+```
+
+Prompt (the docs say isolation is requested in the prompt, not configured):
+
+> Launch two subagents in parallel, each in its own environment (isolated git worktree): cf-writer creates notes/one.txt and cf-writer creates notes/two.txt. Run them concurrently.
+
+Afterwards, in the scratch repo: `git worktree list` (record how many
+worktrees Cursor created and where; do not paste your home path into issues).
+Analyze again and read **Q3/Q4** (is `workspace_roots` a linked worktree, and
+does one capture file contain events from several worktrees) and **Q5**
+(`overlapping_subagent_windows`, `tool_calls_started_while_another_open`,
+`max_concurrent_hook_processes`).
+
+Also try the Agents Window: start an agent from the Agents Window into a
+worktree (label `agents-window-wt` first), run a prompt that edits one file
+and runs one shell command. Then `/worktree <task>` and `/best-of-n` from the
+IDE (labels `ide-worktree-cmd`, `ide-best-of-n`).
+
+## 4. Run C: Cursor CLI (Q3)
+
+```sh
+python3 .cursor/hooks/capture_hook.py --set-label cli
+agent -p --force "Use the cf-reviewer subagent to review README.md, then run 'git status' in the shell."
+```
+
+`--force` is required for file changes in print mode; the scratch repo makes
+that safe. Also try an interactive `agent` session once (label `cli-interactive`).
+Questions: do hooks fire at all (the docs only guarantee `workspaceOpen` runs in
+the CLI), which events, and which `cursor_version` is reported? The CLI
+inherits your shell env, so you can also use
+`CURSORFLEET_SPIKE_DIR=/tmp/cf-cli agent -p ...` to separate it.
+
+## 5. Context compaction, failures, and the rest (Q6, token data)
+
+- Trigger a tool failure (ask the agent to `cat` a file that does not exist)
+  to capture `postToolUseFailure`.
+- `preCompact` needs a long conversation or a manual compact. If you can get
+  it, note whether `context_*` counters are present: they are the only
+  token-ish data hooks expose.
+- Run `python3 spike/bench_latency.py -n 40` on Windows and macOS too.
+
+## 6. Final analysis and what to hand back
+
+```sh
+python3 spike/analyze.py > spike/results/analysis-$(date +%Y%m%d).txt
+python3 spike/analyze.py --json > /tmp/analysis.json
+```
+
+Then answer each item in [`questions.md`](questions.md) with
+`CONFIRMED / REFUTED / PARTIAL` plus the evidence line from the analysis, and
+update `docs/adr/0001-cursor-capabilities.md` (move items out of
+UNVERIFIED). Only after review, copy a **hand-sanitized subset** of
+`captures.jsonl` lines to `tests/fixtures/` with the recorded `cursor_version`.
+The capture file is already sanitized by design, but still read it first.
+
+## Cleanup
+
+```sh
+rm -rf "$(git rev-parse --git-common-dir)/cursorfleet-spike"
+rm -rf .cursor/hooks .cursor/hooks.json .cursor/agents/cf-*.md   # then commit
+git worktree list && git worktree prune
+```
+
+## Files
+
+- `capture_hook.py`: the hook, plus `--selftest`, `--set-label`, `--print-capture-dir`.
+- `hooks.json.example`, `hooks.windows.json.example`: passive hooks only.
+- `analyze.py`: per-event key shapes, identity evidence, latency percentiles,
+  worktree flags, interleaving evidence. Tolerates torn lines.
+- `bench_latency.py`: cold-start wall-clock latency; results in `results/`.
+- `questions.md`: the open questions and how each is answered.
+- `doc_examples/`: hand-built, doc-derived example payloads. **Not captured.**
