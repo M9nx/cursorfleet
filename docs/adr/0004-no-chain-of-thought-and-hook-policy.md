@@ -1,9 +1,19 @@
 # ADR 0004: No chain-of-thought; never register content hooks
 
-- Status: accepted
+- Status: superseded by [ADR 0007](0007-narrower-v01-hook-policy.md) (content kept for the record; the never-register rule for the four content hooks is restated and kept by ADR 0007)
 - Date: 2026-10-04
 - Deciders: project owner (M9nx)
 - Evidence level: verified-from-docs
+- Supersedes: none
+- Superseded by: 0007
+- Related ADRs: 0001 (A2, A3, A11), 0007 (replacement), 0008 (fail-open and enforcement boundaries)
+- Implementation status: Divergent-from-code with respect to ADR 0007: `ALLOWED_V01_HOOKS` still lists 12 hooks. The never-register rule for `afterAgentThought`, `afterAgentResponse`, `beforeSubmitPrompt` and `beforeReadFile` is implemented and tested (`FORBIDDEN_HOOKS`, `tests/security/test_hook_policy.py`).
+- Review trigger: none (superseded); re-review happens in ADR 0007
+- Release gate: none of its own; see ADR 0007
+
+> This ADR is superseded. Read [ADR 0007](0007-narrower-v01-hook-policy.md) for the current
+> hook list. The text below is unchanged and is no longer the policy where it lists
+> `beforeShellExecution`, `afterShellExecution` or `afterFileEdit` as registered.
 
 ## Context
 
