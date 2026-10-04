@@ -478,7 +478,7 @@ def background_lifecycle(recs):
     windows, _ = pair_start_stop(starts, stops)
     matched = sum(1 for w in windows if w["matched_stop"])
     unmatched = sum(1 for w in windows if not w["matched_stop"])
-    return {
+    out = {
         "task_run_in_background": flag_counts(_task_run_in_background(r) for r in tasks),
         "subagentStart_is_parallel_worker": flag_counts(_start_parallel_flag(r) for r in starts),
         "tool_outcomes_by_event_and_tool": tool_outcomes_by_event_and_tool(recs),
@@ -493,6 +493,102 @@ def background_lifecycle(recs):
             "present). Missing means the boolean was not recorded, not false. "
             "Not a Q1 verdict."
         ),
+    }
+    out.update(row8_readiness(recs, windows, tasks))
+    return out
+
+
+ROW8_READY = (
+    "READY: required parallel/background lifecycle observed with matched start/stop"
+)
+ROW8_BLOCKED_OPEN = (
+    "BLOCKED/OPEN: required parallel/background lifecycle not observed; "
+    "do not infer a Q1 verdict"
+)
+ROW8_REQUIRED_NOTE = (
+    "Required for READY: overlapping subagent windows OR "
+    "is_parallel_worker=true OR Task run_in_background=true, AND matched "
+    "start/stop for those parallel instances. Starts without stops, or "
+    "missing background flags with no overlap, is BLOCKED/OPEN. Never FAIL. "
+    "Never a Q1 verdict."
+)
+
+
+def _overlapping_window_indexes(windows):
+    """Indexes of windows that overlap another completed window."""
+    indexed = [
+        (i, w["t0"], w["t1"])
+        for i, w in enumerate(windows)
+        if w["t0"] is not None and w["t1"] is not None
+    ]
+    hit = set()
+    for i, (ia, a0, a1) in enumerate(indexed):
+        for ib, b0, b1 in indexed[i + 1:]:
+            if a0 < b1 and b0 < a1:
+                hit.add(ia)
+                hit.add(ib)
+    return hit
+
+
+def row8_readiness(recs, windows=None, tasks=None):
+    """Gate formal row-8 concurrent classification. Never FAIL; never a Q1 verdict.
+
+    READY only when a required parallel/background signal is actually observed
+    and those parallel instances have matched start/stop. Otherwise BLOCKED/OPEN.
+    """
+    recs = [r for r in recs if isinstance(r, dict)]
+    starts = [r for r in recs if r.get("hook_event_name") == "subagentStart"]
+    stops = [r for r in recs if r.get("hook_event_name") == "subagentStop"]
+    if windows is None:
+        windows, _ = pair_start_stop(starts, stops)
+    if tasks is None:
+        tasks = [
+            r for r in recs
+            if r.get("hook_event_name") in TOOL_EVENTS and _is_task(r)
+        ]
+    overlap_idx = _overlapping_window_indexes(windows)
+    bg_true_calls = set()
+    unlinked_bg_true = 0
+    start_calls = {_sid(w.get("tool_call_id")) for w in windows} - {None}
+    for r in tasks:
+        if _task_run_in_background(r) is not True:
+            continue
+        tid = _sid(_dict(r.get("ids")).get("tool_use_id"))
+        if tid is not None and tid in start_calls:
+            bg_true_calls.add(tid)
+        else:
+            unlinked_bg_true += 1
+    parallel_idx = set(overlap_idx)
+    for i, (s, w) in enumerate(zip(starts, windows)):
+        if _start_parallel_flag(s) is True:
+            parallel_idx.add(i)
+        call = _sid(w.get("tool_call_id"))
+        if call is not None and call in bg_true_calls:
+            parallel_idx.add(i)
+    required_signal = bool(overlap_idx) or any(
+        _start_parallel_flag(s) is True for s in starts
+    ) or any(_task_run_in_background(r) is True for r in tasks)
+    unmatched_parallel = sum(
+        1 for i in parallel_idx if not windows[i]["matched_stop"]
+    )
+    matched_parallel = sum(1 for i in parallel_idx if windows[i]["matched_stop"])
+    complete = (
+        required_signal
+        and unmatched_parallel == 0
+        and unlinked_bg_true == 0
+        and matched_parallel > 0
+    )
+    code = "READY" if complete else "BLOCKED/OPEN"
+    text = ROW8_READY if complete else ROW8_BLOCKED_OPEN
+    return {
+        "row8_readiness_code": code,
+        "row8_readiness": text,
+        "row8_required_note": ROW8_REQUIRED_NOTE,
+        "row8_required_signal": required_signal,
+        "row8_parallel_instances": len(parallel_idx),
+        "row8_matched_parallel_instances": matched_parallel,
+        "row8_unmatched_parallel_instances": unmatched_parallel,
+        "row8_unlinked_background_tasks": unlinked_bg_true,
     }
 
 
@@ -875,6 +971,16 @@ def render(a):
       % (lc["starts"], lc["matched_stops"], lc["unmatched_starts"]))
     if bl.get("note"):
         w("  note: %s" % bl["note"])
+    w("")
+    w("--- row 8 readiness (not a Q1 verdict) ---")
+    w("  ROW 8 READINESS: %s" % bl["row8_readiness"])
+    if bl.get("row8_required_note"):
+        w("  required: %s" % bl["row8_required_note"])
+    w("  required_signal=%s parallel_instances=%s matched=%s unmatched=%s unlinked_background_tasks=%s"
+      % (bl.get("row8_required_signal"), bl.get("row8_parallel_instances"),
+         bl.get("row8_matched_parallel_instances"),
+         bl.get("row8_unmatched_parallel_instances"),
+         bl.get("row8_unlinked_background_tasks")))
     w("")
     w("--- Q2 subagent_type values ---")
     st = a["subagent_types"]
