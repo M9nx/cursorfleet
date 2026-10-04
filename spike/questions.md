@@ -30,9 +30,14 @@ Result values: `CONFIRMED`, `REFUTED`, `PARTIAL`, `OPEN`. Always record the
   `subagent_id`. Nothing documents identity on tool hooks.
 - Why it matters: per-agent timelines, the `agent_instance_id` field mapping,
   and attribution of edits/commands to roles in v0.1 and any v0.2 per-role guard.
-- Evidence in `analyze.py`: "Q1" verdict (a hint only; classify by hand per row 8),
-  `tool_hook_keys_with_agent_identity`, `tool_conversation_id_relation`, the share of
-  in-window tool events with the same conversation+generation as the main agent.
+- Evidence in `analyze.py`: the four separate categories `direct_current_identity`,
+  `role_only_identity`, `parent_only_identity` (a `parent_*` key or the parent's
+  `conversation_id` only ever lands here) and `unclassified_identity_candidates`
+  (undocumented or unlinked id-like keys, never auto-promoted); the "Q1" VERDICT, which is a
+  hint requiring manual classification per row 8 (CONFIRMED only from direct, PARTIAL for
+  role only, REFUTED for parent only or nothing found, OPEN for unclassified candidates or
+  no data); the raw `tool_hook_keys_with_agent_identity` and `tool_conversation_id_relation`;
+  the share of in-window tool events with the same conversation+generation as the main agent.
 - Fallbacks if the instance is NOT identifiable (all would be `inferred`): temporal
   attribution (unsafe with parallel subagents), worktree/`workspace_roots` as the identity (only with isolation),
   `tool_use_id` linkage of the `Task` call to `subagentStart.tool_call_id`,

@@ -73,7 +73,7 @@ def load(path):
                     bad += 1
             except Exception:
                 bad += 1  # torn/corrupt line: tolerated
-    recs.sort(key=lambda r: r.get("start_epoch_ms", 0))
+    recs.sort(key=lambda r: _when(r) or 0)
     return path, recs, bad
 
 
@@ -118,96 +118,205 @@ def key_shapes(recs):
     return out
 
 
+# --- Q1 identity classification -------------------------------------------------------
+# Four separate buckets (docs/empirical-test-plan.md row 8). The verdict derived from them is
+# a HINT: only a human classifying per hook name, against ground truth, decides Q1.
+#   direct_current_identity          a field that uniquely identifies the CURRENT subagent
+#                                    instance on tool hooks (a subagent_id that equals a
+#                                    captured subagentStart.subagent_id, on every occurrence;
+#                                    or conversation_id equal to such a subagent_id)
+#   role_only_identity               names the kind of agent only (subagent_type ...)
+#   parent_only_identity             names the spawning parent only (any key containing
+#                                    "parent", or conversation_id equal to the parent's).
+#                                    NEVER counts toward current-instance identity.
+#   unclassified_identity_candidates id-like keys with undocumented meaning, or a
+#                                    subagent_id that is not (fully) linkable. NEVER
+#                                    auto-promoted.
+BUCKETS = (
+    "direct_current_identity",
+    "role_only_identity",
+    "parent_only_identity",
+    "unclassified_identity_candidates",
+)
+DIRECT_ID_KEYS = frozenset({"subagent_id"})
+ROLE_ONLY_KEYS = frozenset({"subagent_type", "agent_type", "agent_role", "subagent_role"})
+HINT_NOTE = "hint only; requires manual classification per docs/empirical-test-plan.md row 8"
+
+
+def _dict(x):
+    return x if isinstance(x, dict) else {}
+
+
+def _sid(v):
+    """A usable id string, else None (missing, null, '<invalid>', or any odd type)."""
+    return v if isinstance(v, str) and v and v != "<invalid>" else None
+
+
+def _when(r):
+    v = r.get("start_epoch_ms")
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def _idlike(low):
+    return (low in ("id", "uuid") or low.endswith(("_id", "_ids", "_uuid"))
+            or any(t in low for t in ("agent", "instance", "worker")))
+
+
+def classify_key(name, event):
+    """Bucket for one payload key seen on a tool hook, or None if it is not identity-like.
+
+    A subagent_id is returned as direct here only provisionally; identity_analysis demotes it
+    to unclassified unless every occurrence links to a captured subagentStart.subagent_id.
+    """
+    if not isinstance(name, str) or name.startswith("<"):
+        return None
+    low = name.lower()
+    if "parent" in low:  # checked first: parent_subagent_id etc. are still the PARENT
+        return "parent_only_identity"
+    if low in DIRECT_ID_KEYS:
+        return "direct_current_identity"
+    if low in ROLE_ONLY_KEYS:
+        return "role_only_identity"
+    if name in BASE_KEYS or name in DOC_KEYS.get(event, ()):
+        return None  # documented fields (conversation_id, tool_use_id, ...) are not candidates
+    return "unclassified_identity_candidates" if _idlike(low) else None
+
+
+def identity_verdict(buckets, starts, in_win):
+    """(code, text) for Q1 from the four buckets. A hint, never a result."""
+    if buckets["direct_current_identity"]:
+        code, why = "CONFIRMED", "tool hooks carry a field that uniquely identifies the current subagent instance: %s" % sorted(buckets["direct_current_identity"])
+    elif buckets["role_only_identity"]:
+        code, why = "PARTIAL", "role only (%s): names the kind of agent, not the instance" % sorted(buckets["role_only_identity"])
+    elif buckets["unclassified_identity_candidates"]:
+        code, why = "OPEN", "undocumented or unlinked id-like keys %s need manual classification" % sorted(buckets["unclassified_identity_candidates"])
+    elif buckets["parent_only_identity"]:
+        code, why = "REFUTED", "parent identity only (%s); a parent id never identifies the current subagent" % sorted(buckets["parent_only_identity"])
+    elif not starts:
+        code, why = "OPEN", "no subagentStart captured; nothing to classify"
+    elif not in_win:
+        code, why = "OPEN", "subagentStart seen but no tool hooks fell inside a matched subagent window"
+    else:
+        code, why = "REFUTED", "no identity-bearing key on tool hooks inside subagent windows"
+    return code, "%s: %s (%s)" % (code, why, HINT_NOTE)
+
+
 def identity_analysis(recs):
+    recs = [r for r in recs if isinstance(r, dict)]
     starts = [r for r in recs if r.get("hook_event_name") == "subagentStart"]
     stops = [r for r in recs if r.get("hook_event_name") == "subagentStop"]
     tools = [r for r in recs if r.get("hook_event_name") in TOOL_EVENTS]
-    parents = {r["ids"].get("parent_conversation_id") for r in starts if "ids" in r} - {None}
-    sub_ids = {r["ids"].get("subagent_id") for r in starts if "ids" in r} - {None}
+    parents = {_sid(_dict(r.get("ids")).get("parent_conversation_id")) for r in starts} - {None}
+    sub_ids = {_sid(_dict(r.get("ids")).get("subagent_id")) for r in starts} - {None}
     res = {"subagent_starts": len(starts), "subagent_stops": len(stops), "tool_events": len(tools)}
 
-    # (a) any identity-ish key on tool hooks?
-    idkeys = Counter()
+    # (a) classify every identity-like key that appears on tool hooks into the four buckets.
+    buckets = {b: Counter() for b in BUCKETS}
+    linked, unlinked = Counter(), Counter()
+    legacy = Counter()  # raw, unclassified key counts (kept for the row 8 artifact list)
     for r in tools:
-        for k in r.get("keys", {}):
-            if any(s in k for s in ("subagent", "parent_", "agent_id", "agent_type")):
-                idkeys[k] += 1
-    res["tool_hook_keys_with_agent_identity"] = dict(idkeys)
+        ids = _dict(r.get("ids"))
+        for k in _dict(r.get("keys")):
+            if isinstance(k, str) and any(x in k for x in ("subagent", "parent_", "agent_id", "agent_type")):
+                legacy[k] += 1
+            b = classify_key(k, r.get("hook_event_name"))
+            if b is None:
+                continue
+            if k in DIRECT_ID_KEYS:
+                if _sid(ids.get(k)) in sub_ids:
+                    linked[k] += 1
+                else:
+                    unlinked[k] += 1
+            else:
+                buckets[b][k] += 1
+    for k in sorted(set(linked) | set(unlinked)):
+        # direct only if EVERY occurrence links to a start; a partial or unlinked id is a
+        # candidate for manual review (row 8: "unlinked discriminator").
+        if linked[k] and not unlinked[k]:
+            buckets["direct_current_identity"][k] += linked[k]
+        else:
+            buckets["unclassified_identity_candidates"][k] += linked[k] + unlinked[k]
+    res["tool_hook_keys_with_agent_identity"] = dict(legacy)  # RAW; not an identity verdict
 
     # (b) tool-hook conversation_id relation to known ids
     rel = Counter()
     for r in tools:
-        cid = (r.get("ids") or {}).get("conversation_id")
-        if cid in sub_ids:
+        cid = _sid(_dict(r.get("ids")).get("conversation_id"))
+        if cid is not None and cid in sub_ids:
             rel["conversation_id==subagent_id"] += 1
-        elif cid in parents:
+        elif cid is not None and cid in parents:
             rel["conversation_id==parent_conversation_id"] += 1
         else:
             rel["conversation_id=other"] += 1
     res["tool_conversation_id_relation"] = dict(rel)
+    if rel.get("conversation_id==subagent_id"):
+        buckets["direct_current_identity"]["conversation_id==subagent_id"] += rel["conversation_id==subagent_id"]
 
     # (c) temporal attribution: pair each start with the next unmatched stop of same type.
-    unmatched = list(stops)
+    unmatched = [x for x in stops if _when(x) is not None]
     windows = []
     for s in starts:
-        st = (s.get("ids") or {}).get("subagent_type")
+        sids = _dict(s.get("ids"))
+        t0 = _when(s)
+        st = sids.get("subagent_type")
         m = None
-        for cand in unmatched:
-            if (cand.get("ids") or {}).get("subagent_type") == st and cand["start_epoch_ms"] >= s["start_epoch_ms"]:
-                m = cand
-                break
+        if t0 is not None:
+            for cand in unmatched:
+                if _dict(cand.get("ids")).get("subagent_type") == st and _when(cand) >= t0:
+                    m = cand
+                    break
         if m:
             unmatched.remove(m)
         windows.append({
-            "subagent_id": (s.get("ids") or {}).get("subagent_id"),
+            "subagent_id": sids.get("subagent_id"),
             "subagent_type": st,
-            "parent": (s.get("ids") or {}).get("parent_conversation_id"),
-            "t0": s["start_epoch_ms"],
-            "t1": m["start_epoch_ms"] if m else None,
+            "parent": sids.get("parent_conversation_id"),
+            "t0": t0,
+            "t1": _when(m) if m else None,
             "matched_stop": bool(m),
         })
     res["windows"] = len(windows)
     res["windows_without_matching_stop"] = sum(1 for w in windows if not w["matched_stop"])
     note_matching = "subagentStop has no subagent_id per docs; start/stop pairing is by type+order and is approximate"
     res["pairing_caveat"] = note_matching
+
+    def inside(r):
+        t = _when(r)
+        cid = _dict(r.get("ids")).get("conversation_id")
+        return t is not None and any(
+            w["t0"] is not None and w["t1"] is not None and w["t0"] <= t <= w["t1"] and w["parent"] == cid
+            for w in windows)
+
     in_win, same_conv_gen = 0, 0
     main_pairs = set()
-    for r in tools:
-        t = r["start_epoch_ms"]
-        ids = r.get("ids") or {}
-        inside = any(w["t1"] and w["t0"] <= t <= w["t1"] and w["parent"] == ids.get("conversation_id") for w in windows)
-        if not inside:
-            main_pairs.add((ids.get("conversation_id"), ids.get("generation_id")))
-    for r in tools:
-        t = r["start_epoch_ms"]
-        ids = r.get("ids") or {}
-        if any(w["t1"] and w["t0"] <= t <= w["t1"] and w["parent"] == ids.get("conversation_id") for w in windows):
+    flags = [(r, inside(r)) for r in tools]
+    for r, ins in flags:
+        if not ins:
+            ids = _dict(r.get("ids"))
+            main_pairs.add((_sid(ids.get("conversation_id")), _sid(ids.get("generation_id"))))
+    for r, ins in flags:
+        if ins:
+            ids = _dict(r.get("ids"))
             in_win += 1
-            if (ids.get("conversation_id"), ids.get("generation_id")) in main_pairs:
+            if (_sid(ids.get("conversation_id")), _sid(ids.get("generation_id"))) in main_pairs:
                 same_conv_gen += 1
     res["tool_events_inside_subagent_windows"] = in_win
     res["of_which_same_conversation_and_generation_as_main"] = same_conv_gen
+    if in_win:  # inside a subagent window the hooks carry the parent's conversation_id: parent identity
+        buckets["parent_only_identity"]["conversation_id==parent_conversation_id"] += in_win
 
     # (d) Task tool linkage
-    task_ids = {(r.get("ids") or {}).get("tool_use_id") for r in tools
-                if (r.get("ids") or {}).get("tool_name") == "Task"} - {None}
-    call_ids = {(r.get("ids") or {}).get("tool_call_id") for r in starts} - {None}
+    task_ids = {_sid(_dict(r.get("ids")).get("tool_use_id")) for r in tools
+                if _dict(r.get("ids")).get("tool_name") == "Task"} - {None}
+    call_ids = {_sid(_dict(r.get("ids")).get("tool_call_id")) for r in starts} - {None}
     res["task_tool_use_ids_matching_subagentStart_tool_call_id"] = len(task_ids & call_ids)
-    res["task_tool_events"] = sum(1 for r in tools if (r.get("ids") or {}).get("tool_name") == "Task")
+    res["task_tool_events"] = sum(1 for r in tools if _dict(r.get("ids")).get("tool_name") == "Task")
 
-    if not starts:
-        verdict = "INCONCLUSIVE: no subagentStart captured"
-    elif idkeys:
-        verdict = "LIKELY YES: tool hooks carry agent-identity-like keys %s (confirm values differ per subagent)" % sorted(idkeys)
-    elif rel.get("conversation_id==subagent_id"):
-        verdict = "LIKELY YES: tool hooks inside subagents use conversation_id == subagent_id"
-    elif in_win:
-        verdict = ("LIKELY NO: %d tool events inside subagent windows; no identity keys; %d/%d share the main "
-                   "conversation_id+generation_id. Only temporal attribution possible (unsafe under parallelism)."
-                   % (in_win, same_conv_gen, in_win))
-    else:
-        verdict = "INCONCLUSIVE: subagentStart seen but no tool hooks fell inside a matched subagent window"
-    res["verdict"] = verdict
+    for b in BUCKETS:
+        res[b] = dict(buckets[b])
+    code, text = identity_verdict(buckets, starts, in_win)
+    res["verdict_code"] = code
+    res["verdict"] = text
     return res
 
 
@@ -387,11 +496,16 @@ def render(a):
         if d["documented_but_absent"]:
             w("    >> documented keys never seen: %s" % d["documented_but_absent"])
     w("")
-    w("--- Q1 agent identity inside subagent tool hooks ---")
+    w("--- Q1 identity of the CURRENT subagent inside its tool hooks (HINT ONLY) ---")
     ai = a["agent_identity"]
+    w("  The four categories below are reported separately. A parent_* key or the parent's")
+    w("  conversation_id can only ever count as parent_only_identity. Classify by hand per")
+    w("  docs/empirical-test-plan.md row 8; the verdict below is not a result.")
     for k, v in ai.items():
-        if k != "verdict":
+        if k not in BUCKETS and k not in ("verdict", "verdict_code"):
             w("  %s: %s" % (k, v))
+    for b in BUCKETS:
+        w("  %s: %s" % (b, ai[b] or "(none)"))
     w("  VERDICT: %s" % ai["verdict"])
     w("")
     w("--- Q2 subagent_type values ---")

@@ -124,9 +124,18 @@ Now analyze:
 python3 spike/analyze.py            # run from the scratch repo, or pass the path
 ```
 
-Read the **Q1** and **Q2** sections: do tool hooks inside a subagent carry
-anything that names the subagent, and does `subagent_type` show `cf-reviewer`,
-`cf-writer`, or only `generalPurpose`?
+Read the **Q1** and **Q2** sections. Q1 asks whether tool hooks inside a subagent
+identify the *current subagent instance*. The analyzer reports four categories
+separately: `direct_current_identity` (a unique current-instance id, for example a
+`subagent_id` that equals a captured `subagentStart.subagent_id` on every occurrence),
+`role_only_identity` (`subagent_type` and similar), `parent_only_identity` (any
+`parent_*` key, or a `conversation_id` equal to the parent's; this can never confirm
+identity) and `unclassified_identity_candidates` (id-like keys with undocumented meaning,
+or an id that does not link to a start; never auto-promoted). Its VERDICT line follows
+CONFIRMED (direct only), PARTIAL (role only), OPEN (only unclassified candidates, or no
+data) and REFUTED (parent only, or nothing found inside subagent windows) and is a hint:
+classify by hand per `docs/empirical-test-plan.md` row 8. Q2 asks whether `subagent_type`
+shows `cf-reviewer`, `cf-writer`, or only `generalPurpose`.
 
 ## 3. Run B: two subagents in parallel with worktree isolation (Q3, Q4, Q5)
 
@@ -199,8 +208,10 @@ git worktree list && git worktree prune
 
 - `capture_hook.py`: the hook, plus `--selftest`, `--set-label`, `--print-capture-dir`.
 - `hooks.json.example`, `hooks.windows.json.example`: passive hooks only.
-- `analyze.py`: per-event key shapes, identity evidence, latency percentiles,
-  worktree flags, interleaving evidence. Tolerates torn lines.
+- `analyze.py`: per-event key shapes, identity evidence in four separate categories (direct
+  current identity, role only, parent only, unclassified candidates; the verdict is a hint),
+  latency percentiles, worktree flags, interleaving evidence. Tolerates torn lines and odd
+  records. Unit-tested with synthetic records in `tests/unit/test_spike_analyze.py`.
 - `bench_latency.py`: steady-state process wall-clock latency (fresh process, warm cache); results in `results/`.
 - `questions.md`: the open questions and how each is answered.
 - `doc_examples/`: hand-built, doc-derived example payloads. **Not captured.**
