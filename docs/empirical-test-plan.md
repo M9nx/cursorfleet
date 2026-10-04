@@ -1268,13 +1268,35 @@ piped to the installed `cursorfleet-hook` in each folder):
 | `doctor` | explains that a git repository is required; does not crash; exit 1 outside Git |
 | `status --json`, `tui` | report "not a git repository" as a problem; do not crash |
 
-For 17b the **hook** design intent is still **undefined** (owner decision still OPEN):
-`git rev-parse` and the hook's `.git` walk would both attribute the folder to the parent
-repository, so events from a folder that is not itself a repository would land in the
-parent's runtime directory. Record exactly what happens (which directory receives the
-spool, what `doctor` says). ADR 0009 rule 7 does not decide this: `init` will not install
-into 17b, but a hook that reaches such a folder another way (user-level hooks, a copied
-`hooks.json`) is a separate question.
+For 17b the **hook** expected behaviour is decided (owner, 2026-10-04;
+[ADR 0002](adr/0002-storage-layout-and-runtime-directory.md) runtime-inheritance
+amendment). **Not implemented. Not empirically verified.** `init` is unchanged (part 3):
+`cursorfleet init` from 17b still exits 2 and writes nothing.
+
+Expected (runtime, from a hook that reaches the folder via user-level hooks or a copied
+`hooks.json`):
+
+| Case | Expected |
+| --- | --- |
+| Ordinary nested non-git dir inside an **initialized** enclosing root (`.cursorfleet/` present at that root) | Inherit that enclosing repository. Events go to its `<git-common-dir>/cursorfleet/`. Paths are stored relative to that root. No nested `.cursorfleet/` and no nested runtime directory are created. |
+| Inner `.git` directory/gitfile or submodule | New repository boundary. Does **not** inherit the outer repository. |
+| Uninitialized inner repository (inner `.git`, no `.cursorfleet/` at the inner root) | Does **not** fall back to the outer repository. No event; fail open. |
+| Missing CursorFleet marker at the detected root | No event; fail open (exit 0, correct reply). |
+| External symlink, ambiguous multi-root workspace, or uninitialized root | No event; fail open. |
+
+Resolution used for the expected cases: tool cwd when available, otherwise
+`CURSOR_PROJECT_DIR`; realpath-resolve the anchor; nearest Git root; require the
+CursorFleet installation/config marker at that root; use that root's git-common-dir and
+repository identity. Inheritance is allowed only for an installation that already exists
+at the resolved root.
+
+Pass (17b, when later executed): every row of the table holds, including no nested
+`.cursorfleet/` or runtime created and paths relative to the inherited root. Refute: the
+hook writes to the outer runtime from an inner `.git`/submodule; falls back from an
+uninitialized inner repository to the outer; records an event when the marker is missing,
+or on an external symlink / ambiguous multi-root / uninitialized root; writes a nested
+`.cursorfleet/` or nested runtime; stores paths relative to the nested folder rather than
+the inherited root; or `init` from 17b writes anything or exits other than 2.
 
 Part 3, `init` and `uninstall` repository-root preconditions (owner decision 2026-10-04;
 [ADR 0009](adr/0009-install-uninstall-ownership.md) amendment; [ADR 0002](adr/0002-storage-layout-and-runtime-directory.md)).
@@ -1295,11 +1317,12 @@ the enclosing repository, so `init`/`uninstall` from 17b/17c would write into th
 and from 17a exit **1** (`test_not_a_git_repo_is_refused`). Follow-ups task 15.
 
 - Pass: 17a part 2 matches every row of the table (exit 0, right reply, nothing written,
-  clear `doctor` message); 17b hook behaviour is recorded (the hook-attribution decision
-  may stay OPEN); part 3 is documented in ADR 0002/0009 (this decision). Refute: the hook
-  writes any file in 17a, exits non-zero, prints a wrong reply, or a command crashes.
-- Can change: ADR 0002 (non-git statement), ADR 0009, [kit](kit.md),
-  [quickstart](quickstart.md), [follow-ups](follow-ups.md) task 15,
+  clear `doctor` message); 17b matches every row of the expected table above; part 3 is
+  documented in ADR 0002/0009 (init still exit 2 from 17b/17c). Refute: the hook writes
+  any file in 17a, exits non-zero, prints a wrong reply, or a command crashes; or any 17b
+  refute case above.
+- Can change: ADR 0002 (non-git statement and runtime inheritance), ADR 0009, [kit](kit.md),
+  [quickstart](quickstart.md), [follow-ups](follow-ups.md) tasks 15 and 16,
   [platform-support](platform-support.md), [architecture](architecture.md) failure table,
   `doctor` messages.
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
@@ -1458,8 +1481,10 @@ this plan is still OPEN.**
    `release-checklist.md` names it as a gate. **RESOLVED (2026-10-04):** ADR 0009 amendment
    and ADR 0002 state the repository-root preconditions for `init`/`uninstall` (exit 2, no
    `--allow-non-git`; subdirectory refuses; nested and linked-worktree roots are valid).
-   **Still open:** 17b hook attribution to an enclosing repository; the release checklist
-   does not yet name the row 15 gate; no first-run (cold cache) target exists.
+   **RESOLVED (2026-10-04, documentation only):** 17b hook attribution inherits an already
+   initialized enclosing repository (ADR 0002); `init` from 17b still exits 2. The result
+   record stays OPEN until a live run. **Still open:** the release checklist does not yet
+   name the row 15 gate; no first-run (cold cache) target exists.
 
 ## After the run
 
