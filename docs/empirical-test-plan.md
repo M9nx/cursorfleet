@@ -648,28 +648,111 @@ carried field; this row decides whether even the hint is safe.
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0001, 0003, 0010.
 
-### 11. Permission-hook fail-open reply shape (release gate)
+### 11. Permission-hook reply shape (release gate)
 
-- Procedure: the kit already prints `{"permission":"allow"}` for permission hooks
-  (`spike/capture_hook.py`), so rows 1, 8 and 9 exercise it. Additionally, once, set
-  a permission hook to print `{}` and then empty output in a scratch hooks file and note
-  whether the action proceeds. The README has no step for this.
-- Artifacts: written notes plus a fixture of the exact reply and Cursor's behaviour.
-- Pass: `{"permission":"allow"}` is accepted for `preToolUse` and `subagentStart` and the
-  action proceeds. Record behaviour for `{}` and empty output.
-- Fail: the fail-open reply is wrong and could block users; do not ship the hook until fixed.
-- Can change: ADR 0001, ADR 0007 and ADR 0008 (fail-open policy), `hook_policy.fail_open_response`.
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
+Question: which hook outputs and failure modes let a permission hook's action proceed, and
+which block it? ADR 0008 and ADR 0007 rely on `{"permission":"allow"}` and on exit 0 being
+safe; this row checks that, and checks what a broken hook (for example a missing binary) does.
+
+Docs citations (per docs, as recorded in ADR 0001 A2 and A3; none is verified here):
+
+- Permission hooks are those where invalid JSON or a schema-mismatching response blocks the
+  action: `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`,
+  `beforeTabFileRead`, `subagentStart`, `preToolUse`.
+- Exit 0: the JSON output is used. Exit 2: blocks (same as `deny`). Any other exit code
+  (crash, timeout): fail open, the action proceeds.
+- `failClosed: true`: crash, timeout, non-zero exit and empty output block the action.
+  Permission hooks block on invalid JSON even when `failClosed` is false.
+- ADR 0001 A3 notes that printing `{}` from a permission hook "is a schema risk the docs
+  imply will block". The docs do not say what empty output does for a permission hook with
+  `failClosed` false.
+- Merge across sources: deny beats ask beats allow, so a user-, team- or enterprise-level
+  hook that denies would mask an allow.
+
+Hooks under test: `preToolUse` and `subagentStart` (the product permission hooks, ADR 0007)
+and `beforeShellExecution` (**diagnostic only**: ADR 0007 does not register it).
+
+Setup (throwaway tooling outside the repository, argv lists and no network): a scratch
+stub script that takes a case id, appends one line `case-id timestamp` to a scratch marker
+file (so you can tell whether the hook ran), and then emits the case's reply. Narrow each
+entry with a matcher so a blocking case cannot lock the scratch session: `preToolUse` with
+matcher `Read` and a scratch `probe.txt` containing the made-up string `CF-PROBE-OK`;
+`subagentStart` with the matcher for a scratch `cf-probe` subagent (`readonly: true`);
+`beforeShellExecution` with a matcher for the exact text `echo cf-probe-<case>`. Verify the
+matcher itself first with case C1 (row 9 probes matchers on `subagentStart`).
+
+Table 11A: cases and expectations per docs (the expectations are claims to test, not facts):
+
+| Case | Reply | Expected, `failClosed` false | Expected, `failClosed` true |
+| --- | --- | --- | --- |
+| C1 | exit 0, `{"permission":"allow"}` | proceeds | proceeds |
+| C2 | exit 0, `{}` | docs imply it may block (schema risk); not stated | same |
+| C3 | exit 0, empty output | not stated | blocks |
+| C4 | exit 0, invalid JSON (`not json`) | blocks | blocks |
+| C5 | exit 1, no output | proceeds | blocks |
+| C6 | exit 2, no output | blocks | blocks |
+| C7 | exit 0 after exceeding the hook `timeout` (set to 1 second in the scratch file) | proceeds | blocks |
+| C8 | exit 0, `{"permission":"allow"}` followed by a non-JSON line (debug noise) | not stated | not stated |
+| C9 | hook command is a non-existent executable (the "missing binary" case) | proceeds (non-zero exit) | blocks |
+
+Table 11B: observations (all OPEN). One grid per case; one cell per hook and `failClosed`
+setting; record `proceeded`, `blocked`, or `other` plus the evidence in the cell:
+
+| Case | `preToolUse` false | `preToolUse` true | `subagentStart` false | `subagentStart` true | `beforeShellExecution` false (diag.) | `beforeShellExecution` true (diag.) |
+| --- | --- | --- | --- | --- | --- | --- |
+| C1 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| C2 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| C3 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| C4 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| C5 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| C6 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| C7 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| C8 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| C9 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+
+What to record per cell: whether the marker line appeared (the hook ran); whether the
+action took effect (the agent read `CF-PROBE-OK`, the subagent started, the shell command
+output appears in the Cursor transcript); any message or error shown in the UI; any Cursor
+hook log entry. Repetitions: C1 and C9 for the two product hooks need N=3; every other cell
+N=1, repeated 3 times if it diverges from the docs expectation.
+
+- Artifacts: the observation grid, the exact stub reply per case, and one sanitized fixture
+  of the C1 reply and Cursor's behaviour for each product hook.
+- Pass (release gate): C1 proceeds for `preToolUse` and `subagentStart` with `failClosed`
+  false and true, in 3 of 3 runs; C5, C7 and C9 proceed with `failClosed` false (so a
+  missing or slow binary does not block users); every other cell is recorded.
+- Refute: C1 blocks or errors for either product hook (the fail-open reply is wrong; do not
+  ship); or any of C5, C7, C9 blocks with `failClosed` false (the "missing binary fails
+  open" argument in ADR 0008 is false). A cell that differs from Table 11A is recorded as
+  DIVERGES and the cited docs line is corrected in ADR 0001 A2 or A3. If C2 proceeds, the
+  AGENTS.md statement about `{}` and permission hooks is stricter than reality (a doc fix,
+  not a behaviour change: the code keeps printing the allow reply).
+- Safety notes: scratch repository only; harmless actions only (`echo`, a Read of a scratch
+  file, a read-only scratch subagent); never test `deny` or `ask` replies on real commands;
+  narrow matchers before enabling any `failClosed: true` entry and remove those entries as
+  soon as the cell is done; keep an out-of-band terminal to edit the scratch hooks file;
+  check no user-, team- or enterprise-level hook is present that could mask the result
+  (`doctor` shows what is readable on disk); `failClosed` is a test setting here and must
+  not appear in the product configuration (ADR 0008).
+- Can change: ADR 0001, ADR 0007 and ADR 0008 (fail-open policy and reply table),
+  `hook_policy.fail_open_response`, and the AGENTS.md reply wording.
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0001, 0007, 0008.
 
 ### 12. `ask` on permission hooks
 
-- Procedure: in a scratch hooks file, return `ask` once each for `preToolUse` and
-  `subagentStart` (and `beforeShellExecution` only to record, since ADR 0007 drops it).
-  The README has no step for this.
-- Pass (informational): whether a prompt appears is recorded once per hook.
+- Procedure: reuse the row 11 stub and narrowed matchers with an `ask` reply, once each for
+  `preToolUse` and `subagentStart`, and for `beforeShellExecution` (diagnostic: ADR 0007
+  drops it). The README has no step for this.
+- Docs expectation (ADR 0001 A2, not verified): `preToolUse` accepts `ask` but does not
+  enforce it; `subagentStart` does not support `ask` and treats it as `deny`;
+  `beforeShellExecution` documents `allow | deny | ask`.
+- Pass (informational): per hook, whether a prompt appears and whether the action proceeds
+  is recorded once. Results: `preToolUse` OPEN; `subagentStart` OPEN;
+  `beforeShellExecution` OPEN.
+- Safety notes: as row 11; use the harmless actions only.
 - Can change: ADR 0008 only (v0.2 Guard design). No effect on v0.1 support.
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0008.
 
 ### 13. Hook latency inside Cursor (Q6) on Linux, macOS, Windows
