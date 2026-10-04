@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -15,15 +16,22 @@ from cursorfleet.tui.watch import watchfiles_available
 
 runner = CliRunner()
 DOCUMENTED_KEYS = ["/", "j", "k", "Enter", "p", "t", "g", "w", "v", "e", "r", "?", "q", "o", "l"]
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(text: str) -> str:
+    """Strip Rich/ANSI so option names like ``--path`` are visible as literals."""
+    return _ANSI.sub("", text)
 
 
 def test_tui_command_is_registered() -> None:
     result = runner.invoke(cli_app, ["--help"])
-    assert result.exit_code == 0 and "tui" in result.output
+    assert result.exit_code == 0 and "tui" in _plain(result.output)
     sub = runner.invoke(cli_app, ["tui", "--help"])
     assert sub.exit_code == 0
+    visible = _plain(sub.output)
     for option in ("--path", "--refresh", "--no-git"):
-        assert option in sub.output
+        assert option in visible
 
 
 def test_tui_refuses_non_interactive_terminals() -> None:
