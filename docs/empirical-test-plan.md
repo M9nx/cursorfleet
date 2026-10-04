@@ -338,21 +338,148 @@ optionally with `--stream-partial-output`)
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
   reviewer sign-off: -; ADRs affected: 0002 Q4, 0012.
 
-### 7. Parallel subagents and concurrency (Q5)
+### 7. Concurrency: real overlap and synthetic multi-process stress (Q5)
 
-- Procedure: README 3 (label `ide-parallel-wt`): two subagents concurrently, isolation
-  requested in the prompt. Repeat on each OS you want to claim.
-- Artifacts: Q5 section (`max_concurrent_hook_processes`, `overlapping_process_pairs`,
-  `overlapping_subagent_windows`, `tool_calls_started_while_another_open`),
-  `corrupt_lines_skipped`; `spike/results/`.
-- Pass: overlap is observed and every appended line is intact; no torn writes.
-- Fail: the ADR 0002 spool split (one file per session) must change; the Windows `O_APPEND`
-  assumption is not safe.
-- Also record: whether isolation was honoured (`git worktree list`, `workspace_roots`), and
-  `subagentStart.git_branch` / `is_parallel_worker` values.
-- Can change: ADR 0002, ADR 0010 (pairing), ADR 0012.
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
-  reviewer sign-off: -; ADRs affected: 0002 Q5, 0010, 0012.
+Question (ADR 0001 Q5, ADR 0002): do hook processes overlap in time, and do concurrent
+appends to the spool stay intact on every OS we claim? Two experiments answer different
+halves: (a) whether Cursor really runs hooks concurrently, (b) whether the spool survives
+heavy concurrent appends whatever Cursor does. A green (a) does not replace (b).
+
+**Storage being tested (corrected).** ADR 0002: `spool/<session_id>/<writer>.jsonl`, that is
+one spool file per writer per session, where the writer is `main` or the subagent instance id
+when known. It is not one file shared by every session. Each line is `<crc32 hex8> <space>
+<event json>` plus a newline, at most 8,192 bytes, written with one `O_APPEND` write. A
+writer file rotates to `<writer>.<ms>-<pid>.jsonl` at 4 MiB, and a session directory stops
+accepting appends at its byte cap (default 50 MiB) by writing a `.capped` marker. Two
+consequences for the design of this test:
+
+- If tool hooks carry no subagent instance id (row 8 is not EXACT), every hook process of a
+  session uses writer `main`, so many short-lived processes append to the same file. That
+  multi-process-per-file case is the realistic worst case and is tested (topology T2 below).
+- The spike kit's `captures.jsonl` is one shared file per repository, which is harsher than
+  the product layout. It is a fair worst case for (a) but says nothing about the product's
+  file split.
+
+#### 7(a). Real Cursor overlap test
+
+- Procedure: README 3 (label `ide-parallel-wt`), extended to four variants, each repeated 5
+  times with its own label (`ide-par-v1-r1` and so on):
+  - V1: two parallel `cf-writer` subagents, isolation requested in the prompt (README 3).
+  - V2: the same two, no isolation requested (distinct target files, so no overwrites).
+  - V3: two parallel subagents of different types (`cf-reviewer` and `cf-writer`).
+  - V4: parallel tool calls in the main agent: "in one step, run these four independent
+    commands at the same time: `echo a`, `echo b`, `echo c`, `echo d`". Whether Cursor
+    issues them in parallel is itself a result.
+- Overlap predicate (timestamps prove it): two hook records overlap when their pids differ
+  and `s1 < e2` and `s2 < e1`, with `s` = `start_epoch_ms` and `e` = `end_epoch_ms` of the
+  kit's records; cross-check with the monotonic fields (`mono_start_ms`, `mono_end_ms`). The
+  kit measures from interpreter-level start to just before its final write
+  (`latency_excludes_final_write`), so each measured interval lies inside the real process
+  lifetime: an observed overlap is conclusive, a missing overlap is not proof of serialization.
+- Evidence: Q5 section of `analyze.py` (`max_concurrent_hook_processes`,
+  `overlapping_process_pairs`, `tool_calls_started_while_another_open`,
+  `overlapping_subagent_windows`), `corrupt_lines_skipped`, and for each repetition the list
+  of overlapping pairs by `tool_use_id`. `overlapping_subagent_windows` pairs starts with stops
+  by type and order, so it is approximate for same-type subagents: build the windows by hand
+  from the row 8 ground truth.
+- Also record: whether isolation was honoured (`git worktree list`, `workspace_roots`),
+  `subagentStart.git_branch` and `is_parallel_worker`, and whether the work truly overlapped
+  (task cards in the UI).
+- Pass (a): in at least one repetition of V1 or V3, hook processes belonging to different
+  subagents overlap; V4 either shows overlapping hook processes for different `tool_use_id`s
+  or is recorded as sequential; `corrupt_lines_skipped` is 0 in every repetition.
+- Refute (a): a torn or interleaved line in the shared capture (the ADR 0002 append claim
+  fails for Cursor's real pattern). If the work overlapped (windows overlap, tool calls
+  started while another was open) but no hook processes did in 5 of 5 repetitions per variant,
+  record "serialized observed": the risk is lower on that version and surface, but (b) is
+  still required. If Cursor never ran anything concurrently, (a) stays OPEN.
+
+#### 7(b). Synthetic multi-process stress test (design validation, throwaway tooling)
+
+This is a design-validation experiment, performed with throwaway tooling kept outside the
+repository or a documented manual procedure. It adds no product code and changes none.
+
+- Writers: a driver spawns W separate OS processes (not threads) with a start barrier. Each
+  process writes E events through the product append function with explicit arguments, or
+  through the product hook for (b2), and logs every outcome to its own private ack file that
+  is not part of the spool.
+- Event: a JSON object with writer index `w`, per-writer sequence `n` (0 to E-1), a unique id
+  `w<w>-n<n>`, and ASCII padding. Bounded size: the whole encoded line (CRC prefix, body and
+  newline) is between 256 and 8,192 bytes, drawn uniformly, with 5% exactly 8,192 bytes, 5%
+  exactly 4,097 bytes and 5% at most 512 bytes. No line exceeds the 8,192-byte limit
+  (`MAX_LINE_BYTES`). The random seed is recorded so a run can be repeated.
+- Configurations (every one run at least 3 times per OS):
+
+  | Config | Writers x events | Total | Topology | Rotation and cap |
+  | --- | --- | --- | --- | --- |
+  | A | 8 x 750 | 6,000 | T1: one writer file per process | defaults (4 MiB, 50 MiB) |
+  | B | 8 x 750 | 6,000 | T2: all processes share one writer file (`main`) | defaults |
+  | C | 16 x 400 | 6,400 | T2 | rotate at 256 KiB, to force many rotations |
+  | D | 8 x 750 | 6,000 | T2 | rotate at 256 KiB, session cap 2 MiB |
+
+  Each total is at least 5,000 events across at least 8 writer processes. The total size of
+  B is about 25 MiB, so B also crosses the 4 MiB rotation several times.
+- (b1) Raw-line level: call the product `append_event` (imported, not modified) with
+  arbitrary JSON text of the sizes above, so size can be controlled (valid `Event` objects
+  cannot be padded to 8 KiB). Verify with an independent checker that recomputes
+  `zlib.crc32`, not with the product reader.
+- (b2) Hook level: invoke the real `cursorfleet-hook` as a subprocess with an argv list and a
+  timeout, 8 concurrent workers, at least 6,000 synthetic `preToolUse` payloads in total
+  (doc-derived shape, `tool_use_id` of the form `tu-<worker>-<seq>`, one shared
+  `conversation_id`), in a throwaway git repo that is not the Cursor scratch repo. A second
+  variant gives each worker its own `subagent_id` (T1-like). A third run raises the count until
+  the session directory exceeds 8 MiB (at least two rotations at the default 4 MiB). A fourth
+  sets `CURSORFLEET_MAX_SESSION_MB=1` to trigger the cap. Capture every exit code and stdout:
+  all must be 0 and the allow reply. Verify with the product reader (`cursorfleet status
+  --json` and `replay`) and by counting `tool_use_id` values in the spool.
+- Assertions, for every run:
+  1. **No lost events.** Every event a writer acknowledged as written appears exactly once in
+     the spool (all segments); lost 0, duplicated 0. Events a writer was told were not
+     written (cap reached, I/O error) are counted separately as dropped.
+  2. **No torn or interleaved lines.** Every physical line is 8 hex digits, a space, a JSON
+     body that parses, and a newline; the number of lines equals the number of events; no line
+     is over 8,192 bytes; no line holds two records; no line lacks its terminating newline.
+  3. **CRC valid** on 100% of lines.
+  4. **Per-writer order preserved.** For each writer, `n` is strictly increasing in file
+     order (segments ordered by the millisecond stamp in the file name, the live file last).
+  5. **Rotation and cap behave.** A live file never exceeds rotate size plus the lines
+     written by processes already past the size check (bound: rotate size + W x 8,192 bytes);
+     rotated names are unique; no zero-length leftovers; in D the `.capped` marker exists and
+     nothing acknowledged is written after it; record the overshoot past the cap, which
+     design-wise is up to one segment plus in-flight lines because the cap is checked only
+     when a file is created or rotated. Specifically look for a rotation race: two processes
+     crossing the rotation size together, where the second rename could take the fresh file
+     (a risk read off `state/spool.py`, not an observed bug).
+  6. **Corruption counters.** Report the independent checker's counts and the product
+     reader's `Corruption` counters (`bad_format`, `bad_crc`, `bad_json`, `invalid_event`,
+     `unknown_version`, `oversize`, `misplaced`, `torn_tail`, `resynced`, `total`). They must
+     be 0 here. Negative control: inject exactly 10 known-bad lines of each kind (bad CRC, bad
+     shape, torn tail, oversize) into a copy of a spool and confirm the counters report exactly
+     those, so a 0 means something.
+- Operating systems: every OS that [platform-support](platform-support.md) lists: Linux,
+  macOS, Windows. Run on the CI matrix runners (`ubuntu-latest`, `macos-latest`,
+  `windows-latest`, as in `.github/workflows/ci.yml`) through a throwaway branch or a manual
+  workflow run that is not merged, and on at least one real machine per OS where available
+  (macOS and Windows have never been run by hand). Record the file system (for example ext4,
+  APFS, NTFS), that it is a local disk (no network or synced folders), CPU count and Python
+  version. On Windows also record whether any `os.write` returned fewer bytes than requested
+  and any antivirus involvement.
+- Pass (b): assertions 1 to 6 hold in every run of every configuration on an OS. An OS whose
+  runs all pass may claim "intact concurrent appends"; a green Linux run says nothing about
+  macOS or Windows.
+- Refute (b): any lost event, torn or interleaved line, CRC failure or order violation not
+  explained by the cap, on an OS. That OS cannot claim intact appends and Q5 is REFUTED
+  there. Consequences: ADR 0002 (spool design, the Windows `O_APPEND` assumption, per-process
+  segment files or another scheme) and platform-support. If only T2 fails, the per-writer
+  split is enough only when row 8 gives EXACT; otherwise ADR 0002 must change.
+
+- Artifacts: Q5 section, `spike/results/` notes, per-OS stress reports (counts, seeds, the
+  six assertions, counters), with no event content.
+- Can change: ADR 0002 (blocking for the OS claim), ADR 0010 (pairing), ADR 0012, ADR 0001
+  matrix row "Concurrency and parallel subagents".
+- Result record, per OS (all OPEN): Linux: OPEN; macOS: OPEN; Windows: OPEN. Date: -;
+  Cursor version / OS / surface: -; evidence path: -; reviewer sign-off: -;
+  ADRs affected: 0001 Q5, 0002, 0010, 0012.
 
 ### 8. Subagent identity inside tool hooks (Q1)
 
