@@ -538,8 +538,31 @@ Rules for classification:
   That first capture also dropped scalar `parent_tool_call_id` and
   `child_conversation_id` at the hook. Copy the updated `capture_hook.py`, start a
   **fresh labeled** capture, and do not append formal row-8 evidence to the older
-  jsonl. Concurrent repetitions below are still required; do not start them until
-  the new capture retains those two ID values.
+  jsonl.
+
+- **Row-8 readiness gate** (`analyze.py`, not a Q1 verdict). Formal R8.1 / R8.2
+  concurrent classification starts only when the analyzer prints
+  `ROW 8 READINESS: READY: required parallel/background lifecycle observed with matched start/stop`.
+  Required for READY: overlapping subagent windows **or** `is_parallel_worker=true`
+  **or** Task `run_in_background=true`, **and** matched start/stop for those
+  parallel instances. If starts exist but stops are missing, or background flags
+  are missing and there is no overlap, the analyzer prints
+  `ROW 8 READINESS: BLOCKED/OPEN: required parallel/background lifecycle not observed; do not infer a Q1 verdict`.
+  The gate never prints `FAIL` and never classifies Q1. Q1 and Q2 remain **OPEN**
+  until a human classifies after READY captures.
+
+- **Cursor 3.22.7 Linux observation (not a verdict; not a row-8 result).** A later
+  sanitized capture (raw files remain private and outside this repository) showed:
+  two-agent attempts repeatedly produced `subagentStart=2`, `subagentStop=0`,
+  `is_parallel_worker=true` count=0, `overlapping_subagent_windows=0`, Task
+  `run_in_background` missing=2; `parent_tool_call_id` matched every comparable
+  inner event (45 comparable, 45 matches, 0 mismatches, 0 collisions). After the
+  custom agent was set to `is_background: true`, Cursor was fully reloaded, and a
+  fresh chat ran `/cf-writer`, a one-agent probe still had Task
+  `run_in_background` missing=1. Formal repeated parallel classification has
+  **not** run. Treat readiness as `BLOCKED/OPEN`. Do not start R8.1 / R8.2 on
+  this observation, and do not infer that Cursor 3.22.7 on Linux can or cannot
+  run parallel subagents beyond what those counts show.
 
 - Procedure: README 2 and 3, extended to three run types, each with its own label.
   - R8.1: two concurrent subagents of the same type (`cf-writer` twice, README 3), 5 runs.
@@ -593,8 +616,11 @@ Result table, per hook name (all cells OPEN; fill with one of the four outcomes)
   naming, ADR 0012 owner mapping, ADR 0011 (what counts as tier 2), the TUI per-agent view,
   and the per-role story in v0.2. (The ADR 0001 Q1 wording that said "names the subagent or
   its parent" was replaced on 2026-10-04 by the current-instance question above.)
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
-  reviewer sign-off: -; ADRs affected: 0001 Q1, 0002, 0003, 0010, 0011, 0012.
+- Result record: OPEN; date: -; Cursor version / OS / surface: Cursor 3.22.7 /
+  Linux observation recorded above is **not** this result; evidence path: - (raw
+  captures stay outside the repo); reviewer sign-off: -; ADRs affected: 0001 Q1,
+  0002, 0003, 0010, 0011, 0012. Formal repeated parallel classification has not
+  run. Q1 stays OPEN.
 
 ### 9. Custom `.cursor/agents` `subagent_type` naming (Q2)
 
@@ -1489,7 +1515,12 @@ this plan is still OPEN.**
    current-subagent identity; `parent_tool_call_id` is an unclassified link candidate,
    not EXACT. The derived verdict is a hint that still requires manual classification per
    row 8. Q1 and Q2 remain OPEN. One sequential Cursor 3.22.7 observation is UNVERIFIED
-   and does not close this item.
+   and does not close this item. A later Cursor 3.22.7 Linux capture retained
+   `parent_tool_call_id` (45/45 comparable inner events matched) but did not
+   observe a parallel/background lifecycle (`subagentStop=0`, no
+   `is_parallel_worker=true`, no overlapping windows, Task `run_in_background`
+   missing). Formal repeated parallel classification has not run; row 8 readiness
+   is BLOCKED/OPEN, not a Q1 verdict.
 5. `spike/questions.md` secondary questions have no ids (SQ1 to SQ9 above are local). Open.
 6. ADR 0001 has one matrix row for headless `agent -p`; row 3 tests without and with
    `--force` separately. No matrix rows exist for rows 15, 17 and 18. Open.

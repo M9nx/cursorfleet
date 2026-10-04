@@ -57,6 +57,13 @@ Result values: `CONFIRMED`, `REFUTED`, `PARTIAL`, `OPEN`. Always record the
   `tool_use_id` linkage of the `Task` call to `subagentStart.tool_call_id`,
   agent self-reported artifacts (plan section 3, item 4).
 - Result: OPEN
+- Cursor 3.22.7 Linux observation (not this result): `parent_tool_call_id`
+  matched every comparable inner event (45/45). Two-agent attempts did not
+  produce a parallel/background lifecycle (`subagentStart=2`, `subagentStop=0`,
+  `is_parallel_worker=true` count=0, `overlapping_subagent_windows=0`, Task
+  `run_in_background` missing=2). After `is_background: true` and a reload, a
+  `/cf-writer` probe still had Task `run_in_background` missing=1. Formal
+  repeated parallel classification has not run. Analyzer readiness: BLOCKED/OPEN.
 
 ## Q2. How custom subagent names appear in `subagent_type`
 

@@ -25,11 +25,19 @@ self-test.
 4. Start a **fresh labeled** capture (`--set-label ide-main-<date>` or similar).
    Do **not** append to the older `captures.jsonl` from the first Cursor 3.22.7
    run: that file lacks the two new ID scalars. Run README sections 2–5, then
-   analyze with `python3 spike/analyze.py`. Do **not** start formal row 8 until
-   the new capture actually retains `parent_tool_call_id` and
-   `child_conversation_id`.
+   analyze with `python3 spike/analyze.py`. A later Cursor 3.22.7 Linux capture
+   did retain `parent_tool_call_id` (see the observation below). Do **not**
+   start formal row 8 until `analyze.py` prints
+   `ROW 8 READINESS: READY: required parallel/background lifecycle observed with matched start/stop`.
+   If it prints `BLOCKED/OPEN`, leave Q1/Q2 OPEN and do not infer a Q1 verdict.
 5. Repeat the surface subset the test plan names for CLI, Agents Window, and
-   worktrees. Keep an out-of-band terminal for cleanup.
+   worktrees. Keep an out-of-band terminal for cleanup. If readiness is still
+   `BLOCKED/OPEN` after IDE two-agent prompts, the remaining experiment is a
+   **different surface** (Agents Window background control, or CLI), then
+   re-analyze. Do not claim Cursor can run parallel/background subagents if that
+   capture still lacks overlapping windows, `is_parallel_worker=true`, and Task
+   `run_in_background=true` with matched start/stop. Sequential README 2 / R8.3
+   windows can still be collected; they cannot close row 8.
 6. After analysis: fill `spike/questions.md` and the ADR 0001 matrix. Leave every
    result **OPEN** until the capture is reviewed.
 
@@ -56,6 +64,30 @@ on `subagentStop` (not guaranteed) and inner tool hooks using a child
 `conversation_id` plus `parent_tool_call_id`, but the first capture hook dropped
 those two scalars. Copy the updated hook and start a **fresh labeled** capture;
 do not append to or re-analyze the older jsonl as row-8 evidence.
+
+`analyze.py` also reports sanitized background flags and a row-8 readiness gate
+(not a Q1 verdict): `READY` only when overlapping subagent windows **or**
+`is_parallel_worker=true` **or** Task `run_in_background=true` is observed, **and**
+those parallel instances have matched start/stop. Otherwise it prints
+`BLOCKED/OPEN` (never `FAIL`).
+
+## Cursor 3.22.7 Linux observation (not a verdict)
+
+Sanitized counts from a later Cursor 3.22.7 Linux capture (raw captures stay
+private and outside this repository). This is an observation, not a Q1/Q2 result
+and not a claim that Cursor can or cannot do parallel work in general.
+
+- Two-agent attempts repeatedly produced: `subagentStart=2`, `subagentStop=0`,
+  `is_parallel_worker=true` count=0, `overlapping_subagent_windows=0`,
+  Task `run_in_background` missing=2.
+- `parent_tool_call_id` linkage stayed deterministic on comparable inner events:
+  45 comparable, 45 matches, 0 mismatches, 0 collisions. It matched every
+  comparable inner event.
+- Custom-agent definition was then set to `is_background: true`; Cursor fully
+  reloaded; a fresh chat ran `/cf-writer`. The one-agent probe still showed
+  Task `run_in_background` missing=1.
+- Formal repeated parallel classification (row 8 R8.1 / R8.2) has **not** run.
+  Analyzer readiness for that capture is `BLOCKED/OPEN`. Q1 and Q2 stay **OPEN**.
 
 ## Row 17 / 17b (expected cases; verdict OPEN)
 

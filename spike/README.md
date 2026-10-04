@@ -10,10 +10,20 @@ capture is **incomplete**: it was taken before `parent_tool_call_id` and
 `child_conversation_id` were on the ID allowlist, so those scalars were
 dropped. Copy the **updated** `capture_hook.py` into the scratch repo and start
 a **fresh labeled** capture. Do **not** append to the older `captures.jsonl`.
-Do **not** start formal row 8 until the new capture actually retains those two
-ID values. Q1 and Q2 stay **OPEN**. Everything in
+A later Cursor 3.22.7 Linux capture did retain `parent_tool_call_id` (45
+comparable inner events, 45 matches, 0 mismatches/collisions) but did **not**
+observe a parallel/background lifecycle: two-agent attempts showed
+`subagentStart=2`, `subagentStop=0`, `is_parallel_worker=true` count=0,
+`overlapping_subagent_windows=0`, Task `run_in_background` missing=2. After
+`is_background: true` on the custom agent, a full Cursor reload, and a fresh
+`/cf-writer` chat, a one-agent probe still had Task `run_in_background`
+missing=1. That is an observation, not a verdict. Formal repeated parallel
+classification has **not** run. Do **not** start formal row 8 until the
+analyzer prints `ROW 8 READINESS: READY: ...`. `BLOCKED/OPEN` is not `FAIL`
+and is not a Q1 result. Q1 and Q2 stay **OPEN**. Everything in
 `docs/adr/0001-cursor-capabilities.md` marked UNVERIFIED stays provisional
-until row-8 repetitions classify it.
+until row-8 repetitions classify it. Raw captures stay private and outside
+this repository.
 
 ## What the kit does and does not record
 
@@ -166,8 +176,11 @@ start/stop by that optional id when present, else by type+order; it associates i
 tool events by `parent_tool_call_id`, then `child_conversation_id`, then temporal
 fallback (temporal is never treated as exact). Inner hooks may use a child
 `conversation_id`, so a parent-`conversation_id` window match alone will miss them.
-Do not promote Q1 or Q2 from OPEN on that single run. Do not start formal row 8
-until a new capture retains the two ID values.
+Do not promote Q1 or Q2 from OPEN on that single run. A later Cursor 3.22.7
+Linux capture retained `parent_tool_call_id` on comparable inner events but
+did not observe overlapping windows, `is_parallel_worker=true`, or Task
+`run_in_background=true` with matched start/stop. Do not start formal row 8
+until the analyzer readiness line is `READY`.
 
 ## 3. Run B: two subagents in parallel with worktree isolation (Q3, Q4, Q5)
 
@@ -246,9 +259,12 @@ git worktree list && git worktree prune
   is a hint, start/stop pairing by optional stop `subagent_id` else type+order, inner-tool
   association by task/child ids then temporal (never exact), linkage evidence
   (matches / mismatches / unavailable / collisions; missing is never a 0-match
-  refutation), latency percentiles, worktree flags, interleaving evidence. Tolerates torn
-  lines and odd records. Unit-tested with synthetic records in
-  `tests/unit/test_spike_analyze.py`.
+  refutation), Task `run_in_background` and `is_parallel_worker` true/false/missing
+  counts, tool outcomes by hook event and tool name, lifecycle completeness
+  (starts / matched stops / unmatched starts), a row-8 readiness gate (`READY` vs
+  `BLOCKED/OPEN`, never `FAIL`, never a Q1 verdict), latency percentiles, worktree
+  flags, interleaving evidence. Tolerates torn lines and odd records. Unit-tested
+  with synthetic records in `tests/unit/test_spike_analyze.py`.
 - `bench_latency.py`: steady-state process wall-clock latency (fresh process, warm cache); results in `results/`.
 - `questions.md`: the open questions and how each is answered.
 - `doc_examples/`: hand-built, doc-derived example payloads. **Not captured.**
