@@ -591,16 +591,62 @@ filename.
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0001 Q2, 0003, 0012.
 
-### 10. `Task` tool linkage and ids (secondary questions)
+### 10. `generation_id` and `Task` linkage (secondary questions)
 
-- Procedure: README 2 and 3; read the analysis for these secondary questions in
-  `spike/questions.md`.
-- Pass: whether `Task`'s `tool_use_id` equals `subagentStart.tool_call_id`, whether
-  `generation_id` is stable across a subagent, and whether subagents get their own
-  `sessionStart` and `sessionEnd` are each recorded.
-- Can change: ADR 0003 (`inferred_*` methods), ADR 0010 (subagentStop pairing).
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
-  reviewer sign-off: -; ADRs affected: 0003, 0010.
+Per docs `generation_id` is a base field "that changes with every user message", while
+`conversation_id` is stable across turns. Per docs `subagentStart.tool_call_id` is the "ID of
+the tool call that triggered the subagent"; whether that equals the `Task` call's
+`tool_use_id` is unverified (ADR 0001 section B, ADR 0003 and ADR 0010 candidate link).
+
+**Design invariant.** `generation_id` must never become a primary identity key: not an event
+id, not an agent instance id, not a session key, not a join key between stores. At most it is
+a grouping or correlation *hint* for the events of one user turn, and every consumer must
+work correctly when it is absent or wrong. The ADR 0003 field map already keeps it as a plain
+carried field; this row decides whether even the hint is safe.
+
+- Procedure: README 2 and 3, plus one dedicated multi-turn session (label `ide-gen-r1`, run 3
+  times): in one chat send three user messages, each causing at least two tool calls; run a
+  foreground subagent in message 2 and a parallel pair in message 3; abort one turn and then
+  send another message; open a second and a third conversation in the same repo, and one in a
+  worktree (rows 5 and 6).
+- Criteria for `generation_id` (every count is over the capture; all results OPEN):
+
+  | ID | Property | Pass | Refute |
+  | --- | --- | --- | --- |
+  | G1 | Stable across tool calls within a turn | all main-agent hook records between two user messages share one value, in every turn (at least 9 turns) | any turn with two or more values |
+  | G2 | Changes per user message | consecutive user messages in a conversation (including after the aborted turn) give different values, constant within each turn, for at least 6 transitions | a new user message reuses the previous value, or the value changes mid-turn |
+  | G3 | Relation to subagent runs | recorded, for `subagentStart`, inner tool hooks and `subagentStop`, as one of: equal to the parent turn's value, a distinct value per subagent, or absent; the same relation in every run | the relation changes between runs or within a run |
+  | G4 | Uniqueness across conversations | no value occurs in two different conversations (at least 3, one in a worktree) and none is reused by another turn | at least one collision |
+  | G5 | Presence on hooks | present, non-null and ID-shaped on every record of the nine registered hooks (and the diagnostic set) | any hook name below 100% presence, or a null value |
+  | G6 | Turn boundary hooks | `stop` and `preCompact` carry the same value as the tool hooks of their turn in 100% of turns; `sessionStart` and `sessionEnd` values are recorded | `stop` differs from its turn's tool hooks |
+
+- Evidence that would refute using `generation_id` even as a grouping key for the events of
+  a user turn: any G1, G2, G4, G5 or G6 failure (events fall out of, or merge into, groups);
+  a value that is not ID-shaped, so it cannot be stored; or values shared across worktrees
+  or sessions (G4). G3 equal to the parent's value for concurrent subagents does not refute
+  turn grouping, but it proves the value cannot separate agents and must not feed
+  attribution (row 8).
+- Criteria for `Task` linkage and session ids:
+
+  | ID | Property | Pass | Refute |
+  | --- | --- | --- | --- |
+  | L1 | `Task` `tool_use_id` equals `subagentStart.tool_call_id` | for at least 10 `Task` calls (at least 5 in parallel pairs) each `preToolUse` (`Task`) id equals the `tool_call_id` of exactly one start in the conversation, and no `tool_call_id` matches two calls (`analyze.py` count equals the `Task` call count) | any `Task` call without a matching start, or one id matching two starts |
+  | L2 | The matching `postToolUse` (`Task`) carries the same id | 100% | any mismatch |
+  | L3 | Subagents have their own `sessionStart` and `sessionEnd` | recorded per subagent (count, and whether `session_id` differs from the parent's); informational | not applicable (a recorded absence is a result) |
+  | L4 | `sessionStart.session_id` equals `conversation_id` | 100% | any mismatch |
+  | L5 | `subagentStart.parent_conversation_id` equals the parent's `conversation_id` | 100% | any mismatch |
+
+- What the results mean: L1 pass makes the `spawn_link` in ADR 0010 reliable for linking a
+  start to its `Task` call, but it still does not pair `subagentStop` (no id on stop); L1
+  refuted drops the link. L3 present means subagents could create extra `session.started`
+  events in ADR 0003's mapping, which the reducer must not count as new sessions. L4 failure
+  invalidates the `conversation_id` to `session_id` mapping for `sessionStart`.
+- Artifacts: the capture, the `analyze.py` output for the secondary questions, a table of
+  distinct `generation_id` values per turn (values replaced by letters in notes).
+- Can change: ADR 0003 (`inferred_*` methods, field map), ADR 0010 (`spawn_link`, stop
+  pairing, session counting), ADR 0001 section B.
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
+  reviewer sign-off: -; ADRs affected: 0001, 0003, 0010.
 
 ### 11. Permission-hook fail-open reply shape (release gate)
 
