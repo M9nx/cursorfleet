@@ -108,8 +108,8 @@ Layout:
 
 - Keep `docs/` as the source. Add one config file at the repository root and a short
   `docs/index.md` landing page (not a copy of the README).
-- Links from `docs/` to files outside it (`../spike/README.md`, `../CHANGELOG.md`,
-  `src/...`, `templates/...`) break in the built site. Rewrite them to absolute
+- Eight links from `docs/` to files outside it exist today (mostly `../spike/README.md` and
+  `../spike/questions.md`) and break in the built site. Rewrite them to absolute
   repository URLs at build time or keep them as GitHub links; decide per link.
 - Do not add MDX, shortcodes or tool-specific syntax to the Markdown. GitHub rendering stays
   the source of truth.
