@@ -17,6 +17,7 @@
 </div>
 <div class="cf-home-hero__visual" aria-hidden="true">
 <div class="cf-home-hero__visual-glow"></div>
+<img class="cf-home-hero__spiral" src="assets/hero-spiral.svg" alt="" width="800" height="700" decoding="async">
 </div>
 </div>
 </section>
