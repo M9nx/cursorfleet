@@ -105,8 +105,8 @@ schema: `cursorfleet.validate/1`.
 fences, parsed with `tomllib`, schema `cursorfleet.artifact/0.1`. Fields: `schema`, `kind`,
 `task`, `artifact_id`, `revision`, optional `digest` (`blake2s:<64 hex>`, computed by the
 indexer, never trusted from the file), `author_role`, `created`, and for handoffs `to_role`,
-`issue_ref`, `context_refs`. Agents may not set the digest themselves in a way that changes
-trust: a mismatch is a problem. Every artifact event is self-reported and ineligible as gate
+`issue_ref`, `context_refs`. If a `digest` is present and does not match what the indexer
+computes, that is a `digest_mismatch` problem. Every artifact event is self-reported and ineligible as gate
 evidence ([ADR 0011](adr/0011-evidence-trust-model.md)). YAML stays for Cursor's own agent,
 rule and skill files.
 
