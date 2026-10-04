@@ -37,6 +37,8 @@ HONESTY: tuple[str, ...] = (
     "obs = observed from a Cursor hook; drv = derived by CursorFleet; SELF = reported by an",
     "agent in a work artifact (a claim, not evidence; the author role can be forged).",
     "A silent agent is shown STALE / OFFLINE, never idle. No telemetry means UNKNOWN.",
+    "session_id groups one Cursor chat; it is correlation only, not agent identity.",
+    "Q1 and Q2 (subagent identity in hooks) are OPEN; incomplete lifecycles stay visible.",
     "Token and cost budgets are unknown: Cursor hooks do not expose them.",
     f"Gates: {DISPLAY_ONLY}. Each gate is its own signal; there is no overall score.",
     "Cloud agents are not visible. Local Cursor sessions only.",

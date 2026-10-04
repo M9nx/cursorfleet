@@ -84,9 +84,10 @@ cursorfleet tui                       # dashboard; needs an interactive terminal
 `status --json` uses schema `cursorfleet.status/1`. Silence is reported as
 stale or offline, never as idle. See [`status`](../cli/status.md).
 
-The TUI is **under development** and unvalidated against live Cursor. It
-refuses non-interactive terminals (exit 2); use `status` or `status --json` in
-scripts. See [TUI overview](../tui/overview.md).
+The TUI is **implemented, provisional, and unvalidated against live Cursor.**
+It refuses non-interactive terminals (exit 2); use `status` or `status --json`
+in scripts. See [TUI overview](../tui/overview.md) and
+[current status](../tui/current-status.md).
 
 ## 5. Uninstall
 

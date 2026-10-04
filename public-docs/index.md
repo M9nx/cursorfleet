@@ -24,9 +24,9 @@ Install from a git checkout. See [Installation](getting-started/installation.md)
 - Parallel-identity classification is **BLOCKED/OPEN** on the Cursor **3.22.7**
   Linux surface that has been exercised. Do not treat that single observation
   as a Q1 result.
-- The Textual dashboard (`cursorfleet tui`) is **under development**: the
-  command exists in the checkout, but it is provisional and unvalidated against
-  live Cursor. New TUI work is frozen until the live spike is finished.
+- The Textual dashboard (`cursorfleet tui`) is **implemented, provisional, and
+  unvalidated against live Cursor.** New TUI screens and event kinds are frozen
+  until the live spike is finished. See [TUI current status](tui/current-status.md).
 - **Supported surface (intended):** the local Cursor IDE (desktop) only, once
   the spike confirms it. The Cursor CLI, the Agents Window, Cursor-managed and
   manual worktrees, parallel subagents, and cloud agents are not claimed.
@@ -52,7 +52,7 @@ Git is required for `init`. There is no `--allow-non-git` flag.
 | --- | --- |
 | Kit | `cursorfleet init --cursor`, `uninstall`, `doctor`, `validate` |
 | Observer | Fail-open `cursorfleet-hook`, local spool and projection, `status --json` |
-| Dashboard | `cursorfleet tui` — under development, observe-only |
+| Dashboard | `cursorfleet tui` — implemented slice, observe-only, provisional |
 | Scope | One Git repository; runtime state under that repo's Git common directory |
 
 ## License

@@ -43,7 +43,7 @@ uv tool install ".[watch]"
 ```
 
 This adds `watchfiles` so the dashboard can react to file changes instead of
-polling. Without it, the TUI (under development) polls.
+polling. Without it, the TUI polls on the default interval.
 
 ## Development install
 

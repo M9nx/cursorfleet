@@ -5,6 +5,14 @@ The dashboard exists and is usable against synthetic and fixture data. It is
 event kinds are frozen until the live spike answers the open Cursor
 questions.
 
+## Spike gates (empirical)
+
+- **Q1** and **Q2** remain **OPEN**; the UI does not treat missing identifiers
+  as zero matches or infer quiet idle.
+- **session_id** is shown for correlation only, never as agent identity.
+- Incomplete subagent lifecycles (unpaired start/stop) stay visible; the UI
+  does not assume background or parallel execution.
+
 ## Implemented
 
 - Overview lanes, agent detail, timeline (paged), worktrees, evidence, help.
