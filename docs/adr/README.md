@@ -64,6 +64,10 @@ release gate in one line. The full gate text is in each ADR.
   - Implementation: Divergent-from-code (TUI derives gates from heuristics).
   - Gate: no v0.1 gate satisfied by tier 1 to 3 data; tiers labelled in the UI.
 - [0012: Roster and worktree ownership](0012-roster-and-worktree-ownership.md)
+- [0013: Run metadata and explicit association](0013-run-metadata-and-association.md)
+  - Status: accepted (M2.5). Supersedes: none.
+  - Implementation: Implemented-provisional (`run` CLI, hook env attach, TUI Active run).
+  - Gate: B0 scenarios exercised; external alpha metrics (M2.5-I).
   - Status: provisional. Supersedes: none.
   - Implementation: Implemented-provisional.
   - Gate: owners shown with attribution labels; no isolation or cleanup claims; worktree claims match the spike.

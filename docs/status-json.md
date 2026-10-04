@@ -10,7 +10,8 @@ golden snapshot test (`tests/integration/test_cli_state.py`,
 - `schema` is `"cursorfleet.status/1"`. Consumers should check it before reading anything else.
 - **Additive changes** (new optional keys, new `lane`/`stale_reasons` values) keep `/1`;
   consumers must ignore unknown keys and treat unknown enum values as `unknown`.
-- **Breaking changes** (removed or retyped keys, changed meaning) bump to `/2`.
+- **Breaking changes** (removed or retyped keys, changed meaning) bump the schema id.
+- When `runs[]` is present (task-centric snapshots), `schema` is `cursorfleet.status/0.2`.
 - Key order is fixed; timestamps are UTC ISO-8601 with a trailing `Z`.
 
 ## Pending changes (decided, not implemented)
