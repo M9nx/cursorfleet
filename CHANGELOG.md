@@ -13,6 +13,35 @@ pre-alpha and **has not been verified against a live Cursor session** (the quest
 [ADR 0001](docs/adr/0001-cursor-capabilities.md) are open). v0.1 is *Observe* only: no
 enforcement, no forced approvals, no cloud-agent visibility.
 
+### Process
+
+- **M0a freeze (2026-10-04).** New M2 and TUI implementation is frozen until the live Cursor
+  spike ([spike/README.md](spike/README.md)) has been run and the ADR 0001 questions are
+  answered. The existing M1, M2 and TUI code is *implemented, provisional, unvalidated
+  against live Cursor*. See [docs/status.md](docs/status.md).
+
+### Documentation
+
+- ADR process and template accepted as ADR 0000, with required fields on every ADR
+  (supersession, related ADRs, implementation status, review trigger, release gate) and an
+  indexed list of release gates in [docs/adr/README.md](docs/adr/README.md).
+- New ADRs: 0007 narrower v0.1 hook policy (supersedes 0004; nine hooks), 0008 enforcement
+  boundaries, 0009 install and uninstall ownership, 0010 reducer state semantics, 0011
+  evidence trust model, 0012 roster and worktree ownership.
+- Decisions recorded that the code does **not** yet follow (tracked in
+  [docs/follow-ups.md](docs/follow-ups.md), to be done after the spike): nine registered
+  hooks, event schema version `0.1`, `verification.observed` instead of `test.completed`,
+  command display off by default, BLAKE2s segment fingerprints, HMAC worktree ids, a
+  maintenance lock, TOML artifact frontmatter, and no gate derived from heuristic events.
+- ADR 0001 stays provisional and now carries an empirical test matrix; the local Cursor IDE
+  (desktop) is the only supported v0.1 surface, and the CLI, Agents Window and worktrees are
+  not claimed. See [docs/empirical-test-plan.md](docs/empirical-test-plan.md).
+- ADR 0005: `CursorFleet` is a working name; the public name, registry availability and a
+  trademark review are release gates. `fleet-for-cursor` is withdrawn as a fallback because
+  it still contains the Cursor mark.
+- Docs-site plan only ([docs/docs-site-plan.md](docs/docs-site-plan.md)); no site, workflow or
+  dependency was added.
+
 ### Added
 
 - **M0 foundations:** project scaffold, ADRs 0001 to 0006, product contract, threat model,
@@ -20,7 +49,7 @@ enforcement, no forced approvals, no cloud-agent visibility.
   capture kit under `spike/` and a Linux hook-latency benchmark (27.7 ms p95 cold start).
 - **M1 kit:** `cursorfleet init --cursor`, `uninstall`, `doctor` and `validate`. Deterministic
   generation of subagent files, rules, skills, `AGENTS.md` blocks and a merged
-  `.cursor/hooks.json` of twelve passive hooks, with a visible diff, confirmation, an install
+  `.cursor/hooks.json` of twelve passive hooks (ADR 0007 later narrowed this to nine; code not yet changed), with a visible diff, confirmation, an install
   lockfile and byte-for-byte uninstall.
 - **M2 observer:** a stdlib-only, fail-open hook entry point (`cursorfleet-hook`) with an
   allowlist parser, command and path sanitizer, per-writer append-only JSONL spool with CRC and
@@ -56,6 +85,9 @@ enforcement, no forced approvals, no cloud-agent visibility.
 ### Known limitations
 
 - Not published; not on PyPI or TestPyPI. No tags or GitHub releases exist.
+- The TUI derives PASS/FAIL gate tiles from heuristic command classification. This is
+  non-authoritative and contradicts ADR 0003 rule R1; fix pending after the spike.
+- The code registers twelve hooks; ADR 0007 decides nine.
 - Hook payload shapes come from documentation, not captures. Agent attribution on tool events,
   custom subagent names, CLI and Agents Window behaviour, and macOS/Windows hook latency are
   unverified (see [docs/platform-support.md](docs/platform-support.md)).
