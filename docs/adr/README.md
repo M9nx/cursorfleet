@@ -25,7 +25,7 @@ release gate in one line. The full gate text is in each ADR.
   - Local Cursor IDE (desktop) is the only supported v0.1 surface until the empirical test matrix passes.
 - [0002: Storage layout and runtime directory](0002-storage-layout-and-runtime-directory.md)
   - Status: provisional (git-common-dir design kept). Supersedes: none.
-  - Implementation: Divergent-from-code (CRC32 fingerprints, unkeyed worktree ids, no maintenance lock).
+  - Implementation: Divergent-from-code (CRC32 fingerprints, unkeyed worktree ids, no maintenance lock; `init`/`uninstall` repository-root preconditions not enforced).
   - Gate: Q4 and Q5 answered on each OS claimed; BLAKE2s, HMAC ids and the lock implemented.
 - [0003: Event model and sanitization allowlist](0003-event-model-and-sanitization.md)
   - Status: provisional (amended 2026-10-04). Supersedes: none.
@@ -53,8 +53,8 @@ release gate in one line. The full gate text is in each ADR.
   - Gate: nothing can emit a blocking reply; docs say observe only.
 - [0009: Install and uninstall ownership](0009-install-uninstall-ownership.md)
   - Status: accepted. Supersedes: none.
-  - Implementation: Implemented-provisional; no migration for removed hooks.
-  - Gate: round trip passes on all three OSes in CI; migration exists.
+  - Implementation: Implemented-provisional; no migration for removed hooks; repository-root preconditions (exit 2) not implemented (subdirectory walks up; non-git exits 1).
+  - Gate: round trip passes on all three OSes in CI; migration exists; `init`/`uninstall` enforce repository-root preconditions (exit 2, no changes).
 - [0010: Reducer state semantics](0010-reducer-state-semantics.md)
   - Status: provisional. Supersedes: none.
   - Implementation: Implemented-provisional; some divergences from 0003.
@@ -89,7 +89,8 @@ Code brought in line with the decisions:
 - ADR 0003: schema `0.1`; `verification.observed`; command display default off; attribution
   never shows inferred as exact.
 - ADR 0006: TOML artifacts with identity, revision and digest.
-- ADR 0009: migration that removes hook entries for hooks no longer registered.
+- ADR 0009: migration that removes hook entries for hooks no longer registered;
+  repository-root preconditions (exit 2, no changes).
 - ADR 0010 and 0011: lane basis shown; no gate satisfied by heuristic or self-reported data.
 
 Project and legal:

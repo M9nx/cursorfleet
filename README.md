@@ -53,6 +53,7 @@ cursorfleet --version
 ## Quickstart
 
 ```bash
+# from the repository root (Git is required; no --allow-non-git)
 cursorfleet init --cursor --dry-run   # review the exact diff first
 cursorfleet init --cursor             # install the observe-only hooks and kit (once per repo)
 # ...work with Cursor agents as usual...

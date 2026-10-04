@@ -201,8 +201,43 @@ How to read an entry:
   review, then perform the renames listed in ADR 0005. Only then publish a package, tag or a
   docs site ([`docs-site-plan.md`](docs-site-plan.md)).
 
+## 15. Repository-root preconditions for `init` and `uninstall` (ADR 0009)
+
+- Waits for: nothing technical (row 17 records Cursor behaviour in a non-git folder; the
+  write-command contract does not depend on it). Still wait for the freeze to lift.
+- Decided (owner, 2026-10-04, documentation only): `init` and `uninstall` run only at a
+  Git **repository root**. Non-git: exit 2, nothing changed, Git is required. Ordinary
+  subdirectory: exit 2, nothing changed, print the detected root. No `--allow-non-git`.
+  Nested repository and linked-worktree roots are valid. Full rules in ADR 0009 amendment
+  2026-10-04.
+- Do:
+  - `cli/commands/_common.py:workspace_root` (and callers in `init.py` / `uninstall.py`):
+    after resolving the enclosing root, refuse unless the target realpath equals that root;
+    use exit **2**; print the messages in the ADR (nothing changed; Git is required; detected
+    root; suggested command). Do not read `.cursorfleet/` or build a plan before the check.
+  - `--path` help: "repository root", not "directory inside the git repo". Reject unknown
+    `--allow-non-git` as an ordinary usage error (exit 2).
+  - `doctor` / `validate`: keep resolving from a subdirectory; print the detected root they
+    used. Do not change hook behaviour.
+- Tests (required; no sleeps):
+  - Non-git folder: `init --cursor --yes` and `--dry-run`, and `uninstall`, exit 2; snapshot
+    empty; stderr says Git is required and nothing was changed. Replace
+    `test_not_a_git_repo_is_refused` (currently asserts exit 1).
+  - Ordinary subdirectory, and `--path <subdirectory>` from the root: exit 2, parent
+    unchanged, detected root printed, no plan/diff.
+  - Nested repository root: installs into the inner repo only.
+  - Subdirectory of a nested repository: exit 2 naming the **inner** root.
+  - Linked-worktree root: accepted; runtime stays at the common dir.
+  - `--path <root>` from elsewhere: accepted.
+  - Bare repository / `.git` directory: exit 2, nothing changed.
+  - Unknown option `--allow-non-git`: exit 2, nothing changed.
+- Docs after: remove the Divergence notes in `kit.md`, `quickstart.md`, ADR 0002/0009.
+- Done when: the ADR 0009 amendment gate holds (exit 2, no changes) on the cases above.
+
 ## Not follow-ups (decided, nothing to change)
 
 - ADR 0004 text stays as history; ADR 0007 supersedes it.
 - The git-common-dir runtime directory is kept (ADR 0002) unless row 5 or 6 refutes it.
 - No enforcement in v0.1 (ADR 0008).
+- No `--allow-non-git` flag in v0.1 (ADR 0009); implementing the refuse-and-exit-2
+  behaviour is task 15.

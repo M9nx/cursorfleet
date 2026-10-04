@@ -7,9 +7,9 @@
 - Supersedes: none
 - Superseded by: none
 - Related ADRs: 0007 (the hook set the installer emits), 0008 (no `failClosed`), 0006 (artifact rules and skills it generates), 0002 (runtime data is not removed by uninstall), 0005 (name changes touch every owned path)
-- Implementation status: Implemented-provisional for the rules below (`installer.py`, `hooksjson.py`, `blocks.py`, `lock.py`, `fsutil.py`; tests under `tests/integration/test_kit_*` and `tests/security/test_kit_installer_policy.py`). Divergent-from-code with ADR 0007: the installer emits 12 hooks and has no migration that removes the three dropped entries on re-`init`.
+- Implementation status: Implemented-provisional for the rules below (`installer.py`, `hooksjson.py`, `blocks.py`, `lock.py`, `fsutil.py`; tests under `tests/integration/test_kit_*` and `tests/security/test_kit_installer_policy.py`). Divergent-from-code with ADR 0007: the installer emits 12 hooks and has no migration that removes the three dropped entries on re-`init`. Not implemented / divergent-from-code with the repository-root amendment of 2026-10-04 (below): `init` and `uninstall` exit 1 outside Git, and silently act on the enclosing repository when run from a subdirectory.
 - Review trigger: Cursor changes how hooks.json is merged or reloaded; a user reports lost content after `uninstall`; the hook set changes (ADR 0007 follow-up)
-- Release gate: round-trip guarantee (below) passes on fixture repos on all three OSes in CI; a migration for removed hook entries exists; the diff-and-consent flow is the only write path
+- Release gate: round-trip guarantee (below) passes on fixture repos on all three OSes in CI; a migration for removed hook entries exists; the diff-and-consent flow is the only write path; `init` and `uninstall` enforce the repository-root preconditions of the 2026-10-04 amendment (exit 2, no changes) with the tests listed in follow-ups task 15
 
 ## Context
 
@@ -99,6 +99,7 @@ tool reports each item and leaves it; it never guesses.
 
 ## Open questions
 
+- Submodule roots (see the 2026-10-04 amendment): allow silently, warn, or refuse? OPEN.
 - Does Cursor tolerate `hooks.json` reformatting by tools while open (it reloads on save)?
 - Should `uninstall` offer to remove the runtime directory?
 
@@ -108,3 +109,155 @@ tool reports each item and leaves it; it never guesses.
 - Write hooks to the user-level `~/.cursor/hooks.json`: rejected for v0.1, hooks then
   run for every repository and are not committed.
 - No lockfile, identify files by name pattern: rejected, cannot prove ownership.
+- An `--allow-non-git` flag, or silently walking up to the enclosing repository: rejected in
+  the 2026-10-04 amendment below; the first dilutes the Git requirement of ADR 0002, the
+  second writes into a repository the user did not name.
+
+## Amendment 2026-10-04 (repository-root preconditions for `init` and `uninstall`)
+
+Architecture-owner decision. **Documentation only: nothing below is implemented.** It adds a
+precondition that runs before the consent-and-diff flow above and does not change any
+ownership rule. `init` and `uninstall` write into a repository the user owns, so they must
+never write into a repository the user did not name.
+
+### Terms
+
+- **Target directory:** the value of `--path` if given, else the current directory, made
+  absolute and symlink-resolved (realpath).
+- **Detected repository root:** the top level of the nearest enclosing Git working tree of the
+  target directory (`git rev-parse --show-toplevel`, realpath-resolved). "Nearest" means the
+  innermost `.git` (directory or gitfile) found walking up from the target.
+
+### Rules (v0.1)
+
+1. **No Git, no install.** If the target directory is not inside a Git working tree,
+   `cursorfleet init` exits **2**, changes **nothing** (no file, no directory, not even
+   `.cursorfleet/`), and explains that Git is required. There is **no `--allow-non-git` flag**
+   and no environment variable or config key that overrides this in v0.1. Passing an unknown
+   option is an ordinary usage error (exit 2, nothing changed).
+2. **Repository root only.** If the target directory is inside a repository but is not that
+   repository's root (an ordinary subdirectory), `init` exits **2**, changes nothing, prints
+   the detected repository root and tells the user to run the command there. It must never
+   silently modify the enclosing repository on the user's behalf.
+3. **Nested repository.** A genuine nested repository (a directory with its own `.git`) is its
+   own root. The nearest root wins and the outer repository is never consulted: `init` at the
+   inner root installs into the inner repository only; from a subdirectory of the inner
+   repository, rule 2 applies with the **inner** root.
+4. **Linked worktree.** The root of a linked worktree (a directory whose `.git` is a gitfile
+   pointing into `<common-dir>/worktrees/<name>`) is a valid root. `init` writes into that
+   worktree's working tree; the runtime directory stays at `<git-common-dir>/cursorfleet/`
+   (ADR 0002). A subdirectory of a linked worktree is rule 2 with the worktree root.
+5. **`uninstall` follows the same preconditions** because it also writes: not in Git, or not at
+   the repository root, gives exit 2 with nothing changed and the same message shape (command
+   name `uninstall`). This extends the owner's `init` decision for consistency; the lockfile
+   lives at the repository root, so a subdirectory has nothing of its own to remove.
+6. **Read-only commands are unchanged.** `doctor` and `validate` change nothing, so they keep
+   resolving the enclosing repository from a subdirectory, but they must print the detected
+   root they used. Outside Git, `doctor` reports a failed `git.repo` check and exits 1 (a
+   check failed, as documented in the quickstart), and `validate` keeps validating the given
+   directory as-is. Exit 2 is reserved for usage and precondition errors of commands that
+   would write.
+7. **Hooks are unaffected.** Hooks still record nothing in a non-Git workspace and still
+   exit 0 with the correct reply ([ADR 0002](0002-storage-layout-and-runtime-directory.md)).
+   Rule 2 stops `init` from installing a kit into a plain folder inside another repository;
+   what a hook does if it reaches such a folder some other way (user-level hooks, a copied
+   `hooks.json`) is not decided here: the hook's `.git` walk would attribute it to the
+   enclosing repository. That remains the open owner decision of
+   [empirical-test-plan](../empirical-test-plan.md) row 17, case 17b.
+
+### Order of checks
+
+Usage errors first (`--cursor` missing, unknown option), then the target directory exists and
+is a directory, then root detection, then the root comparison. Only after all of these pass
+does the command read `.cursorfleet/`, the lockfile or `hooks.json`, or build a plan. The
+checks apply to `--dry-run` and `--yes` exactly as without them: a dry run in a non-root
+directory is exit 2 with no diff.
+
+### Exit codes (`init` and `uninstall`)
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Success, "already up to date" / "nothing to remove", or a dry run with no drift |
+| 1 | The operation was understood and refused or failed: conflicts, drift, the user declined the prompt, a write error |
+| 2 | Usage or precondition failure: `--cursor` missing, unknown option, `--path` missing or not a directory, not inside a Git working tree, not at the repository root, `git` not found or timed out while detecting the root |
+
+### Message requirements
+
+All messages go to stderr, contain no traceback, and print every path through `safe_text`
+(control and bidi characters neutralised). Each message must:
+
+- say that **nothing was changed**;
+- for no Git: say that **Git is required** (a Git repository, as in ADR 0002), name the
+  directory that was inspected, and suggest `git init` or running the command from a
+  repository root;
+- for not at the root: print the **detected repository root** as an absolute path on its own
+  line, and print the **suggested command** to run, exactly, with the root quoted when it
+  contains spaces or shell-special characters (`cd <root>` followed by the command, or
+  the command with `--path <root>`);
+- for an unreadable root (bare repository, the `.git` directory itself, git missing, git
+  timeout, ownership refused by git): say that no usable working tree was found and give
+  git's first error line, truncated.
+
+Illustrative text (the requirements above are normative, the wording is not):
+
+```text
+error: Git is required. /tmp/scratch is not inside a Git working tree.
+Nothing was changed. Run `git init` there, or run this command from a repository root.
+
+error: /home/me/proj/src is not the repository root.
+Detected repository root: /home/me/proj
+Nothing was changed. Run:  cd /home/me/proj && cursorfleet init --cursor
+```
+
+### `--path`, symlinks, bare repositories, submodules
+
+- **`--path`** names the directory to install into; it is no longer a hint to search upward.
+  It is judged by the same rules: it must exist, be a directory, and be a repository root.
+  `--path <root>` from any current directory is the supported way to run elsewhere;
+  `--path <subdirectory>` is rule 2. The help text must say "repository root", not
+  "directory inside the repo". A relative path is resolved against the current directory.
+- **Symlinks.** Both the target and the detected root are compared after realpath
+  resolution (and case normalisation on Windows and macOS). A symlink that resolves to a
+  root is accepted and the resolved root is what the command reports. A symlink that resolves
+  to a subdirectory is rule 2 (a link is never a way around the check). A symlink to a
+  non-Git directory is rule 1. Writing through symlinked managed paths stays refused by the
+  ownership rules above. Windows junctions are treated as links (untested; OPEN on Windows).
+- **Bare repositories and the `.git` directory.** There is no working tree, so the target is
+  not a root: exit 2, nothing changed, with the unreadable-root message.
+- **Submodules.** A submodule root has its own `.git` gitfile, so rule 3 applies mechanically:
+  it is a valid root, and from the superproject root the superproject is the root. Whether v0.1
+  should *warn* about writing generated files into a submodule, or refuse, is **OPEN** (owner
+  decision).
+- A `GIT_DIR` or `GIT_WORK_TREE` in the environment must not redirect root detection (the
+  existing git runner drops git environment variables; keep it that way).
+
+### Implementation status of this amendment
+
+**Not implemented; divergent-from-code** (checked in `cli/commands/init.py`,
+`cli/commands/uninstall.py`, `cli/commands/_common.py:workspace_root` and
+`adapters/cursor/workspace.py:resolve_workspace`):
+
+- Outside Git: `workspace_root` catches `WorkspaceError` and calls `fail(...)` with the default
+  code, so `init` exits **1**, not 2. Nothing is written (the failure is before any plan), and
+  the message says v0.1 needs a git repository, but does not say "nothing was changed" and
+  does not suggest `git init`. Pinned by `test_not_a_git_repo_is_refused`
+  (`tests/integration/test_kit_init_uninstall.py`), which asserts exit 1.
+- Subdirectory: `resolve_workspace` runs `git rev-parse --show-toplevel` from the target and
+  returns the **enclosing** root, so `init` and `uninstall` from a subdirectory (or with
+  `--path <subdirectory>`) install into or remove from the parent repository. The root is shown
+  only as the "Workspace:" header of the plan, and with `--yes` there is no pause. This is the
+  behaviour rule 2 forbids.
+- `--path` help text says "Directory inside the git repo (default: current)".
+- Nested repositories, linked-worktree roots and submodule roots already resolve to their own
+  nearest root through git (rules 3 and 4 hold at the root; only the subdirectory case
+  diverges). No test covers them for `init`.
+- Symlinks resolve via `Path.resolve()` and git's realpath, so the resolution in the symlink
+  rule mostly holds; a link to a subdirectory diverges as above.
+- Bare repository or the `.git` directory: git fails ("this operation must be run in a work
+  tree"), which surfaces as exit 1 with git's message.
+- `doctor` and `validate` already behave as rule 6 (doctor exits 1 outside Git; validate falls
+  back to the given directory) but neither prints the detected root in its text output.
+- Hooks already record nothing outside Git (`tests/integration/test_hook_main.py`,
+  `test_not_a_git_repo_records_nothing`).
+
+Tracked as task 15 in [`../follow-ups.md`](../follow-ups.md), with the required tests.

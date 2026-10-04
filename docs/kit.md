@@ -74,6 +74,37 @@ old entries.)
   (`.cursor/agents|rules|skills/`, `.cursorfleet/`, `AGENTS.md`), so a hostile
   lock cannot make `uninstall` delete other files.
 
+## Repository-root preconditions (decided, not implemented)
+
+`init` and `uninstall` must run from a Git **repository root**
+([ADR 0009](adr/0009-install-uninstall-ownership.md) amendment 2026-10-04;
+[ADR 0002](adr/0002-storage-layout-and-runtime-directory.md)). Documentation only;
+nothing below is implemented.
+
+- **No Git, no install.** A target that is not inside a Git working tree: exit **2**,
+  change nothing (not even `.cursorfleet/`), explain that Git is required. There is
+  **no `--allow-non-git`** flag.
+- **Ordinary subdirectory.** Exit **2**, change nothing, print the detected repository
+  root and tell the user to run there. Must never silently modify the enclosing
+  repository.
+- **Nested repository.** A directory with its own `.git` is its own root; the nearest
+  root wins.
+- **Linked worktree.** The worktree root (`.git` gitfile) is a valid root. Runtime data
+  stays at `<git-common-dir>/cursorfleet/`.
+- **`--path`** names the directory to install into and is judged by the same rules: it
+  must exist, be a directory, and be a repository root.
+- **`doctor` / `validate`** stay read-only and may still resolve from a subdirectory;
+  `doctor` outside Git exits 1 (a check failed). Hooks still record nothing outside Git
+  and exit 0.
+
+**Divergence (current code):** `cli/commands/init.py` and `uninstall.py` call
+`workspace_root` → `resolve_workspace`, which runs `git rev-parse --show-toplevel` from
+the target and returns the enclosing root. From a subdirectory (or `--path
+<subdirectory>`) the commands install into or remove from the parent. Outside Git,
+`workspace_root` calls `fail(...)` with the default code, so they exit **1**, not 2
+(pinned by `test_not_a_git_repo_is_refused`). `--path` help still says "Directory
+inside the git repo". Follow-ups task 15.
+
 ## `doctor`
 
 Read-only. Checks Python (>= 3.11), `cursorfleet-hook` on PATH, git and the

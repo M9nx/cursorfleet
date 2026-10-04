@@ -36,12 +36,21 @@ instead of polling.
 
 ## 2. Install the kit in a repository
 
-Run inside the git repository you work on with Cursor:
+Run from the **root** of the git repository you work on with Cursor (not a
+subdirectory). Git is required; there is no `--allow-non-git` flag
+([ADR 0009](adr/0009-install-uninstall-ownership.md)).
 
 ```bash
+cd /path/to/your/repo                 # the repository root
 cursorfleet init --cursor --dry-run   # print the exact diff, write nothing
 cursorfleet init --cursor             # show the diff again and ask before writing
 ```
+
+A non-git folder, or an ordinary subdirectory of a repository, must refuse: exit 2,
+change nothing, and (from a subdirectory) print the detected repository root.
+`--path` must itself be a repository root. A genuine nested repository and a
+linked-worktree root are valid roots. **Divergence:** today's command walks up to the
+enclosing repository from a subdirectory and exits 1 (not 2) outside Git.
 
 This adds passive hooks to `.cursor/hooks.json` (yours are preserved and merged), a
 small roster of subagent files under `.cursor/agents/`, rules and skills, an `AGENTS.md`
@@ -103,6 +112,7 @@ cursorfleet events purge --all --yes         # delete every event and rotate the
 ## 6. Uninstall
 
 ```bash
+cd /path/to/your/repo             # same repository-root rule as init
 cursorfleet uninstall --dry-run   # the diff of what would be removed
 cursorfleet uninstall             # removes only what the lockfile lists, while hashes still match
 ```

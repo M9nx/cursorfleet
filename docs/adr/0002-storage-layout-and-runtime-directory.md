@@ -7,7 +7,7 @@
 - Supersedes: none
 - Superseded by: none
 - Related ADRs: 0001 (Q4, Q5), 0003 (event ids, worktree attribution), 0009 (uninstall leaves runtime data), 0010 (replay from spool), 0012 (worktree ownership)
-- Implementation status: Divergent-from-code. Implemented: git-common-dir layout, CRC-per-line spool, quarantine of a corrupt database, an indexer lock. Divergent: segment fingerprint is CRC32 not BLAKE2s; `worktree_id` is a bare SHA-256 prefix not an HMAC; no lock for retention/purge; the lock cannot tell contention from an unsupported filesystem. Details in "Amendment 2026-10-04" below.
+- Implementation status: Divergent-from-code. Implemented: git-common-dir layout, CRC-per-line spool, quarantine of a corrupt database, an indexer lock. Divergent: segment fingerprint is CRC32 not BLAKE2s; `worktree_id` is a bare SHA-256 prefix not an HMAC; no lock for retention/purge; the lock cannot tell contention from an unsupported filesystem; `init`/`uninstall` do not yet enforce the repository-root preconditions (they exit 1 outside Git and silently use the enclosing root from a subdirectory). Details in "Amendment 2026-10-04" below and in ADR 0009.
 - Review trigger: Q4 or Q5 answered on any OS, or a reproduced torn or interleaved spool line
 - Release gate: Q4 and Q5 answered on every OS claimed; BLAKE2s fingerprints, HMAC worktree ids and the maintenance lock implemented, or the claims in this ADR weakened to match the code
 
@@ -49,7 +49,13 @@ all worktrees:
   git; a contract test compares it with `git`. Other callers use git with an
   argv list and a timeout.
 - **Non-git workspaces:** unsupported in v0.1; hooks record nothing and exit
-  open, `doctor` explains.
+  open, `doctor` explains. Write commands (`init`, `uninstall`) require a Git
+  **repository root**: exit 2, nothing changed, no `--allow-non-git`. An ordinary
+  subdirectory is refused the same way (print the detected root; never silently
+  modify the parent). A genuine nested repository and a linked-worktree root are
+  valid roots. Full rules are in [ADR 0009](0009-install-uninstall-ownership.md)
+  (amendment 2026-10-04). **Divergence:** today's `init`/`uninstall` exit 1
+  outside Git and walk up to the enclosing repository from a subdirectory.
 - **Committed config** lives in `.cursorfleet/` (`config.toml`, `roster.toml`,
   `work/<task>/`) and is per checkout. No runtime state under `.cursorfleet/`.
 - **Spool.** One directory per session; one file per writer, where writer is
@@ -228,3 +234,24 @@ Hooks stay **lock-free and append-only**. Only two background roles lock.
   contention-versus-unsupported distinction (any `OSError` is treated as busy); the
   diagnostic pid content; `O_NOFOLLOW` when opening the lock file. Windows behaviour is
   unverified.
+
+### Repository-root preconditions for write commands
+
+`init` and `uninstall` require a Git repository root. The rules, messages and exit codes
+are in [ADR 0009](0009-install-uninstall-ownership.md) (amendment of the same date). This
+ADR's non-git rule is unchanged for hooks (record nothing, exit open) and is extended for
+write commands:
+
+- Non-git directory: `init`/`uninstall` exit **2**, write nothing. No `--allow-non-git`
+  flag, environment variable or config key in v0.1.
+- Ordinary subdirectory of a repository: exit 2, write nothing, print the detected
+  repository root and tell the user to run there.
+- Genuine nested repository: the nearest root wins; the outer repository is never
+  consulted.
+- Linked-worktree root: valid. Runtime data stays at `<git-common-dir>/cursorfleet/`.
+- `doctor` and `validate` stay read-only and may resolve from a subdirectory; `doctor`
+  outside Git exits 1 (a check failed).
+
+**Divergence:** see ADR 0009 "Implementation status of this amendment" and follow-ups
+task 15. Hooks already match the non-git rule
+(`tests/integration/test_hook_main.py::test_not_a_git_repo_records_nothing`).

@@ -1230,9 +1230,10 @@ Requirements:
 ### 17. Non-git workspace
 
 Question: what happens when Cursor opens a folder that is not a git repository (v0.1
-requires git: ADR 0002 says hooks record nothing and exit open, and `doctor` explains)? Two
-parts: what Cursor does (unverified), and what our code does in that situation (designed,
-not live-verified).
+requires git: ADR 0002 says hooks record nothing and exit open, and `doctor` explains)?
+Three parts: what Cursor does (unverified); what our hook and read-only commands do
+(designed, not live-verified); and the write-command repository-root contract (decided
+2026-10-04, **not implemented**, describe only in this pass).
 
 Cases (scratch folders only; no real project):
 
@@ -1240,6 +1241,9 @@ Cases (scratch folders only; no real project):
 | --- | --- |
 | 17a | a plain folder with no `.git` anywhere above it |
 | 17b | a plain folder created inside another scratch git repository (git, and our file-based `.git` walk, would find the parent) |
+| 17c | an ordinary subdirectory of a scratch repository (not a nested repo) |
+| 17d | the root of a genuine nested repository, and a subdirectory of that nested repo |
+| 17e | the root of a linked worktree |
 
 Part 1, Cursor behaviour (spike kit, which falls back to a temp directory when it finds no
 git entry, so no git is needed for it; its capture directory is created `0700`):
@@ -1253,35 +1257,53 @@ git entry, so no git is needed for it; its capture directory is created `0700`):
   and ADR 0002 do not allow for (record it and update ADR 0002 and
   [platform-support](platform-support.md)).
 
-Part 2, our hook and commands (no Cursor needed; synthetic doc-derived payload piped to the
-installed `cursorfleet-hook` in each folder; `init` is not part of this row):
+Part 2, our hook and read-only commands (no Cursor needed; synthetic doc-derived payload
+piped to the installed `cursorfleet-hook` in each folder):
 
 | Check | Expected (design intent, unverified) |
 | --- | --- |
 | hook exit code | 0 |
 | hook stdout | `{"permission":"allow"}` for permission hooks, `{}` otherwise |
 | files created anywhere | none (no spool, no SQLite, no runtime directory) for 17a |
-| `doctor` | explains that a git repository is required; does not crash |
+| `doctor` | explains that a git repository is required; does not crash; exit 1 outside Git |
 | `status --json`, `tui` | report "not a git repository" as a problem; do not crash |
 
-For 17b the design intent is **undefined**: `git rev-parse` and the hook's `.git` walk
-would both attribute the folder to the parent repository, so events from a folder that is
-not itself a repository would land in the parent's runtime directory. Record exactly what
-happens (which directory receives the spool, what `doctor` says). **OWNER DECISION** whether
-that is acceptable, should be documented, or should be prevented.
+For 17b the **hook** design intent is still **undefined** (owner decision still OPEN):
+`git rev-parse` and the hook's `.git` walk would both attribute the folder to the parent
+repository, so events from a folder that is not itself a repository would land in the
+parent's runtime directory. Record exactly what happens (which directory receives the
+spool, what `doctor` says). ADR 0009 rule 7 does not decide this: `init` will not install
+into 17b, but a hook that reaches such a folder another way (user-level hooks, a copied
+`hooks.json`) is a separate question.
 
-Procedure check for `init` in a non-git folder (describe, do not run in this pass): record
-whether `cursorfleet init --cursor --dry-run` refuses or plans writes, and whether the
-message is clear. ADR 0002 and ADR 0009 do not say; this is a gap, not a result.
+Part 3, `init` and `uninstall` repository-root preconditions (owner decision 2026-10-04;
+[ADR 0009](adr/0009-install-uninstall-ownership.md) amendment; [ADR 0002](adr/0002-storage-layout-and-runtime-directory.md)).
+**Documentation only; not implemented. Describe, do not run `init` in this pass.**
+
+| Case | Decided contract |
+| --- | --- |
+| 17a (non-git) | `init` / `uninstall` exit **2**, change nothing, explain that Git is required. No `--allow-non-git`. |
+| 17b / 17c (ordinary subdirectory of another repo) | exit **2**, change nothing, print the detected repository root, tell the user to run there. Never silently modify the parent. |
+| 17d nested repository root | valid root: nearest `.git` wins; install into the inner repo only. A subdirectory of the nested repo is 17c with the **inner** root. |
+| 17e linked-worktree root | valid root. Runtime stays at `<git-common-dir>/cursorfleet/`. A subdirectory of the worktree is 17c with the worktree root. |
+
+`--dry-run` and `--yes` are judged by the same preconditions: a dry run from a non-root is
+exit 2 with no diff. `--path` must itself be a repository root.
+
+**Divergence (today's code, do not treat as the contract):** `workspace_root` walks up to
+the enclosing repository, so `init`/`uninstall` from 17b/17c would write into the parent
+and from 17a exit **1** (`test_not_a_git_repo_is_refused`). Follow-ups task 15.
 
 - Pass: 17a part 2 matches every row of the table (exit 0, right reply, nothing written,
-  clear `doctor` message); 17b behaviour is recorded and the owner decision is made.
-  Refute: the hook writes any file in 17a, exits non-zero, prints a wrong reply, or a
-  command crashes.
-- Can change: ADR 0002 (non-git statement), [platform-support](platform-support.md),
-  [architecture](architecture.md) failure table, `doctor` messages.
+  clear `doctor` message); 17b hook behaviour is recorded (the hook-attribution decision
+  may stay OPEN); part 3 is documented in ADR 0002/0009 (this decision). Refute: the hook
+  writes any file in 17a, exits non-zero, prints a wrong reply, or a command crashes.
+- Can change: ADR 0002 (non-git statement), ADR 0009, [kit](kit.md),
+  [quickstart](quickstart.md), [follow-ups](follow-ups.md) task 15,
+  [platform-support](platform-support.md), [architecture](architecture.md) failure table,
+  `doctor` messages.
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
-  reviewer sign-off: -; raw-capture sign-off: -; ADRs affected: 0002.
+  reviewer sign-off: -; raw-capture sign-off: -; ADRs affected: 0002, 0009.
 
 ### 18. Existing-hooks coexistence and the install round trip
 
@@ -1421,11 +1443,11 @@ this plan is still OPEN.**
    a possible future addition (not implemented). Remaining code differences (reducer keeps the
    strongest value, per-value counts absent, explanatory strings) are recorded in ADR 0003 and
    `follow-ups.md` task 7; they are not fixed.
-4. **Documented, tool fix pending.** `spike/analyze.py` printed a Q1 verdict that counted any
-   key containing `parent_` as identity. Row 8 told the reader to classify by hand. The
-   analyzer is fixed in a separate commit so that parent fields can never confirm identity
-   and so that it reports four buckets; its verdict remains only a hint. The fix has never been
-   run against a live capture.
+4. **RESOLVED (2026-10-04, analyzer commit).** `spike/analyze.py` now reports four buckets
+   (`direct_current_identity`, `role_only_identity`, `parent_only_identity`,
+   `unclassified_identity_candidates`). Parent fields never confirm current-subagent
+   identity. The derived verdict is a hint that still requires manual classification per
+   row 8. The fix has never been run against a live capture.
 5. `spike/questions.md` secondary questions have no ids (SQ1 to SQ9 above are local). Open.
 6. ADR 0001 has one matrix row for headless `agent -p`; row 3 tests without and with
    `--force` separately. No matrix rows exist for rows 15, 17 and 18. Open.
@@ -1433,10 +1455,11 @@ this plan is still OPEN.**
    not there"; ADR 0001 already lists both, so only rows 3, 15, 17 and 18 need adding. Open.
 8. Gaps, not contradictions. **RESOLVED (2026-10-04):** the end-to-end hook overhead
    tolerance (row 13B) is now the PASS / PARTIAL / FAIL contract in ADR 0001 section D, and
-   `release-checklist.md` names it as a gate. **Still open:** ADR 0002 and ADR 0009 do not
-   say what `init` does in a non-git folder or what a folder nested in another repository
-   does (row 17; see the later repository-root decision); the release checklist does not
-   yet name the row 15 gate; no first-run (cold cache) target exists.
+   `release-checklist.md` names it as a gate. **RESOLVED (2026-10-04):** ADR 0009 amendment
+   and ADR 0002 state the repository-root preconditions for `init`/`uninstall` (exit 2, no
+   `--allow-non-git`; subdirectory refuses; nested and linked-worktree roots are valid).
+   **Still open:** 17b hook attribution to an enclosing repository; the release checklist
+   does not yet name the row 15 gate; no first-run (cold cache) target exists.
 
 ## After the run
 
