@@ -41,7 +41,8 @@ Install from a git checkout. See [Installation](getting-started/installation.md)
 
 1. [Install from a checkout](getting-started/installation.md)
 2. [Quickstart](getting-started/quickstart.md) — `init`, `doctor`, `status`
-3. [CLI](cli/init.md) and [privacy](privacy-and-security.md)
+3. [CLI](cli/init.md), [privacy](privacy-and-security.md), and
+   [known limitations](known-limitations.md)
 
 Git is required for `init`. There is no `--allow-non-git` flag.
 
