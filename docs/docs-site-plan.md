@@ -5,15 +5,25 @@ be until the naming gate below is passed. This is the author's own evaluation, w
 2026-10-04; it is not an independent review. Facts about third-party tools were checked
 against the pages cited; what could not be checked is listed at the end.
 
+## Owner decision
+
+The owner has decided to build the docs site with **Zensical** (the primary choice in the
+recommendation below). **mdBook stays the documented fallback** if Zensical blocks (see the
+fallback conditions below). This records a tool choice only: nothing is built or published,
+and nothing is published before the naming and trademark gate
+([ADR 0005](adr/0005-naming-and-trademark.md)) and the live spike. No dependency, config file
+or workflow is added by this decision.
+
 ## Recommendation
 
-- **Primary: Zensical**, with docs kept as plain CommonMark/GFM Markdown.
+- **Primary: Zensical** (chosen by the owner), with docs kept as plain CommonMark/GFM Markdown.
 - **Fallback: mdBook**, if Zensical is still early 0.x, has no workable versioning, or
-  changes its Markdown toolchain in a way that breaks our files when the decision is made.
+  changes its Markdown toolchain in a way that breaks our files when the site is built.
 - **Do not start a new site on Material for MkDocs or MkDocs.** Material for MkDocs is in
   maintenance mode and MkDocs 1.x is described by the Material team as unmaintained.
-- Decide only after the naming gate (ADR 0005) and the live spike, and re-check every
-  "unverified" item below on that day.
+- The tool is chosen; building and publishing still wait for the naming gate (ADR 0005) and
+  the live spike. Re-check every "unverified" item below on the day the build starts, and
+  fall back to mdBook if a blocker appears.
 
 Rationale:
 

@@ -59,4 +59,5 @@ display default, hashing, locking, artifact format and gate derivation. They are
 The per-ADR release gates are summarised in the [ADR index](adr/README.md). The owner steps
 are in [`release-checklist.md`](release-checklist.md). Naming and trademark review (ADR
 0005) is a release gate, and no public docs site is published before it
-([`docs-site-plan.md`](docs-site-plan.md)).
+([`docs-site-plan.md`](docs-site-plan.md)). The owner has chosen Zensical for the docs site
+(mdBook is the documented fallback); nothing is built or published yet.
