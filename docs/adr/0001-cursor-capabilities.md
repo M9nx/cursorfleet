@@ -408,6 +408,13 @@ to `tests/fixtures/cursor/<surface>/` stamped with `cursor_version`; verdicts go
 - **Hook latency inside Cursor (Q6).** Pass: p95 of the in-Cursor delay with the stdlib hook
   is under 60 ms warm on each OS claimed, measured by `spike/bench_latency.py` and by the
   capture's own timings. Evidence: `spike/results/latency-<os>.json`.
+- **`Task` linkage and ids.** Pass: whether `Task`'s `tool_use_id` equals
+  `subagentStart.tool_call_id`, whether `generation_id` is stable across a subagent and
+  whether subagents get their own `sessionStart`/`sessionEnd` are each recorded. Evidence:
+  `tests/fixtures/cursor/subagent/` and spike notes.
+- **Rule, skill and nested `AGENTS.md` loading.** Pass: the generated rule, skills and nested
+  `AGENTS.md` are loaded where ADR 0006 and ADR 0012 assume, in the main agent and, recorded
+  separately, in subagents and worktrees. Evidence: spike notes (no committed fixture).
 
 ## Decision
 
