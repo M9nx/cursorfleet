@@ -39,15 +39,14 @@ are doing what, from passive hooks and read-only git, without sending anything a
 - v0.1 is **Observe**: no enforcement, no forced approvals, and no cloud-agent visibility
   (local Cursor sessions only). It is not a security boundary: a malicious or prompt-injected
   agent can bypass or forge what it shows ([threat model](docs/threat-model.md)).
-- **Not yet verified against a live Cursor.** Hook payload shapes come from Cursor's
-  documentation; the open questions (agent identity inside subagent tool hooks, custom
-  subagent names, CLI and Agents Window behaviour, hook latency outside Linux) are tracked in
-  [ADR 0001](docs/adr/0001-cursor-capabilities.md) and marked **PROVISIONAL** throughout.
-- **Development is frozen at the M0a spike.** The existing observer and TUI code is
-  implemented, provisional and unvalidated against live Cursor; no new M2/TUI work until the
-  live spike is run ([status](docs/status.md),
-  [empirical test plan](docs/empirical-test-plan.md)).
-- **Supported surface: the local Cursor IDE (desktop) only**, once the spike confirms it.
+- **Live Cursor (product hooks):** maintainer smoke on **Linux Cursor IDE 3.22.7** confirmed hook
+  telemetry, subagent lifecycle, and artifact scanning; see
+  [live validation index](docs/evidence/live-validation-index.md). **Q1/Q2** (subagent identity
+  on tool hooks, custom `subagent_type` naming) remain **OPEN**; M0a formal matrix is not complete.
+- **M2.5 active:** task-centric observer work (Active Run) is in progress; see
+  [status](docs/status.md). The M0a capture kit ([spike](spike/README.md)) remains separate.
+- **Supported surface for claims today:** local Cursor IDE (desktop) on Linux for the exercised
+  smoke only; CLI, Agents Window, worktrees, and parallel subagents are not claimed until matrix PASS.
   The Cursor CLI, the Agents Window, Cursor-managed and manual worktrees, parallel
   subagents and cloud agents are not claimed.
 - The name "CursorFleet" is a working name; the final name is a release gate

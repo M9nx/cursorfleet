@@ -7,15 +7,22 @@ teams. It is not affiliated with or endorsed by Anysphere or Cursor
 Status markers: **PROVISIONAL** means the behavior depends on Cursor facts not yet
 captured live ([ADR 0001](adr/0001-cursor-capabilities.md), section B).
 
-## Process freeze (2026-10-04)
+## M2.5 charter (2026-10-05)
 
-- New M2 and TUI implementation is **frozen** until the M0a live Cursor spike
-  ([`spike/README.md`](../spike/README.md)) has been run and the ADR 0001 questions are
-  answered ([`empirical-test-plan.md`](empirical-test-plan.md)).
-- Existing M1, M2 and TUI code is **implemented, provisional, unvalidated against live
-  Cursor**. Where it disagrees with the accepted ADRs it is listed in
-  [`follow-ups.md`](follow-ups.md) and is not changed until after the spike.
-- See [`status.md`](status.md).
+- **Direction:** task-centric **local observer** for Cursor agent teams (see
+  [`evidence/live-validation-index.md`](evidence/live-validation-index.md)).
+- **M0a spike kit** and **product hooks** are separate validation tracks; Q1/Q2 and formal
+  row-8 parallel classification can remain OPEN while M2.5 product work proceeds.
+- **Observe-only boundaries:** passive hooks; read-only git/worktree collection; TUI does not
+  write. Explicit CLI commands may write **CursorFleet-owned runtime metadata** only (for example
+  under `<git-common-dir>/cursorfleet/runs/` after B2), not agent conversation content.
+- Committed `.cursorfleet/work/<task>/` artifacts remain agent/user-owned in the working tree;
+  run-control state does not dirty the checkout unless exported or committed intentionally.
+- **Run metadata (B2):** `cursorfleet run` writes under `<git-common-dir>/cursorfleet/runs/`; hook
+  env `CURSORFLEET_ACTIVE_RUN` attaches sessions fail-open. Default TUI is **Active run**.
+  wired to run metadata.
+- ADR/code divergences are resolved via A2 decision matrix and A3 compatible convergence; see
+  [`follow-ups.md`](follow-ups.md) and [`status.md`](status.md).
 
 ## Supported surface
 
@@ -50,13 +57,11 @@ captured live ([ADR 0001](adr/0001-cursor-capabilities.md), section B).
 
 ## v0.1 scope: Observe
 
-- Passive hooks only: **nine** hooks (`sessionStart`, `sessionEnd`, `preToolUse`,
-  `postToolUse`, `postToolUseFailure`, `subagentStart`, `subagentStop`, `preCompact`,
-  `stop`); shell, file-edit, MCP, prompt, response, thought and Tab hooks are not
-  registered ([ADR 0007](adr/0007-narrower-v01-hook-policy.md), which supersedes
-  [ADR 0004](adr/0004-no-chain-of-thought-and-hook-policy.md)). **The code still registers
-  twelve (including `beforeShellExecution`, `afterShellExecution`, `afterFileEdit`); this is
-  a recorded divergence.**
+- Passive hooks: **twelve** observe hooks (`sessionStart`, `sessionEnd`, `preToolUse`,
+  `postToolUse`, `postToolUseFailure`, `subagentStart`, `subagentStop`,
+  `beforeShellExecution`, `afterShellExecution`, `afterFileEdit`, `preCompact`, `stop`);
+  prompt, response, thought and Tab hooks are not registered ([ADR 0007](adr/0007-narrower-v01-hook-policy.md)
+  amended per [A2 hook matrix](evidence/a2-hook-matrix.md)).
 - Stdlib-only hook hot path that always fails open, appends to per-session JSONL
   spools; a single-writer indexer builds a rebuildable SQLite projection
   ([architecture](architecture.md), [ADR 0002](adr/0002-storage-layout-and-runtime-directory.md)).
