@@ -1,0 +1,107 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cursorfleet"
+version = "0.0.1.dev0"
+description = "Unofficial local TUI and workflow harness (observe-only) for Cursor agent teams."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "M9nx" }]
+keywords = ["cursor", "agents", "tui", "workflow", "hooks", "observability", "git-worktree"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Topic :: System :: Monitoring",
+    "Typing :: Typed",
+]
+dependencies = [
+    "typer>=0.12",
+    "pydantic>=2",
+    "textual>=0.80",
+]
+
+[project.optional-dependencies]
+watch = ["watchfiles>=0.21"]
+
+[project.urls]
+Homepage = "https://github.com/M9nx/cursorfleet"
+Documentation = "https://github.com/M9nx/cursorfleet/tree/main/docs"
+Source = "https://github.com/M9nx/cursorfleet"
+Issues = "https://github.com/M9nx/cursorfleet/issues"
+Changelog = "https://github.com/M9nx/cursorfleet/blob/main/CHANGELOG.md"
+Security = "https://github.com/M9nx/cursorfleet/blob/main/SECURITY.md"
+
+[project.scripts]
+cursorfleet = "cursorfleet.cli.main:app"
+cursorfleet-hook = "cursorfleet.adapters.cursor.hook_main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5",
+    "hypothesis>=6",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cursorfleet"]
+
+# Kit templates ship inside the wheel; adapters/cursor/templates.py reads them via
+# importlib.resources and falls back to <repo>/templates/cursor in a source checkout.
+[tool.hatch.build.targets.wheel.force-include]
+"templates/cursor" = "cursorfleet/_templates/cursor"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+# Benchmarks are opt-in: `pytest -m benchmark` (the default run excludes them).
+addopts = "-ra --strict-markers -m 'not benchmark'"
+markers = [
+    "benchmark: records hook timings (scripts/bench_hook.py); tiny smoke run, no tight assertions",
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+extend-exclude = ["spike"]  # throwaway M0a capture kit, not product code
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "S", "PL", "RUF"]
+ignore = ["PLR2004"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S603", "S607", "PLR2004"]
+# Hook hot path and shared stdlib helpers: imports are lazy ON PURPOSE (startup budget),
+# silent best-effort I/O is the fail-open contract, and plain classes avoid dataclasses.
+"src/cursorfleet/adapters/cursor/hook_*.py" = ["PLC0415", "SIM105", "PLR0913", "PLR0911", "E402"]
+"src/cursorfleet/state/spool.py" = ["PLC0415", "SIM105", "PLR0913"]
+"src/cursorfleet/state/runtime.py" = ["PLC0415", "SIM105"]
+"src/cursorfleet/events/ids.py" = ["PLC0415"]
+"src/cursorfleet/state/lock.py" = ["PLC0415"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src"]
+plugins = ["pydantic.mypy"]

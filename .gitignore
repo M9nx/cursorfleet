@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+coverage.xml
+htmlcov/
+
+# Environments
+.venv/
+venv/
+.env
+
+# CursorFleet runtime state (committed config in .cursorfleet/ is config.toml, roster.toml, work/)
+.cursorfleet/runtime/
+.cursorfleet/*.sqlite*
+.cursorfleet/*.jsonl
+.cursorfleet/*.lock
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
