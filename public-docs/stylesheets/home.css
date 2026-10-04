@@ -1,5 +1,14 @@
 /* Home landing only — scoped via .cf-home-hero (see public-docs/index.md). */
 
+:root {
+  --cf-orange: #f0a030;
+  --cf-orange-soft: #f5b84a;
+  --cf-orange-glow: rgba(240, 160, 48, 0.45);
+  --cf-orange-mist: rgba(255, 140, 40, 0.14);
+  --cf-bg-deep: #08090c;
+  --cf-bg-warm: #12100e;
+}
+
 body:has(.cf-home-hero) .md-sidebar--primary,
 body:has(.cf-home-hero) .md-sidebar--secondary {
   display: none;
@@ -21,6 +30,7 @@ body:has(.cf-home-hero) .md-main__inner {
 
 body:has(.cf-home-hero) .md-main {
   flex-grow: 1;
+  background: transparent;
 }
 
 body:has(.cf-home-hero) .md-footer {
@@ -31,23 +41,55 @@ html:has(.cf-home-hero),
 body:has(.cf-home-hero) {
   overflow: hidden;
   height: 100%;
+  background: var(--cf-bg-deep);
 }
 
 body:has(.cf-home-hero) .md-container {
   min-height: 100dvh;
   max-height: 100dvh;
+  background: radial-gradient(
+      ellipse 90% 70% at 72% 48%,
+      var(--cf-orange-mist) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 45% 35% at 12% 88%,
+      rgba(240, 120, 30, 0.07) 0%,
+      transparent 50%
+    ),
+    linear-gradient(160deg, var(--cf-bg-warm) 0%, var(--cf-bg-deep) 45%, #0a0c12 100%);
 }
 
 body:has(.cf-home-hero) .md-header {
-  background: rgba(11, 12, 15, 0.85);
-  backdrop-filter: blur(8px);
+  background: rgba(8, 9, 12, 0.72);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(240, 160, 48, 0.12);
+  box-shadow: 0 1px 0 rgba(255, 180, 80, 0.04);
 }
 
-body:has(.cf-home-hero)[data-md-color-scheme="default"] {
-  --md-default-bg-color: #0b0c0f;
-  --md-default-fg-color: #e8eaed;
-  --md-default-fg-color--light: #9aa0a6;
-  --md-typeset-a-color: #f5b84a;
+body:has(.cf-home-hero)[data-md-color-scheme="default"],
+body:has(.cf-home-hero)[data-md-color-scheme="slate"] {
+  --md-default-bg-color: var(--cf-bg-deep);
+  --md-default-fg-color: #eceff3;
+  --md-default-fg-color--light: #a8adb5;
+  --md-typeset-a-color: var(--cf-orange-soft);
+}
+
+/* Neutralize Material list styles inside the hero block. */
+body:has(.cf-home-hero) .md-typeset .cf-home-hero ul,
+body:has(.cf-home-hero) .md-typeset .cf-home-hero ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+body:has(.cf-home-hero) .md-typeset .cf-home-hero li {
+  margin: 0;
+  padding: 0;
+}
+
+body:has(.cf-home-hero) .md-typeset .cf-home-hero p {
+  margin: 0;
 }
 
 .cf-home-hero {
@@ -57,8 +99,8 @@ body:has(.cf-home-hero)[data-md-color-scheme="default"] {
   display: flex;
   align-items: center;
   margin: 0;
-  padding: clamp(0.75rem, 2vh, 1.5rem) clamp(1rem, 3vw, 2rem);
-  background: #0b0c0f;
+  padding: clamp(0.75rem, 2vh, 1.5rem) clamp(1.25rem, 4vw, 2.5rem);
+  background: transparent;
   overflow: hidden;
 }
 
@@ -66,103 +108,181 @@ body:has(.cf-home-hero)[data-md-color-scheme="default"] {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  gap: clamp(1rem, 3vw, 2.5rem);
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: clamp(1.5rem, 4vw, 3rem);
   width: 100%;
-  max-width: 72rem;
+  max-width: 74rem;
   margin: 0 auto;
   align-items: center;
 }
 
+.cf-home-hero__eyebrow {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cf-orange-soft);
+  opacity: 0.92;
+}
+
 .cf-home-hero__title {
-  margin: 0 0 0.25em;
-  font-size: clamp(2.25rem, 5.5vw, 4.25rem);
+  margin: 0 0 0.35em;
+  font-size: clamp(2.35rem, 5.5vw, 4.35rem);
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
   line-height: 0.95;
-  color: #f3f4f6;
+  color: #fafafa;
+  text-shadow: 0 0 40px rgba(240, 160, 48, 0.12);
 }
 
 .cf-home-hero__subtitle {
-  margin: 0 0 0.65rem;
-  font-size: clamp(1rem, 1.8vw, 1.25rem);
-  line-height: 1.4;
-  color: #c4c7cc;
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.02rem, 1.85vw, 1.28rem);
+  line-height: 1.45;
+  color: #c8ccd2;
   max-width: 26rem;
 }
 
 .cf-home-hero__disclaimer {
-  margin: 0 0 1.1rem;
+  margin: 0 0 1.35rem;
   font-size: clamp(0.75rem, 1.5vw, 0.875rem);
-  line-height: 1.45;
-  color: #9aa0a8;
+  line-height: 1.5;
+  color: #949aa3;
   max-width: 30rem;
+}
+
+.cf-home-hero__disclaimer strong {
+  color: #b8bcc4;
+  font-weight: 600;
 }
 
 .cf-home-hero__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.65rem 0.85rem;
-  margin: 0 0 0.85rem;
-  padding: 0;
-  list-style: none;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
 }
 
-.cf-home-hero__actions a {
-  display: inline-block;
-  margin: 0;
+.cf-home-hero__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.65rem;
+  padding: 0 1.45rem;
   border-radius: 999px;
-  padding: 0.5em 1.25em;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.9375rem;
-  border: 1px solid #5c6370;
-  color: #e8eaed;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  text-decoration: none;
+  border: 1px solid rgba(240, 160, 48, 0.28);
+  color: #eceff3;
+  background: rgba(255, 255, 255, 0.04);
+  transition: background-color 0.18s ease, border-color 0.18s ease,
+    transform 0.18s ease, box-shadow 0.18s ease;
 }
 
-.cf-home-hero__actions a:hover {
-  border-color: #9aa0a8;
+.cf-home-hero__btn:hover {
+  border-color: rgba(245, 184, 74, 0.55);
+  background: rgba(240, 160, 48, 0.08);
   color: #fff;
+  transform: translateY(-1px);
 }
 
-.cf-home-hero__actions a.md-button--primary {
-  background-color: #f0a030;
-  border-color: #f0a030;
-  color: #0b0c0f;
+.cf-home-hero__btn:focus-visible {
+  outline: 2px solid var(--cf-orange-soft);
+  outline-offset: 3px;
 }
 
-.cf-home-hero__actions a.md-button--primary:hover {
-  background-color: #f5b84a;
-  border-color: #f5b84a;
-  color: #0b0c0f;
+.cf-home-hero__btn--primary {
+  border-color: transparent;
+  background: linear-gradient(135deg, #f5a832 0%, #e89528 100%);
+  color: #1a1208;
+  box-shadow: 0 4px 24px rgba(240, 160, 48, 0.35),
+    0 1px 0 rgba(255, 220, 160, 0.25) inset;
+}
+
+.cf-home-hero__btn--primary:hover {
+  background: linear-gradient(135deg, #ffc04a 0%, #f0a030 100%);
+  color: #1a1208;
+  box-shadow: 0 6px 28px rgba(240, 160, 48, 0.45),
+    0 1px 0 rgba(255, 220, 160, 0.3) inset;
 }
 
 .cf-home-hero__meta {
-  margin: 0;
   font-size: 0.8125rem;
-  color: #8b9199;
+  color: #868c95;
 }
 
 .cf-home-hero__meta a {
-  color: #f5b84a;
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
+  color: var(--cf-orange-soft);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(245, 184, 74, 0.45);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.cf-home-hero__meta a:hover {
+  color: #ffd080;
+  border-color: rgba(255, 208, 128, 0.7);
 }
 
 .cf-home-hero__media {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem;
+  min-height: min(22rem, 40vh);
+}
+
+.cf-home-hero__logo-glow {
+  position: absolute;
+  width: min(26rem, 48vw);
+  height: min(26rem, 48vw);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    var(--cf-orange-glow) 0%,
+    rgba(240, 120, 30, 0.15) 35%,
+    transparent 68%
+  );
+  filter: blur(8px);
+  pointer-events: none;
+  animation: cf-glow-pulse 6s ease-in-out infinite;
+}
+
+@keyframes cf-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-home-hero__logo-glow {
+    animation: none;
+  }
+
+  .cf-home-hero__btn:hover {
+    transform: none;
+  }
 }
 
 .cf-home-hero__logo {
+  position: relative;
+  z-index: 1;
   display: block;
-  width: min(20rem, 42vw);
+  width: min(18rem, 40vw);
   height: auto;
-  max-height: min(20rem, 38vh);
+  max-height: min(18rem, 36vh);
   object-fit: contain;
-  filter: drop-shadow(0 0 3rem rgba(240, 160, 48, 0.4));
+  mix-blend-mode: lighten;
+  filter: drop-shadow(0 0 2.5rem rgba(240, 160, 48, 0.55));
 }
 
 @media (max-width: 960px) {
@@ -180,7 +300,7 @@ body:has(.cf-home-hero)[data-md-color-scheme="default"] {
     height: auto;
     max-height: none;
     min-height: calc(100dvh - 3.6rem);
-    padding: 1.25rem 1rem 2rem;
+    padding: 1.5rem 1.15rem 2rem;
   }
 
   .cf-home-hero__layout {
@@ -204,10 +324,16 @@ body:has(.cf-home-hero)[data-md-color-scheme="default"] {
 
   .cf-home-hero__media {
     order: 2;
+    min-height: 12rem;
   }
 
   .cf-home-hero__logo {
-    width: min(14rem, 55vw);
+    width: min(13rem, 52vw);
     max-height: none;
+  }
+
+  .cf-home-hero__logo-glow {
+    width: min(16rem, 70vw);
+    height: min(16rem, 70vw);
   }
 }
