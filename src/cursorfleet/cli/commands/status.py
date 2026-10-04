@@ -12,12 +12,22 @@ import typer
 from cursorfleet.adapters.cursor.kit_probe import probe_hooks_kit
 from cursorfleet.git.collector import DEFAULT_STALE_AFTER_HOURS, GitSnapshot, collect
 from cursorfleet.git.runner import NotAGitRepo
+from cursorfleet.state.artifact_scan import DEFAULT_WORK_DIR, ArtifactScanner
 from cursorfleet.state.context import RepoContext, parse_now, resolve_repo
 from cursorfleet.state.indexer import Indexer, replay_session_state
-from cursorfleet.state.models import SessionAcc
+from cursorfleet.state.models import FleetView, SessionAcc
 from cursorfleet.state.reducer import snapshot
+from cursorfleet.state.run_builder import build_active_run, pick_primary_task
+from cursorfleet.state.run_store import list_runs
 from cursorfleet.state.spool_read import Corruption, list_spool_files
-from cursorfleet.state.status_doc import STATUS_SCHEMA, StatusDoc, build_status, worktree_activity
+from cursorfleet.state.status_doc import (
+    STATUS_SCHEMA,
+    RunDoc,
+    StatusDoc,
+    build_status,
+    run_docs_from_snapshots,
+    worktree_activity,
+)
 
 
 def _safe(text: object) -> str:
@@ -51,6 +61,14 @@ def build(ctx: RepoContext, *, now: datetime, stale_after_s: int, with_git: bool
             activity=worktree_activity(sessions),
         )
     repo_root = ctx.top_level or ctx.common_dir
+    run_docs = _status_runs(
+        ctx=ctx,
+        sessions=sessions,
+        fleet=fleet,
+        now=now,
+        stale_after_s=stale_after_s,
+        repo_root=repo_root,
+    )
     return build_status(
         now=now,
         fleet=fleet,
@@ -61,7 +79,59 @@ def build(ctx: RepoContext, *, now: datetime, stale_after_s: int, with_git: bool
         spool_files=files,
         source=source,
         hooks_kit=probe_hooks_kit(repo_root).state,
+        runs=run_docs or None,
     )
+
+
+def _status_runs(  # noqa: PLR0913
+    *,
+    ctx: RepoContext,
+    sessions: dict[str, SessionAcc],
+    fleet: FleetView,
+    now: datetime,
+    stale_after_s: int,
+    repo_root: str,
+) -> list[RunDoc]:
+    session_views = {s.session_id: s for s in fleet.sessions}
+    scan = ArtifactScanner(DEFAULT_WORK_DIR).scan([repo_root])
+    records = scan.records
+    snapshots = []
+    for meta in sorted(
+        (r for r in list_runs(ctx.paths.root) if not r.archived),
+        key=lambda r: r.created_at,
+        reverse=True,
+    ):
+        snapshots.append(
+            build_active_run(
+                task_slug=meta.task_slug,
+                run_id=meta.run_id,
+                sessions=sessions,
+                session_views=session_views,
+                records=records,
+                linked_session_ids=frozenset(meta.session_ids),
+                now=now,
+                stale_after_s=stale_after_s,
+            )
+        )
+    if not snapshots:
+        task = pick_primary_task(records, now=now)
+        if task is None and not session_views:
+            return []
+        slug = task or "unscoped"
+        snapshots.append(
+            build_active_run(
+                task_slug=slug,
+                run_id=f"inferred:{slug}",
+                sessions=sessions,
+                session_views=session_views,
+                records=records,
+                linked_session_ids=frozenset(),
+                now=now,
+                stale_after_s=stale_after_s,
+            )
+        )
+    docs: list[RunDoc] = run_docs_from_snapshots(snapshots)
+    return docs
 
 
 def _render_text(doc: StatusDoc) -> str:

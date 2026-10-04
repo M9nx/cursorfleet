@@ -342,6 +342,7 @@ def record(
         return 0
     writer = hook_normalize.writer_of(hook, payload)
     written = 0
+    attached_session: str | None = None
     for event in events:
         text = _fit(event)
         session_id = event.get("session_id")
@@ -356,6 +357,16 @@ def record(
             max_session_bytes=settings.max_session_bytes,
         ):
             written += 1
+            attached_session = session_id
+    if written and attached_session:
+        active = environ.get("CURSORFLEET_ACTIVE_RUN", "").strip()
+        if active:
+            try:
+                from cursorfleet.state.run_store import attach_session
+
+                attach_session(paths.root, active, attached_session)
+            except OSError:
+                pass  # fail-open: run attach must never block hooks
     return written
 
 

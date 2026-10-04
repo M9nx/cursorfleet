@@ -26,9 +26,11 @@ from cursorfleet.state.models import (
     TaskView,
     utc,
 )
+from cursorfleet.state.run_model import RunSnapshot
 from cursorfleet.state.spool_read import Corruption
 
 STATUS_SCHEMA = "cursorfleet.status/1"
+STATUS_SCHEMA_WITH_RUNS = "cursorfleet.status/0.2"
 
 
 def json_abs_path(path: str | None) -> str | None:
@@ -83,6 +85,22 @@ class Owner(_Doc):
     attribution: str
 
 
+class RunGroupDoc(_Doc):
+    role: str
+    summary_lane: str
+    confidence: str
+    instance_count: int
+    conflict: bool
+
+
+class RunDoc(_Doc):
+    run_id: str
+    task_slug: str
+    confidence: str
+    session_ids: list[str]
+    groups: list[RunGroupDoc]
+
+
 class WorktreeDoc(_Doc):
     path: str
     worktree_id: str | None
@@ -119,12 +137,16 @@ class StatusDoc(_Doc):
     sessions: list[SessionView]
     tasks: list[TaskView]
     worktrees: list[WorktreeDoc]
+    runs: list[RunDoc] = []
 
     def to_json_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = self.model_dump(mode="json")
-        data["schema"] = data.pop("schema_")
-        ordered: dict[str, Any] = {"schema": data.pop("schema")}
+        schema = data.pop("schema_")
+        runs = data.pop("runs", [])
+        ordered: dict[str, Any] = {"schema": schema}
         ordered.update(data)
+        if runs:
+            ordered["runs"] = runs
         return ordered
 
 
@@ -186,6 +208,32 @@ def _worktree_doc(snap: WorktreeSnapshot, views: list[SessionView]) -> WorktreeD
     )
 
 
+def run_docs_from_snapshots(snapshots: list[RunSnapshot]) -> list[RunDoc]:
+    out: list[RunDoc] = []
+    for snap in snapshots:
+        groups = [
+            RunGroupDoc(
+                role=g.role,
+                summary_lane=g.summary_lane,
+                confidence=g.confidence,
+                instance_count=len(g.instances),
+                conflict=g.conflict,
+            )
+            for g in snap.groups
+        ]
+        session_ids = sorted({inst.session_id for g in snap.groups for inst in g.instances})
+        out.append(
+            RunDoc(
+                run_id=snap.run_id,
+                task_slug=snap.task_slug,
+                confidence=snap.confidence,
+                session_ids=session_ids,
+                groups=groups,
+            )
+        )
+    return out
+
+
 def build_status(  # noqa: PLR0913
     *,
     now: datetime,
@@ -197,6 +245,7 @@ def build_status(  # noqa: PLR0913
     spool_files: int,
     source: str,
     hooks_kit: HooksKitState | None = None,
+    runs: list[RunDoc] | None = None,
 ) -> StatusDoc:
     """Assemble the document. Pure given its inputs (``now`` is injected)."""
     events = sum(s.event_count for s in fleet.sessions)
@@ -219,8 +268,10 @@ def build_status(  # noqa: PLR0913
     elif not git.available:
         notes.append(f"git unavailable: {git.error}")
     worktrees = [_worktree_doc(w, fleet.sessions) for w in git.worktrees] if git is not None else []
+    run_docs = runs or []
+    schema = STATUS_SCHEMA_WITH_RUNS if run_docs else STATUS_SCHEMA
     return StatusDoc(
-        schema_=STATUS_SCHEMA,
+        schema_=schema,
         generated_at=utc(now),
         repo=RepoInfo(common_dir=json_abs_path(common_dir), runtime_dir=json_abs_path(runtime_dir)),
         telemetry=TelemetryInfo(
@@ -238,4 +289,5 @@ def build_status(  # noqa: PLR0913
         sessions=fleet.sessions,
         tasks=list(fleet.tasks),
         worktrees=worktrees,
+        runs=run_docs,
     )

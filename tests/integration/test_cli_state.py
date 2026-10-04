@@ -110,7 +110,7 @@ def test_status_json_matches_the_golden_snapshot(repo: Path, tmp_path: Path) -> 
 def test_status_schema_is_versioned_and_keys_are_stable(repo: Path) -> None:
     populate(repo)
     document = json.loads(invoke("status", "--json", "--repo", str(repo), "--now", NOW).stdout)
-    assert document["schema"] == "cursorfleet.status/1"
+    assert document["schema"] == "cursorfleet.status/0.2"
     assert list(document) == [
         "schema",
         "generated_at",
@@ -121,7 +121,9 @@ def test_status_schema_is_versioned_and_keys_are_stable(repo: Path) -> None:
         "sessions",
         "tasks",
         "worktrees",
+        "runs",
     ]
+    assert document["runs"]
     assert document["limits"] == {
         "token_budget": "unknown",
         "cloud_agents": "not_visible",

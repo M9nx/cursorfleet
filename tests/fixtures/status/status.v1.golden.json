@@ -1,5 +1,5 @@
 {
-  "schema": "cursorfleet.status/1",
+  "schema": "cursorfleet.status/0.2",
   "generated_at": "2026-09-21T14:15:20Z",
   "repo": {
     "common_dir": "<REPO>/.git",
@@ -66,7 +66,7 @@
           "key": "generalPurpose#abc-123",
           "role": "generalPurpose",
           "instance_id": "abc-123",
-          "attribution": "exact",
+          "attribution": "inferred",
           "lane": "done",
           "lane_source": "observed",
           "lane_basis": "observed_activity",
@@ -215,7 +215,7 @@
           "agent_key": "generalPurpose#abc-123",
           "role": "generalPurpose",
           "lane": "done",
-          "attribution": "exact"
+          "attribution": "inferred"
         },
         {
           "session_id": "doc-example-conversation",
@@ -261,6 +261,15 @@
       "owners": [],
       "tasks": [],
       "error": null
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "inferred:unscoped",
+      "task_slug": "unscoped",
+      "confidence": "inferred",
+      "session_ids": [],
+      "groups": []
     }
   ]
 }
