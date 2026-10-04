@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/M9nx/cursorfleet/main/schemas/config.schema.json",
+  "$defs": {
+    "CursorConfig": {
+      "additionalProperties": false,
+      "description": "Cursor-specific settings.",
+      "properties": {
+        "validated_versions": {
+          "default": [],
+          "description": "Cursor versions you have verified; `doctor` warns on others. Empty until a live capture has been reviewed (ADR 0001).",
+          "items": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+\\-]{0,63}$",
+            "type": "string"
+          },
+          "title": "Validated Versions",
+          "type": "array"
+        }
+      },
+      "title": "CursorConfig",
+      "type": "object"
+    },
+    "GitConfig": {
+      "additionalProperties": false,
+      "description": "Read-only git/worktree collector settings.",
+      "properties": {
+        "refresh_interval_s": {
+          "default": 5,
+          "maximum": 3600,
+          "minimum": 1,
+          "title": "Refresh Interval S",
+          "type": "integer"
+        },
+        "stale_after_hours": {
+          "default": 72,
+          "maximum": 8760,
+          "minimum": 1,
+          "title": "Stale After Hours",
+          "type": "integer"
+        },
+        "ahead_behind": {
+          "default": true,
+          "title": "Ahead Behind",
+          "type": "boolean"
+        }
+      },
+      "title": "GitConfig",
+      "type": "object"
+    },
+    "HooksConfig": {
+      "additionalProperties": false,
+      "description": "Which passive hooks the installer registers (subset of the 12 allowed).",
+      "properties": {
+        "enabled": {
+          "default": [
+            "sessionStart",
+            "sessionEnd",
+            "preToolUse",
+            "postToolUse",
+            "postToolUseFailure",
+            "subagentStart",
+            "subagentStop",
+            "beforeShellExecution",
+            "afterShellExecution",
+            "afterFileEdit",
+            "preCompact",
+            "stop"
+          ],
+          "items": {
+            "enum": [
+              "sessionStart",
+              "sessionEnd",
+              "preToolUse",
+              "postToolUse",
+              "postToolUseFailure",
+              "subagentStart",
+              "subagentStop",
+              "beforeShellExecution",
+              "afterShellExecution",
+              "afterFileEdit",
+              "preCompact",
+              "stop"
+            ],
+            "type": "string"
+          },
+          "title": "Enabled",
+          "type": "array"
+        }
+      },
+      "title": "HooksConfig",
+      "type": "object"
+    },
+    "PrivacyConfig": {
+      "additionalProperties": false,
+      "description": "Knobs can only reduce what is stored; they cannot add content fields.",
+      "properties": {
+        "store_command_display": {
+          "default": true,
+          "title": "Store Command Display",
+          "type": "boolean"
+        },
+        "command_display_max_chars": {
+          "default": 200,
+          "maximum": 200,
+          "minimum": 20,
+          "title": "Command Display Max Chars",
+          "type": "integer"
+        },
+        "hash_commands": {
+          "default": true,
+          "title": "Hash Commands",
+          "type": "boolean"
+        }
+      },
+      "title": "PrivacyConfig",
+      "type": "object"
+    },
+    "RetentionConfig": {
+      "additionalProperties": false,
+      "description": "Spool retention. Defaults: 14 days or 50 MB per session, whichever comes first.",
+      "properties": {
+        "max_age_days": {
+          "default": 14,
+          "maximum": 365,
+          "minimum": 1,
+          "title": "Max Age Days",
+          "type": "integer"
+        },
+        "max_session_mb": {
+          "default": 50,
+          "maximum": 1024,
+          "minimum": 1,
+          "title": "Max Session Mb",
+          "type": "integer"
+        }
+      },
+      "title": "RetentionConfig",
+      "type": "object"
+    },
+    "TuiConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "refresh_interval_ms": {
+          "default": 500,
+          "maximum": 10000,
+          "minimum": 100,
+          "title": "Refresh Interval Ms",
+          "type": "integer"
+        }
+      },
+      "title": "TuiConfig",
+      "type": "object"
+    },
+    "WorkConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "default": ".cursorfleet/work",
+          "description": "Workspace-relative directory holding agent-declared Markdown artifacts.",
+          "title": "Dir",
+          "type": "string"
+        }
+      },
+      "title": "WorkConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Root of ``.cursorfleet/config.toml``.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "retention": {
+      "$ref": "#/$defs/RetentionConfig"
+    },
+    "privacy": {
+      "$ref": "#/$defs/PrivacyConfig"
+    },
+    "hooks": {
+      "$ref": "#/$defs/HooksConfig"
+    },
+    "git": {
+      "$ref": "#/$defs/GitConfig"
+    },
+    "tui": {
+      "$ref": "#/$defs/TuiConfig"
+    },
+    "cursor": {
+      "$ref": "#/$defs/CursorConfig"
+    },
+    "work": {
+      "$ref": "#/$defs/WorkConfig"
+    }
+  },
+  "title": "CursorFleet config",
+  "type": "object"
+}

@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/M9nx/cursorfleet/main/schemas/roster.schema.json",
+  "$defs": {
+    "AgentSpec": {
+      "additionalProperties": false,
+      "description": "A Cursor subagent rendered to ``.cursor/agents/<name>.md``.",
+      "properties": {
+        "id": {
+          "description": "Stable slug; also the value stored in event.agent_role.",
+          "pattern": "^[a-z][a-z0-9\\-]{1,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        },
+        "description": {
+          "description": "Delegation hint Cursor reads; keep it sharp (when to use, when not to).",
+          "maxLength": 1024,
+          "minLength": 20,
+          "title": "Description",
+          "type": "string"
+        },
+        "readonly": {
+          "description": "Cursor's only permission-like switch; coarse.",
+          "title": "Readonly",
+          "type": "boolean"
+        },
+        "model": {
+          "default": "inherit",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/\\[\\]=,\\- ]{0,127}$",
+          "title": "Model",
+          "type": "string"
+        },
+        "is_background": {
+          "default": false,
+          "title": "Is Background",
+          "type": "boolean"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "capability_notes": {
+          "default": [],
+          "description": "DOCUMENTATION ONLY. Not enforced by Cursor or by CursorFleet v0.1.",
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Capability Notes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "description",
+        "readonly"
+      ],
+      "title": "AgentSpec",
+      "type": "object"
+    },
+    "CoordinatorSpec": {
+      "additionalProperties": false,
+      "description": "The main agent, driven by a skill and/or rule. Never rendered as a subagent file.\n\nDesign choice (ADR 0001 A7), not a platform limit.",
+      "properties": {
+        "id": {
+          "const": "coordinator",
+          "default": "coordinator",
+          "title": "Id",
+          "type": "string"
+        },
+        "role": {
+          "const": "coordinator",
+          "default": "coordinator",
+          "title": "Role",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 1024,
+          "minLength": 20,
+          "title": "Description",
+          "type": "string"
+        },
+        "delivery": {
+          "default": "skill",
+          "enum": [
+            "skill",
+            "rule",
+            "both"
+          ],
+          "title": "Delivery",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "capability_notes": {
+          "default": [],
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Capability Notes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "title": "CoordinatorSpec",
+      "type": "object"
+    },
+    "Role": {
+      "description": "Workflow function. Several agents may share one role (alpha/beta implementers).",
+      "enum": [
+        "coordinator",
+        "architect",
+        "scout",
+        "implementer",
+        "tester",
+        "reviewer",
+        "patcher",
+        "qa"
+      ],
+      "title": "Role",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Root of ``.cursorfleet/roster.toml``.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "name_prefix": {
+      "default": "cf-",
+      "description": "Prefix for generated Cursor subagent names. PROVISIONAL (ADR 0001 Q2).",
+      "pattern": "^([a-z][a-z0-9]{0,15}-)?$",
+      "title": "Name Prefix",
+      "type": "string"
+    },
+    "coordinator": {
+      "$ref": "#/$defs/CoordinatorSpec"
+    },
+    "agents": {
+      "items": {
+        "$ref": "#/$defs/AgentSpec"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Agents",
+      "type": "array"
+    }
+  },
+  "required": [
+    "coordinator",
+    "agents"
+  ],
+  "title": "CursorFleet roster",
+  "type": "object"
+}

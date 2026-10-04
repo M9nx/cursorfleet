@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/M9nx/cursorfleet/main/schemas/policy.schema.json",
+  "title": "CursorFleet policy (reserved for v0.2)",
+  "description": "Placeholder. The policy engine (v0.2 Guard) does not exist in v0.1, so no policy file is valid yet: this schema accepts only an empty object. Do not rely on its shape.",
+  "x-cursorfleet-status": "reserved-for-v0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {}
+}
