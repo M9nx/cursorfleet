@@ -66,9 +66,7 @@ def start(
     return rec("subagentStart", t, ids, keys)
 
 
-def stop(
-    kind: str = "cf-writer", t: float = 2000, extra_ids: dict[str, Any] | None = None
-) -> Rec:
+def stop(kind: str = "cf-writer", t: float = 2000, extra_ids: dict[str, Any] | None = None) -> Rec:
     ids: dict[str, Any] = {"subagent_type": kind}
     ids.update(extra_ids or {})
     keys = {"subagent_type": "str"}
@@ -493,8 +491,7 @@ def test_parent_tool_call_id_is_unclassified_not_parent_only_or_exact(az: Module
     assert "parent_tool_call_id" not in res["direct_current_identity"]
     assert res["verdict_code"] == "OPEN"
     assert (
-        az.classify_key("parent_tool_call_id", "preToolUse")
-        == "unclassified_identity_candidates"
+        az.classify_key("parent_tool_call_id", "preToolUse") == "unclassified_identity_candidates"
     )
     assert az.classify_key("parent_conversation_id", "preToolUse") == "parent_only_identity"
 
@@ -644,9 +641,7 @@ def test_duplicate_start_tool_call_id_is_ambiguous_not_unique_link(az: ModuleTyp
         linked_start(sub_id=SUB_B, kind="cf-reviewer", t=1100, tool_call_id=TC),
         inner_tool(t=1500),
         linked_stop(kind="cf-writer", t=2000, subagent_id=SUB, child_conversation_id=CHILD),
-        linked_stop(
-            kind="cf-reviewer", t=2100, subagent_id=SUB_B, child_conversation_id=CHILD_B
-        ),
+        linked_stop(kind="cf-reviewer", t=2100, subagent_id=SUB_B, child_conversation_id=CHILD_B),
     ]
     res = az.identity_analysis(recs)
     assert res["ambiguous_links"].get("ambiguous_parent_tool_call_id") == 1
@@ -701,9 +696,7 @@ def test_association_prefers_parent_tool_call_id_over_child_and_temporal(
         linked_start(sub_id=SUB_B, kind="cf-reviewer", t=3000, tool_call_id=TC_B),
         inner_tool(t=3500, conversation_id=CHILD_B, parent_tool_call_id=TC),
         linked_stop(kind="cf-writer", t=2000, subagent_id=TC, child_conversation_id=CHILD),
-        linked_stop(
-            kind="cf-reviewer", t=4000, subagent_id=TC_B, child_conversation_id=CHILD_B
-        ),
+        linked_stop(kind="cf-reviewer", t=4000, subagent_id=TC_B, child_conversation_id=CHILD_B),
     ]
     res = az.identity_analysis(recs)
     assert res["inner_tool_association"] == {"parent_tool_call_id": 1}
