@@ -180,7 +180,7 @@ def test_gates_stale_after_head_moves(tmp_path: Path) -> None:
     source = DataSource(repo, clock=lambda: NOW, git_every=1)
     first = source.load()
     unit = next(s for s in first.gates.by_worktree[fleet.wt_id] if s.gate == "unit_tests")
-    assert unit.state == "pass"
+    assert unit.state == "observed"
     (repo / "NEW.txt").write_text("x\n", encoding="utf-8")
     git(["add", "NEW.txt"], repo)
     git(["commit", "-q", "-m", "move head"], repo)

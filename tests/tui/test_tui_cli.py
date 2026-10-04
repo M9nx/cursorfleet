@@ -15,7 +15,7 @@ from cursorfleet.tui.layout import layout_for
 from cursorfleet.tui.watch import watchfiles_available
 
 runner = CliRunner()
-DOCUMENTED_KEYS = ["/", "j", "k", "Enter", "p", "t", "g", "w", "v", "e", "r", "?", "q", "o", "l"]
+DOCUMENTED_KEYS = ["/", "j", "k", "Enter", "p", "t", "a", "u", "g", "w", "e", "r", "?", "q", "o", "l"]
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -78,7 +78,7 @@ def test_every_key_is_documented_in_help() -> None:
     joined = " ".join(key for key, _ in KEYS)
     for key in DOCUMENTED_KEYS:
         assert key in joined or key in listed, key
-    assert "placeholder until v0.2" in text
+    assert "Observations" in text or "observations" in text.lower()
     assert "cursorfleet init --cursor" in text and "cursorfleet doctor" in text
     assert HONESTY and all(line in text for line in HONESTY)
 

@@ -23,7 +23,7 @@ from tui_helpers import (
     write_artifact,
 )
 
-VIEW_KEYS = ["o", "l", "w", "g", "e", "v"]
+VIEW_KEYS = ["o", "l", "w", "g", "e"]
 FORBIDDEN_KEYS = {
     "prompt": SECRET,
     "thinking": SECRET,

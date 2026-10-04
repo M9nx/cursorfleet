@@ -150,9 +150,19 @@ def make_source(repo: Path, *, with_git: bool = True) -> DataSource:
     return DataSource(repo, with_git=with_git, clock=fixed_clock)
 
 
-def make_app(repo: Path, *, with_git: bool = True, **kwargs: Any) -> CursorFleetApp:
+def make_app(
+    repo: Path,
+    *,
+    with_git: bool = True,
+    initial_view: str | None = "overview",
+    **kwargs: Any,
+) -> CursorFleetApp:
     return CursorFleetApp(
-        make_source(repo, with_git=with_git), refresh_s=3600, watch=False, **kwargs
+        make_source(repo, with_git=with_git),
+        refresh_s=3600,
+        watch=False,
+        initial_view=initial_view,
+        **kwargs,
     )
 
 

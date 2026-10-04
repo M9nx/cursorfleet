@@ -6,6 +6,7 @@ through :func:`~cursorfleet.tui.theme.safe` and end up in ``rich.text.Text`` (ne
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -15,6 +16,7 @@ from cursorfleet.adapters.cursor.kit_probe import HooksKitState
 from cursorfleet.events.models import Event
 from cursorfleet.state.artifact_scan import ArtifactRecord
 from cursorfleet.state.event_store import EventPage
+from cursorfleet.state.run_model import ParticipantGroup
 from cursorfleet.tui import gates as gate_logic
 from cursorfleet.tui.data import AgentBundle, Card, FleetData
 from cursorfleet.tui.filters import matches_text
@@ -34,15 +36,38 @@ from cursorfleet.tui.theme import (
     short_sha,
 )
 
-VIEWS: tuple[str, ...] = ("overview", "timeline", "worktrees", "gates", "evidence", "violations")
+VIEWS: tuple[str, ...] = (
+    "active_run",
+    "active_runs",
+    "overview",
+    "timeline",
+    "worktrees",
+    "gates",
+    "evidence",
+)
 VIEW_TITLE = {
-    "overview": "Workflow overview",
+    "active_run": "Active run",
+    "active_runs": "Active runs",
+    "overview": "Sessions (archive)",
     "timeline": "Timeline",
     "worktrees": "Worktrees",
-    "gates": "Gates",
+    "gates": "Observations",
     "evidence": "Evidence",
-    "violations": "Policy violations",
 }
+
+CONFIDENCE_LABEL = {
+    "explicit": "Explicit",
+    "declared": "Declared",
+    "inferred": "Inferred",
+}
+
+
+def default_view() -> str:
+    """Primary screen for M2.5; legacy overview via ``CURSORFLEET_PROTOTYPE=overview``."""
+    mode = os.environ.get("CURSORFLEET_PROTOTYPE", "").strip().lower()
+    if mode in {"overview", "legacy", "sessions"}:
+        return "overview"
+    return "active_run"
 MAX_CARDS_PER_LANE = 100
 MAX_LIST = 40
 
@@ -61,9 +86,6 @@ GUIDANCE_KIT_PARTIAL = (
     f"Run `{INIT_HINT}` or `{DOCTOR_HINT}`."
 )
 HONEST_UNKNOWN = "Without telemetry the state is UNKNOWN; CursorFleet never infers inactivity."
-VIOLATIONS_PLACEHOLDER = "policy engine arrives in v0.2"
-
-
 def _timeline_empty_message(data: FleetData) -> str:
     lines = overview_guidance_lines(data)
     return lines[0] if lines else GUIDANCE_NO_KIT
@@ -160,6 +182,130 @@ def card_label(card: Card, data: FleetData, ui: UiState) -> Text:
         "  ",
         "  ".join(tail),
     )
+
+
+def _group_label(group: ParticipantGroup, data: FleetData, ui: UiState) -> Text:
+    mark = LANE_MARK.get(group.summary_lane, "[?]")
+    conf = CONFIDENCE_LABEL.get(group.confidence, group.confidence)
+    tail = [conf]
+    if group.conflict:
+        tail.append("Conflict")
+    if group.declared_blockers:
+        tail.append(f"declared blockers:{group.declared_blockers}")
+    tail.append(f"{len(group.instances)} instance(s)")
+    return _t(
+        (mark, ui.theme.lane(group.summary_lane)),
+        " ",
+        (safe(group.role, 40), "bold"),
+        "  ",
+        "  ".join(tail),
+    )
+
+
+def active_run_rows(data: FleetData, ui: UiState) -> list[Row]:
+    run = data.primary_run
+    rows: list[Row] = []
+    if run is None:
+        rows.extend(_guidance_rows(data))
+        rows.append(
+            _note(
+                "ar:empty",
+                "No active run yet. Declare a task under .cursorfleet/work/ or "
+                "`cursorfleet run start --task <slug>`.",
+            )
+        )
+        return rows
+    conf = CONFIDENCE_LABEL.get(run.confidence, run.confidence)
+    rows.append(
+        Row(
+            "ar:h",
+            _t(
+                ("ACTIVE RUN", "bold"),
+                f"  task={safe(run.task_slug, 40)}  run={safe(run.run_id, 24)}  {conf}",
+            ),
+            header=True,
+        )
+    )
+    if run.branch or run.commit:
+        commit_label = short_sha(run.commit) if run.commit else "-"
+        rows.append(
+            _note("ar:git", f"branch={safe(run.branch or '-', 40)}  commit={commit_label}")
+        )
+    for group in run.groups:
+        key = f"grp:{group.role}"
+        search = f"{group.role} {group.summary_lane} {group.confidence}"
+        rows.append(Row(key, _group_label(group, data, ui), search.lower()))
+    if run.suggested_session_ids:
+        rows.append(
+            Row("ar:sug:h", _t(("Suggested sessions (not attached)", "bold")), header=True)
+        )
+        for sid in run.suggested_session_ids[:MAX_LIST]:
+            hint = f"  attach: cursorfleet run attach <run> --session {sid}"
+            rows.append(_note(f"sug:{sid}", hint))
+    if run.unassociated_session_ids:
+        rows.append(
+            Row("ar:un:h", _t(("Other live sessions (unscoped)", "bold")), header=True)
+        )
+        for sid in run.unassociated_session_ids[:MAX_LIST]:
+            rows.append(_note(f"un:{sid}", f"  session {safe(sid, 48)}"))
+    rows.append(_note("ar:nav", "Press u for all runs; o for full session archive."))
+    return rows
+
+
+def active_runs_rows(data: FleetData, ui: UiState) -> list[Row]:
+    rows: list[Row] = [Row("runs:h", _t(("ACTIVE RUNS", "bold")), header=True)]
+    if not data.run_snapshots:
+        rows.append(_note("runs:0", "No persisted runs. `cursorfleet run start --task <slug>`"))
+        if data.primary_run is not None:
+            run = data.primary_run
+            conf = CONFIDENCE_LABEL.get(run.confidence, run.confidence)
+            rows.append(
+                Row(
+                    f"run:{run.run_id}",
+                    _t(("inferred", "dim"), f"  {safe(run.task_slug, 40)}  ({conf})"),
+                    run.task_slug,
+                )
+            )
+        return rows
+    for run in data.run_snapshots:
+        conf = CONFIDENCE_LABEL.get(run.confidence, run.confidence)
+        rows.append(
+            Row(
+                f"run:{run.run_id}",
+                _t(
+                    (safe(run.task_slug, 40), "bold"),
+                    f"  {safe(run.run_id, 24)}  {conf}  groups={len(run.groups)}",
+                ),
+                run.task_slug,
+            )
+        )
+    archived = sum(1 for r in data.run_records if r.archived)
+    if archived:
+        rows.append(_note("runs:arch", f"{archived} archived run(s); see `cursorfleet run list`"))
+    return rows
+
+
+def active_run_detail(data: FleetData, ui: UiState, key: str) -> Text:
+    run = data.primary_run
+    if run is None or not key.startswith("grp:"):
+        return Text("Select a role group to see instances.", style="dim")
+    role = key[4:]
+    group = next((g for g in run.groups if g.role == role), None)
+    if group is None:
+        return Text("Unknown group.", style="dim")
+    doc = _Doc(ui.theme)
+    doc.title(f"Role: {safe(role, 40)}", "bold")
+    doc.line("Summary lane", LANE_TAG.get(group.summary_lane, group.summary_lane))
+    doc.line("Confidence", CONFIDENCE_LABEL.get(group.confidence, group.confidence))
+    if group.conflict:
+        doc.raw("Conflict: instances disagree on lane or state.", "bold")
+    doc.raw("")
+    for inst in group.instances:
+        lane = LANE_TAG.get(inst.lane, inst.lane)
+        basis = BASIS_TAG.get(inst.lane_basis, inst.lane_basis)
+        doc.line(f"{inst.session_id}/{inst.agent_key}", f"{lane} ({basis})")
+        doc.line("  last", fmt_ts(inst.last_ts) if inst.last_ts else "-")
+    return doc.text
 
 
 def overview_rows(data: FleetData, ui: UiState) -> list[Row]:
@@ -827,30 +973,14 @@ def evidence_detail(data: FleetData, ui: UiState, key: str) -> Text:
     return Text("Select an item to see its detail.", style="dim")
 
 
-# ---------------------------------------------------------------------------- violations
-
-
-def violations_rows(data: FleetData, ui: UiState) -> list[Row]:
-    return [
-        _header("pv:h", f"POLICY VIOLATIONS - {VIOLATIONS_PLACEHOLDER}"),
-        _note("pv:1", "v0.1 observes only: nothing is allowed, denied or flagged by policy."),
-        _note("pv:2", "Per-event risk labels are informational; see the timeline (l)."),
-    ]
-
-
-def violations_detail() -> Text:
-    return Text(
-        f"Policy violations: {VIOLATIONS_PLACEHOLDER}.\n\n"
-        "v0.1 is Observe-only. There is no policy engine, no allow/deny decision and no "
-        "approval flow, so there is nothing to list here.",
-        style="",
-    )
-
-
 # ---------------------------------------------------------------------------- dispatch
 
 
-def rows_for(view: str, data: FleetData, ui: UiState) -> list[Row]:
+def rows_for(view: str, data: FleetData, ui: UiState) -> list[Row]:  # noqa: PLR0911
+    if view == "active_run":
+        return active_run_rows(data, ui)
+    if view == "active_runs":
+        return active_runs_rows(data, ui)
     if view == "timeline":
         return timeline_rows(data, ui)
     if view == "worktrees":
@@ -859,8 +989,6 @@ def rows_for(view: str, data: FleetData, ui: UiState) -> list[Row]:
         return gate_rows(data, ui)
     if view == "evidence":
         return evidence_rows(data, ui)
-    if view == "violations":
-        return violations_rows(data, ui)
     return overview_rows(data, ui)
 
 
@@ -871,10 +999,24 @@ def detail_for(  # noqa: PLR0911 - one return per view, clearer than a table
     key: str | None,
     tools: Sequence[Event] | None = None,
 ) -> Text:
-    if view == "violations":
-        return violations_detail()
     if key is None:
         return Text("Nothing selected.", style="dim")
+    if view == "active_run":
+        return active_run_detail(data, ui, key)
+    if view == "active_runs" and key.startswith("run:"):
+        run_id = key[4:]
+        run = next(
+            (r for r in data.run_snapshots if r.run_id == run_id),
+            data.primary_run if data.primary_run and data.primary_run.run_id == run_id else None,
+        )
+        if run is None:
+            return Text("Select a run.", style="dim")
+        doc = _Doc(ui.theme)
+        doc.title(f"Run {safe(run.run_id, 40)}", "bold")
+        doc.line("Task", safe(run.task_slug, 60))
+        doc.line("Confidence", CONFIDENCE_LABEL.get(run.confidence, run.confidence))
+        doc.line("Groups", str(len(run.groups)))
+        return doc.text
     if view == "timeline":
         found = next(
             (e for e in data.timeline.events if f"ev:{e.session_id}:{e.event_id}" == key), None

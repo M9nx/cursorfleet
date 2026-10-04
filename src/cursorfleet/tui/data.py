@@ -48,6 +48,9 @@ from cursorfleet.state.event_store import (
 from cursorfleet.state.indexer import Indexer, replay_session_state
 from cursorfleet.state.models import AgentAcc, AgentView, FleetView, Lane, SessionAcc, SessionView
 from cursorfleet.state.reducer import DEFAULT_STALE_AFTER_S, MAIN, reduce_events, snapshot
+from cursorfleet.state.run_builder import build_active_run, pick_primary_task
+from cursorfleet.state.run_model import RunSnapshot
+from cursorfleet.state.run_store import RunRecord, list_runs
 from cursorfleet.state.spool_read import Corruption, list_spool_files
 from cursorfleet.state.status_doc import worktree_activity
 from cursorfleet.tui import gates as gate_logic
@@ -122,6 +125,9 @@ class FleetData:
     recent: EventPage = field(default_factory=EventPage)
     timeline: EventPage = field(default_factory=EventPage)
     timeline_errors: tuple[str, ...] = ()
+    primary_run: RunSnapshot | None = None
+    run_snapshots: list[RunSnapshot] = field(default_factory=list)
+    run_records: list[RunRecord] = field(default_factory=list)
 
     @property
     def is_empty(self) -> bool:
@@ -255,7 +261,54 @@ class DataSource:
         self._refresh_evidence(data)
         _build_cards(data)
         self._build_gates(data)
+        self._build_runs(data, ctx)
         self._add_problems(data)
+
+    def _build_runs(self, data: FleetData, ctx: RepoContext) -> None:
+        if data.fleet is None:
+            return
+        session_views = {s.session_id: s for s in data.fleet.sessions}
+        records = data.artifacts.records
+        all_records = list_runs(ctx.paths.root)
+        data.run_records = all_records
+        active_meta = sorted(
+            (r for r in all_records if not r.archived),
+            key=lambda r: r.created_at,
+            reverse=True,
+        )
+        snapshots: list[RunSnapshot] = []
+        for meta in active_meta:
+            snapshots.append(
+                build_active_run(
+                    task_slug=meta.task_slug,
+                    run_id=meta.run_id,
+                    sessions=data.sessions,
+                    session_views=session_views,
+                    records=records,
+                    linked_session_ids=frozenset(meta.session_ids),
+                    now=data.now,
+                    stale_after_s=self._stale_after_s,
+                )
+            )
+        data.run_snapshots = snapshots
+        if snapshots:
+            data.primary_run = snapshots[0]
+            return
+        task = pick_primary_task(records, now=data.now)
+        if task is None and not session_views:
+            data.primary_run = None
+            return
+        slug = task or "unscoped"
+        data.primary_run = build_active_run(
+            task_slug=slug,
+            run_id=f"inferred:{slug}",
+            sessions=data.sessions,
+            session_views=session_views,
+            records=records,
+            linked_session_ids=frozenset(),
+            now=data.now,
+            stale_after_s=self._stale_after_s,
+        )
 
     def _refresh_projection(self, data: FleetData) -> None:
         assert self._indexer is not None  # noqa: S101 - set together with the context
@@ -337,7 +390,11 @@ class DataSource:
         if not self._evidence_dirty or self._ctx is None:
             return
         events: list[Event] = []
-        for kind in (EventKind.TEST_COMPLETED, EventKind.GATE_CHANGED):
+        for kind in (
+            EventKind.VERIFICATION_OBSERVED,
+            EventKind.TEST_COMPLETED,
+            EventKind.GATE_CHANGED,
+        ):
             page = query_events(
                 self._ctx.paths.db, EventFilter(kind=kind.value), limit=GATE_EVIDENCE_EVENTS
             )
@@ -377,6 +434,15 @@ class DataSource:
 # ---------------------------------------------------------------- cards
 
 
+def _declared_for_role(records: list[ArtifactRecord], role: str) -> list[ArtifactRecord]:
+    """Task-scoped declared records for a hook-observed role (avoid cross-task bleed)."""
+    matched = [r for r in records if r.author_role == role]
+    tasks = {r.task for r in matched}
+    if len(tasks) == 1:
+        return matched
+    return []
+
+
 def _hook_cards(data: FleetData, records_by_role: dict[str, list[ArtifactRecord]]) -> None:
     fleet = data.fleet
     assert fleet is not None  # noqa: S101
@@ -384,7 +450,8 @@ def _hook_cards(data: FleetData, records_by_role: dict[str, list[ArtifactRecord]
         acc_session = data.sessions[sview.session_id]
         for aview in sview.agents:
             acc = acc_session.agents[aview.key]
-            records = list(records_by_role.get(acc.role or "", [])) if acc.role else []
+            all_records = data.artifacts.records
+            records = _declared_for_role(all_records, acc.role) if acc.role else []
             declared_blockers = sum(1 for r in records if r.kind == "blocker.raised")
             observed_blockers = acc.blockers or (1 if aview.lane == Lane.BLOCKED.value else 0)
             key = f"agent:{sview.session_id}:{aview.key}"

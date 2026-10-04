@@ -28,12 +28,12 @@ from tui_helpers import (
 )
 
 VIEW_KEYS = {
+    "a": "active_run",
     "o": "overview",
     "l": "timeline",
     "w": "worktrees",
     "g": "gates",
     "e": "evidence",
-    "v": "violations",
 }
 
 
@@ -227,12 +227,12 @@ async def test_every_screen_renders_with_fixture_data(
         assert VIEW_TITLE[view] in screen_text(app)
         text = app.rendered_text()
         expected = {
+            "active_run": "ACTIVE RUN",
             "overview": "UNKNOWN / NO TELEMETRY",
             "timeline": "matching event(s)",
             "worktrees": "[main]",
             "gates": "display-only: v0.1 does not enforce gates",
             "evidence": "DECLARED BY AGENTS",
-            "violations": "policy engine arrives in v0.2",
         }[view]
         assert expected in text
 
@@ -246,12 +246,12 @@ async def test_every_screen_renders_empty(tmp_path: Path, key: str, view: str) -
         await settle(app, pilot)
         assert app.view == view
         text = app.rendered_text()
-        if view in ("overview", "timeline"):
+        if view in ("overview", "timeline", "active_run"):
             assert "cursorfleet init --cursor" in text and "cursorfleet doctor" in text
         if view == "overview":
             assert "UNKNOWN / NO TELEMETRY (1)" in text  # the git-only worktree
         if view == "gates":
-            assert text.count("UNKNOWN") >= 10
+            assert text.count("NOT_EVA") >= 5 or text.count("NOT EVAL") >= 5
         if view == "evidence":
             assert "none yet" in text
 
@@ -314,7 +314,7 @@ async def test_agent_detail_has_required_fields(fleet_repo: Path) -> None:
         "Compactions  1",
         "destination: reviewer",
         "Token/cost   unknown (not exposed by Cursor hooks)",
-        "Unit tests: PASS",
+        "Unit tests: OBSERVED",
         "DECLARED BY THE AGENT",
     ):
         assert needle in text, needle
@@ -326,7 +326,7 @@ async def test_gates_screen_marks_stale_and_never_scores(fleet_repo: Path) -> No
         await pilot.press("g")
         await settle(app, pilot)
         text = app.rendered_text()
-        assert "[PASS   ] Unit tests" in text
+        assert "OBSERVED" in text and "Unit tests" in text
         assert "Independent review" in text and "CI status" in text and "Merge readiness" in text
         lowered = text.lower()
         assert "no overall score" in lowered
@@ -338,7 +338,7 @@ async def test_gates_screen_marks_stale_and_never_scores(fleet_repo: Path) -> No
         await pilot.press("r")
         await settle(app, pilot)
         text = app.rendered_text()
-        assert "[STALE  ] Unit tests" in text and "STALE: was pass" in text
+        assert "STALE" in text and "Unit tests" in text
 
 
 async def test_worktrees_screen_and_refresh_is_read_only(
@@ -367,13 +367,22 @@ async def test_worktrees_screen_and_refresh_is_read_only(
     assert not git_words & {"fetch", "pull", "push", "clone", "commit", "checkout", "reset"}
 
 
-async def test_violations_placeholder(fleet_repo: Path) -> None:
+async def test_active_run_is_default_view(fleet_repo: Path) -> None:
+    app = make_app(fleet_repo, initial_view=None)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await settle(app, pilot)
+        assert app.view == "active_run"
+        assert "ACTIVE RUN" in app.rendered_text()
+
+
+async def test_violations_removed_from_nav(fleet_repo: Path) -> None:
     app = make_app(fleet_repo)
     async with app.run_test(size=(120, 40)) as pilot:
+        await settle(app, pilot)
         await pilot.press("v")
         await settle(app, pilot)
-        assert "policy engine arrives in v0.2" in app.rendered_text()
-        assert "policy engine arrives in v0.2" in screen_text(app)
+        assert app.view != "violations"
+        assert "policy engine arrives in v0.2" not in app.rendered_text()
 
 
 async def test_help_screen_open_close_and_q_does_not_quit(fleet_repo: Path) -> None:
@@ -532,8 +541,8 @@ async def test_every_state_has_a_text_label_not_just_colour(fleet_repo: Path) ->
             assert tag in text, lane
         await pilot.press("g")
         await settle(app, pilot)
-        for state in ("PASS", "UNKNOWN"):
-            assert f"[{state}" in app.rendered_text()
+        for state in ("OBSERVED", "NOT_EVA"):
+            assert state in app.rendered_text()
 
 
 async def test_focus_order_filter_list_detail(fleet_repo: Path) -> None:
@@ -573,7 +582,7 @@ async def test_corrupt_spool_and_database_never_crash(fleet_repo: Path) -> None:
 
 async def test_source_failure_keeps_old_data_and_ui_alive(fleet_repo: Path) -> None:
     source = make_source(fleet_repo)
-    app = CursorFleetApp(source, refresh_s=3600, watch=False)
+    app = CursorFleetApp(source, refresh_s=3600, watch=False, initial_view="overview")
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
 

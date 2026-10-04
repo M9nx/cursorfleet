@@ -39,9 +39,10 @@ PAGE_STEP = DEFAULT_PAGE
 
 KEYS_WIDE = (
     "q quit | ? help | / filter | j/k move | Enter detail | p pin | t tile | "
-    "o overview | l timeline | w worktrees | g gates | e evidence | v violations | r refresh"
+    "a active run | u runs | o sessions | l timeline | w worktrees | g observations | "
+    "e evidence | r refresh"
 )
-KEYS_NARROW = "? help  q quit  / filter  o l w g e v  p pin  r refresh"
+KEYS_NARROW = "? help  q quit  / filter  a u o l w g e  p pin  r refresh"
 
 
 def _hooks_titlebar(data: FleetData, *, short: bool) -> str:
@@ -113,11 +114,12 @@ class CursorFleetApp(App[None]):
         Binding("k", "cursor_up", "Up", show=False),
         Binding("p", "pin", "Pin"),
         Binding("t", "tile", "Tile"),
-        Binding("g", "show('gates')", "Gates"),
+        Binding("a", "show('active_run')", "Active run"),
+        Binding("u", "show('active_runs')", "Runs"),
+        Binding("g", "show('gates')", "Observations"),
         Binding("w", "show('worktrees')", "Worktrees"),
-        Binding("v", "show('violations')", "Violations"),
         Binding("e", "show('evidence')", "Evidence"),
-        Binding("o", "show('overview')", "Overview"),
+        Binding("o", "show('overview')", "Sessions"),
         Binding("l", "show('timeline')", "Timeline"),
         Binding("r", "refresh", "Refresh"),
         Binding("m", "more", "More"),
@@ -133,6 +135,7 @@ class CursorFleetApp(App[None]):
         watch_factory: WatchFactory | None = None,
         spool_dir: str | None = None,
         mono: bool | None = None,
+        initial_view: str | None = None,
     ) -> None:
         # Textual pops NO_COLOR from the environment in App.__init__: read it first.
         no_color = os.environ.get("NO_COLOR") is not None if mono is None else mono
@@ -140,7 +143,7 @@ class CursorFleetApp(App[None]):
         self.source = source
         self.refresh_s = max(0.25, refresh_s)
         self.ui = views.UiState(theme=Theme(mono=no_color))
-        self.view = "overview"
+        self.view = initial_view or views.default_view()
         self.data = FleetData(now=source.now())
         self.tile_enabled = False
         self.detail_open = False

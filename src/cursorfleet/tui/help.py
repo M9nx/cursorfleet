@@ -13,12 +13,13 @@ from cursorfleet.tui.gates import DISPLAY_ONLY
 from cursorfleet.tui.layout import SINGLE_BELOW, TILE_FROM
 
 KEYS: tuple[tuple[str, str], ...] = (
-    ("o", "Workflow overview: lanes of agents (default)"),
+    ("a", "Active run: task-centric roles and instances (default)"),
+    ("u", "Active runs: persisted runs for this repo"),
+    ("o", "Sessions (archive): full session-centric overview"),
     ("l", "Timeline: filterable event stream (newest first)"),
     ("w", "Worktrees: branch, HEAD, dirty, ahead/behind, owner"),
-    ("g", "Gates: independent signals, display-only"),
+    ("g", "Observations: verification signals, display-only (no pass/fail score)"),
     ("e", "Evidence: observed runs vs SELF-REPORTED declarations"),
-    ("v", "Policy violations (placeholder until v0.2)"),
     ("j / k, arrows", "Move down / up (scrolls the detail when it has focus)"),
     ("Enter", "Open the detail for the selected item"),
     ("Esc", "Back: leave detail, close or clear the filter"),
@@ -34,13 +35,13 @@ KEYS: tuple[tuple[str, str], ...] = (
 
 HONESTY: tuple[str, ...] = (
     "CursorFleet v0.1 OBSERVES. It does not enforce, approve or block anything.",
-    "obs = observed from a Cursor hook; drv = derived by CursorFleet; SELF = reported by an",
-    "agent in a work artifact (a claim, not evidence; the author role can be forged).",
+    "Primary labels: Observed, Declared, Inferred, Unavailable, Conflict (not obs/drv/SELF).",
+    "Detail panes may still show technical source/attribution for power users.",
     "A silent agent is shown STALE / OFFLINE, never idle. No telemetry means UNKNOWN.",
     "session_id groups one Cursor chat; it is correlation only, not agent identity.",
     "Q1 and Q2 (subagent identity in hooks) are OPEN; incomplete lifecycles stay visible.",
     "Token and cost budgets are unknown: Cursor hooks do not expose them.",
-    f"Gates: {DISPLAY_ONLY}. Each gate is its own signal; there is no overall score.",
+    f"Observations: {DISPLAY_ONLY}. Each signal stands alone; there is no overall score.",
     "Cloud agents are not visible. Local Cursor sessions only.",
     "Status is always written as text; colour is only a hint and NO_COLOR is honoured.",
 )
