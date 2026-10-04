@@ -1174,6 +1174,62 @@ Requirements:
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; raw-capture sign-off: -; ADRs affected: 0002, 0003.
 
+### 17. Non-git workspace
+
+Question: what happens when Cursor opens a folder that is not a git repository (v0.1
+requires git: ADR 0002 says hooks record nothing and exit open, and `doctor` explains)? Two
+parts: what Cursor does (unverified), and what our code does in that situation (designed,
+not live-verified).
+
+Cases (scratch folders only; no real project):
+
+| Case | Setup |
+| --- | --- |
+| 17a | a plain folder with no `.git` anywhere above it |
+| 17b | a plain folder created inside another scratch git repository (git, and our file-based `.git` walk, would find the parent) |
+
+Part 1, Cursor behaviour (spike kit, which falls back to a temp directory when it finds no
+git entry, so no git is needed for it; its capture directory is created `0700`):
+
+- Procedure: open the folder in the IDE with the kit's `hooks.json`; run one short agent
+  turn with a Shell and a Read call; repeat once with the CLI (`agent`) and once headless.
+  Record whether project hooks fire at all, the `workspace_roots` and `cwd` values (as
+  basenames and git kind only), and whether `sessionStart` and `sessionEnd` still arrive.
+- Pass (information): the result is recorded for each case and surface. Refute of a design
+  assumption: hooks do not fire, or `workspace_roots` is empty, in a way that the docs
+  and ADR 0002 do not allow for (record it and update ADR 0002 and
+  [platform-support](platform-support.md)).
+
+Part 2, our hook and commands (no Cursor needed; synthetic doc-derived payload piped to the
+installed `cursorfleet-hook` in each folder; `init` is not part of this row):
+
+| Check | Expected (design intent, unverified) |
+| --- | --- |
+| hook exit code | 0 |
+| hook stdout | `{"permission":"allow"}` for permission hooks, `{}` otherwise |
+| files created anywhere | none (no spool, no SQLite, no runtime directory) for 17a |
+| `doctor` | explains that a git repository is required; does not crash |
+| `status --json`, `tui` | report "not a git repository" as a problem; do not crash |
+
+For 17b the design intent is **undefined**: `git rev-parse` and the hook's `.git` walk
+would both attribute the folder to the parent repository, so events from a folder that is
+not itself a repository would land in the parent's runtime directory. Record exactly what
+happens (which directory receives the spool, what `doctor` says). **OWNER DECISION** whether
+that is acceptable, should be documented, or should be prevented.
+
+Procedure check for `init` in a non-git folder (describe, do not run in this pass): record
+whether `cursorfleet init --cursor --dry-run` refuses or plans writes, and whether the
+message is clear. ADR 0002 and ADR 0009 do not say; this is a gap, not a result.
+
+- Pass: 17a part 2 matches every row of the table (exit 0, right reply, nothing written,
+  clear `doctor` message); 17b behaviour is recorded and the owner decision is made.
+  Refute: the hook writes any file in 17a, exits non-zero, prints a wrong reply, or a
+  command crashes.
+- Can change: ADR 0002 (non-git statement), [platform-support](platform-support.md),
+  [architecture](architecture.md) failure table, `doctor` messages.
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
+  reviewer sign-off: -; raw-capture sign-off: -; ADRs affected: 0002.
+
 ## After the run
 
 - Fill in `spike/questions.md` results and the ADR 0001 matrix (move the row from NOT RUN to
