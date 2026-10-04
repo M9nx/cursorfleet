@@ -126,11 +126,16 @@ def key_shapes(recs):
 #                                    captured subagentStart.subagent_id, on every occurrence;
 #                                    or conversation_id equal to such a subagent_id)
 #   role_only_identity               names the kind of agent only (subagent_type ...)
-#   parent_only_identity             names the spawning parent only (any key containing
-#                                    "parent", or conversation_id equal to the parent's).
-#                                    NEVER counts toward current-instance identity.
-#   unclassified_identity_candidates id-like keys with undocumented meaning, or a
-#                                    subagent_id that is not (fully) linkable. NEVER
+#   parent_only_identity             names the spawning parent only
+#                                    (parent_conversation_id, other parent_* identity
+#                                    keys except parent_tool_call_id, or conversation_id
+#                                    equal to the parent's). NEVER counts toward
+#                                    current-instance identity.
+#   unclassified_identity_candidates id-like keys with undocumented meaning, a
+#                                    subagent_id that is not (fully) linkable, or a
+#                                    deterministic-link candidate such as
+#                                    parent_tool_call_id (not EXACT, not parent-only,
+#                                    until row 8 repetitions verify it). NEVER
 #                                    auto-promoted.
 BUCKETS = (
     "direct_current_identity",
@@ -140,6 +145,10 @@ BUCKETS = (
 )
 DIRECT_ID_KEYS = frozenset({"subagent_id"})
 ROLE_ONLY_KEYS = frozenset({"subagent_type", "agent_type", "agent_role", "subagent_role"})
+PARENT_ONLY_KEYS = frozenset({"parent_conversation_id"})
+# Deterministic-link candidate: observed on inner tool hooks; not EXACT and not
+# parent-only until row 8 concurrent repetitions verify the relationship.
+LINK_CANDIDATE_KEYS = frozenset({"parent_tool_call_id"})
 HINT_NOTE = "hint only; requires manual classification per docs/empirical-test-plan.md row 8"
 
 
@@ -171,7 +180,9 @@ def classify_key(name, event):
     if not isinstance(name, str) or name.startswith("<"):
         return None
     low = name.lower()
-    if "parent" in low:  # checked first: parent_subagent_id etc. are still the PARENT
+    if low in LINK_CANDIDATE_KEYS:
+        return "unclassified_identity_candidates"
+    if low in PARENT_ONLY_KEYS or (low != "parent_tool_call_id" and "parent" in low):
         return "parent_only_identity"
     if low in DIRECT_ID_KEYS:
         return "direct_current_identity"
@@ -498,8 +509,11 @@ def render(a):
     w("")
     w("--- Q1 identity of the CURRENT subagent inside its tool hooks (HINT ONLY) ---")
     ai = a["agent_identity"]
-    w("  The four categories below are reported separately. A parent_* key or the parent's")
-    w("  conversation_id can only ever count as parent_only_identity. Classify by hand per")
+    w("  The four categories below are reported separately. parent_conversation_id (and")
+    w("  other parent_* identity keys except parent_tool_call_id) or the parent's")
+    w("  conversation_id can only ever count as parent_only_identity.")
+    w("  parent_tool_call_id is an unclassified deterministic-link candidate, not EXACT")
+    w("  and not parent-only until row 8 repetitions verify it. Classify by hand per")
     w("  docs/empirical-test-plan.md row 8; the verdict below is not a result.")
     for k, v in ai.items():
         if k not in BUCKETS and k not in ("verdict", "verdict_code"):
