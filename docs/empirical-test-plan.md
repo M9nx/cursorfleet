@@ -507,7 +507,8 @@ Rules for classification:
 
 - **Parent identity is not current-subagent identity.** `parent_conversation_id`, or the
   parent's `conversation_id` appearing on a tool hook, must never be reported as EXACT. It
-  can at most produce PARENT_ONLY.
+  can at most produce PARENT_ONLY. `parent_tool_call_id` is not that field: treat it as an
+  unclassified deterministic-link candidate until this row's concurrent runs verify it.
 - If several fields are present, the outcome is the strongest level that holds in 100% of
   valid runs; a field that is present only part of the time counts as absent for that level
   (so the outcome drops, usually to UNKNOWN) and its rate is recorded.
@@ -520,12 +521,18 @@ Rules for classification:
   promote it automatically, and classify it by hand with the evidence below.
 - The `spike/analyze.py` Q1 output is a **hint requiring manual classification** per this
   row. It reports four separate buckets: `direct_current_identity`, `role_only_identity`,
-  `parent_only_identity` and `unclassified_identity_candidates`. A key containing `parent_`
-  can only ever land in `parent_only_identity`. Its overall verdict follows this mapping
-  (CONFIRMED only from `direct_current_identity`, PARTIAL for role-only, REFUTED for
-  parent-only or nothing, OPEN when only unclassified candidates exist) but it does not
-  replace the hand classification; keep its raw outputs
-  (`tool_hook_keys_with_agent_identity`, `tool_conversation_id_relation`) as artifacts.
+  `parent_only_identity` and `unclassified_identity_candidates`. `parent_conversation_id`
+  can only ever land in `parent_only_identity`. `parent_tool_call_id` is an unclassified
+  deterministic-link candidate (not EXACT, not parent-only) until R8.1/R8.2 verify it.
+  Its overall verdict follows this mapping (CONFIRMED only from `direct_current_identity`,
+  PARTIAL for role-only, REFUTED for parent-only or nothing, OPEN when only unclassified
+  candidates exist) but it does not replace the hand classification; keep its raw outputs
+  (`tool_hook_keys_with_agent_identity`, `tool_conversation_id_relation`, and the
+  Task / `parent_tool_call_id` / stop-id / child-conversation equality counters) as
+  artifacts. Q1 and Q2 remain **OPEN**. One sequential Cursor 3.22.7 observation is
+  UNVERIFIED and does not fill this row: it saw optional `subagent_id` and
+  `child_conversation_id` on `subagentStop` (not guaranteed) and inner hooks using a
+  child `conversation_id`. Concurrent repetitions below are still required.
 
 - Procedure: README 2 and 3, extended to three run types, each with its own label.
   - R8.1: two concurrent subagents of the same type (`cf-writer` twice, README 3), 5 runs.
@@ -1471,9 +1478,11 @@ this plan is still OPEN.**
    `follow-ups.md` task 7; they are not fixed.
 4. **RESOLVED (2026-10-04, analyzer commit).** `spike/analyze.py` now reports four buckets
    (`direct_current_identity`, `role_only_identity`, `parent_only_identity`,
-   `unclassified_identity_candidates`). Parent fields never confirm current-subagent
-   identity. The derived verdict is a hint that still requires manual classification per
-   row 8. The fix has never been run against a live capture.
+   `unclassified_identity_candidates`). `parent_conversation_id` never confirms
+   current-subagent identity; `parent_tool_call_id` is an unclassified link candidate,
+   not EXACT. The derived verdict is a hint that still requires manual classification per
+   row 8. Q1 and Q2 remain OPEN. One sequential Cursor 3.22.7 observation is UNVERIFIED
+   and does not close this item.
 5. `spike/questions.md` secondary questions have no ids (SQ1 to SQ9 above are local). Open.
 6. ADR 0001 has one matrix row for headless `agent -p`; row 3 tests without and with
    `--force` separately. No matrix rows exist for rows 15, 17 and 18. Open.

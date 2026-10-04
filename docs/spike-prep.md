@@ -29,17 +29,22 @@ self-test.
 
 ## Analyzer (four identity buckets)
 
-`spike/analyze.py` is already fixed. Q1 reports four buckets separately; do not
-collapse them:
+Q1 reports four buckets separately; do not collapse them:
 
 - `direct_current_identity`
 - `role_only_identity`
-- `parent_only_identity`
-- `unclassified_identity_candidates`
+- `parent_only_identity` (`parent_conversation_id` only, never `parent_tool_call_id`)
+- `unclassified_identity_candidates` (includes `parent_tool_call_id` as a
+  deterministic-link candidate, not EXACT until row 8 concurrent repetitions)
 
 The VERDICT line is a hint only. Classify by hand per empirical-test-plan row 8.
-Parent fields never confirm current-subagent identity. The analyzer has not been
-run against a live capture.
+`parent_conversation_id` never confirms current-subagent identity. Q1 and Q2
+remain **OPEN**. One sequential Cursor 3.22.7 observation is UNVERIFIED; do not
+promote it. That run also showed optional `subagent_id` and `child_conversation_id`
+on `subagentStop` (not guaranteed) and inner tool hooks using a child
+`conversation_id` plus `parent_tool_call_id`. Re-run `analyze.py` on the existing
+scratch `captures.jsonl` after this analyzer fix; do not treat that replay as
+row-8 confirmation.
 
 ## Row 17 / 17b (expected cases; verdict OPEN)
 

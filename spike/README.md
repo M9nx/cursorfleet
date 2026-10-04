@@ -4,9 +4,10 @@
 > questions in [`questions.md`](questions.md) with real Cursor payloads before
 > any CursorFleet schema is frozen. It is **not** the v0.1 hook entrypoint.
 
-**Status:** the kit is built and self-tested. **No live Cursor session has been
-captured yet.** Everything in `docs/adr/0001-cursor-capabilities.md` marked
-UNVERIFIED stays provisional until you run this runbook.
+**Status:** the kit is built and self-tested. One sequential Cursor 3.22.7
+observation exists and is **UNVERIFIED** (not a row-8 result). Q1 and Q2 stay
+**OPEN**. Everything in `docs/adr/0001-cursor-capabilities.md` marked UNVERIFIED
+stays provisional until row-8 repetitions classify it.
 
 ## What the kit does and does not record
 
@@ -128,14 +129,24 @@ Read the **Q1** and **Q2** sections. Q1 asks whether tool hooks inside a subagen
 identify the *current subagent instance*. The analyzer reports four categories
 separately: `direct_current_identity` (a unique current-instance id, for example a
 `subagent_id` that equals a captured `subagentStart.subagent_id` on every occurrence),
-`role_only_identity` (`subagent_type` and similar), `parent_only_identity` (any
-`parent_*` key, or a `conversation_id` equal to the parent's; this can never confirm
-identity) and `unclassified_identity_candidates` (id-like keys with undocumented meaning,
-or an id that does not link to a start; never auto-promoted). Its VERDICT line follows
-CONFIRMED (direct only), PARTIAL (role only), OPEN (only unclassified candidates, or no
-data) and REFUTED (parent only, or nothing found inside subagent windows) and is a hint:
-classify by hand per `docs/empirical-test-plan.md` row 8. Q2 asks whether `subagent_type`
-shows `cf-reviewer`, `cf-writer`, or only `generalPurpose`.
+`role_only_identity` (`subagent_type` and similar), `parent_only_identity`
+(`parent_conversation_id`, or a `conversation_id` equal to the parent's; this can never
+confirm identity) and `unclassified_identity_candidates` (id-like keys with undocumented
+meaning, an id that does not link to a start, or a deterministic-link candidate such as
+`parent_tool_call_id`; never auto-promoted). `parent_tool_call_id` is **not** parent-only
+and is **not** EXACT until row 8 concurrent repetitions verify it. Its VERDICT line
+follows CONFIRMED (direct only), PARTIAL (role only), OPEN (only unclassified candidates,
+or no data) and REFUTED (parent only, or nothing found inside subagent windows) and is a
+hint: classify by hand per `docs/empirical-test-plan.md` row 8. Q2 asks whether
+`subagent_type` shows `cf-reviewer`, `cf-writer`, or only `generalPurpose`.
+
+One unverified sequential Cursor 3.22.7 observation saw optional `subagent_id` and
+`child_conversation_id` on `subagentStop` (docs list neither). The analyzer pairs
+start/stop by that optional id when present, else by type+order; it associates inner
+tool events by `parent_tool_call_id`, then `child_conversation_id`, then temporal
+fallback (temporal is never treated as exact). Inner hooks may use a child
+`conversation_id`, so a parent-`conversation_id` window match alone will miss them.
+Do not promote Q1 or Q2 from OPEN on that single run.
 
 ## 3. Run B: two subagents in parallel with worktree isolation (Q3, Q4, Q5)
 
@@ -209,9 +220,12 @@ git worktree list && git worktree prune
 - `capture_hook.py`: the hook, plus `--selftest`, `--set-label`, `--print-capture-dir`.
 - `hooks.json.example`, `hooks.windows.json.example`: passive hooks only.
 - `analyze.py`: per-event key shapes, identity evidence in four separate categories (direct
-  current identity, role only, parent only, unclassified candidates; the verdict is a hint),
-  latency percentiles, worktree flags, interleaving evidence. Tolerates torn lines and odd
-  records. Unit-tested with synthetic records in `tests/unit/test_spike_analyze.py`.
+  current identity, role only, parent only, unclassified candidates including
+  `parent_tool_call_id`; the verdict is a hint), start/stop pairing by optional stop
+  `subagent_id` else type+order, inner-tool association by task/child ids then temporal
+  (never exact), latency percentiles, worktree flags, interleaving evidence. Tolerates torn
+  lines and odd records. Unit-tested with synthetic records in
+  `tests/unit/test_spike_analyze.py`.
 - `bench_latency.py`: steady-state process wall-clock latency (fresh process, warm cache); results in `results/`.
 - `questions.md`: the open questions and how each is answered.
 - `doc_examples/`: hand-built, doc-derived example payloads. **Not captured.**

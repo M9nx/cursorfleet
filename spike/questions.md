@@ -1,9 +1,9 @@
 # M0a open questions
 
 Each question comes from the CursorFleet v0.1 plan (section 2 and the M0a
-spike list). Status as of this writing: **all OPEN**, because no live Cursor
-capture has been performed yet. Fill in the "Result" lines after running
-`spike/README.md` and `spike/analyze.py`.
+spike list). Status as of this writing: **Q1 and Q2 remain OPEN.** One sequential Cursor
+3.22.7 observation exists and is UNVERIFIED; do not treat it as a result.
+Fill in the "Result" lines only after row-8 repetitions and review.
 
 Result values: `CONFIRMED`, `REFUTED`, `PARTIAL`, `OPEN`. Always record the
 `cursor_version` and the surface (IDE, Agents Window, CLI) with the result.
@@ -27,17 +27,26 @@ Result values: `CONFIRMED`, `REFUTED`, `PARTIAL`, `OPEN`. Always record the
 - Docs say: base fields are `conversation_id` and `generation_id`;
   `subagent_id`, `subagent_type`, `parent_conversation_id` are documented only
   on `subagentStart`. `subagentStop` documents `subagent_type` but **no**
-  `subagent_id`. Nothing documents identity on tool hooks.
+  `subagent_id`. Nothing documents identity on tool hooks. One unverified
+  Cursor 3.22.7 sequential run observed optional `subagent_id` and
+  `child_conversation_id` on `subagentStop`; treat those as optional, not
+  guaranteed. The same run saw `parent_tool_call_id` on inner tool hooks
+  (a deterministic-link *candidate*, not EXACT and not parent-only until
+  row 8 repetitions verify it).
 - Why it matters: per-agent timelines, the `agent_instance_id` field mapping,
   and attribution of edits/commands to roles in v0.1 and any v0.2 per-role guard.
 - Evidence in `analyze.py`: the four separate categories `direct_current_identity`,
-  `role_only_identity`, `parent_only_identity` (a `parent_*` key or the parent's
+  `role_only_identity`, `parent_only_identity` (`parent_conversation_id` or the parent's
   `conversation_id` only ever lands here) and `unclassified_identity_candidates`
-  (undocumented or unlinked id-like keys, never auto-promoted); the "Q1" VERDICT, which is a
-  hint requiring manual classification per row 8 (CONFIRMED only from direct, PARTIAL for
-  role only, REFUTED for parent only or nothing found, OPEN for unclassified candidates or
-  no data); the raw `tool_hook_keys_with_agent_identity` and `tool_conversation_id_relation`;
-  the share of in-window tool events with the same conversation+generation as the main agent.
+  (undocumented or unlinked id-like keys, or `parent_tool_call_id` as a link candidate;
+  never auto-promoted); the "Q1" VERDICT, which is a hint requiring manual classification
+  per row 8 (CONFIRMED only from direct, PARTIAL for role only, REFUTED for parent only or
+  nothing found, OPEN for unclassified candidates or no data); the relationship counters
+  (`Task.tool_use_id` / `parent_tool_call_id` / stop `subagent_id` / child
+  `conversation_id` equalities); the raw `tool_hook_keys_with_agent_identity` and
+  `tool_conversation_id_relation`; the share of in-window tool events with the same
+  conversation+generation as the main agent. Temporal inner-tool association is never
+  treated as exact.
 - Fallbacks if the instance is NOT identifiable (all would be `inferred`): temporal
   attribution (unsafe with parallel subagents), worktree/`workspace_roots` as the identity (only with isolation),
   `tool_use_id` linkage of the `Task` call to `subagentStart.tool_call_id`,
