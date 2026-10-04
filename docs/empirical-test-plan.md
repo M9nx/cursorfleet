@@ -568,13 +568,27 @@ Result table, per hook name (all cells OPEN; fill with one of the four outcomes)
 
 ### 9. Custom `.cursor/agents` `subagent_type` naming (Q2)
 
+Per docs the `subagent_type` examples are `generalPurpose`, `explore` and `shell`; custom
+agents are not mentioned in the hooks reference, and a subagent file's `name` defaults to its
+filename.
+
 - Procedure: README 2 with `cf-reviewer` and `cf-writer`, plus `/cf-reviewer review README.md`.
+  Add one more scratch agent by hand (not under `spike/`) whose filename differs from its
+  `name`, for example file `cf-note-taker.md` with `name: cf-scribe`, so that the value can be
+  told apart: filename, frontmatter `name`, or a fixed `generalPurpose`. Invoke each by
+  `/<name>` and by prose, 3 times each, and record which invocation names work.
+- Matcher probe without changing the kit: in the scratch `hooks.json` add a second
+  `subagentStart` entry with the same command plus `"matcher": "cf-scribe"`. Count records per
+  start: 2 records (different pids) means the matcher matched, 1 means it did not. Repeat with
+  a matcher of the filename form and of `cf-reviewer`.
 - Artifacts: `types_seen`, `non_builtin_types`; same fixtures directory as row 8.
-- Pass: the value for a custom agent is recorded verbatim for `subagentStart` and
-  `subagentStop`, and a `matcher` on it is tested.
-- Fail: it is `generalPurpose` or another fixed value: role mapping must come from elsewhere.
-- Can change: `hook_normalize` role mapping, ADR 0003, ADR 0012, the kit's roster file names.
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
+- Pass: the value for each custom agent is recorded verbatim for `subagentStart` and
+  `subagentStop` and is the same on both, and the matcher result is recorded.
+- Fail: it is `generalPurpose` or another fixed value for custom agents: the role mapping must
+  come from elsewhere.
+- Can change: `hook_normalize` role mapping, ADR 0003 (`agent_role`), ADR 0012, the kit's
+  roster file names.
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0001 Q2, 0003, 0012.
 
 ### 10. `Task` tool linkage and ids (secondary questions)
