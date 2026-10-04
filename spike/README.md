@@ -201,6 +201,6 @@ git worktree list && git worktree prune
 - `hooks.json.example`, `hooks.windows.json.example`: passive hooks only.
 - `analyze.py`: per-event key shapes, identity evidence, latency percentiles,
   worktree flags, interleaving evidence. Tolerates torn lines.
-- `bench_latency.py`: cold-start wall-clock latency; results in `results/`.
+- `bench_latency.py`: steady-state process wall-clock latency (fresh process, warm cache); results in `results/`.
 - `questions.md`: the open questions and how each is answered.
 - `doc_examples/`: hand-built, doc-derived example payloads. **Not captured.**

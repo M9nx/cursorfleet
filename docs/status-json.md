@@ -23,8 +23,9 @@ text below describes the current code.
   ([ADR 0003](adr/0003-event-model-and-sanitization.md)): `cursorfleet.status/0.1`, with
   `/1` reserved for the first stable contract. Consumers should expect the golden snapshot
   to change once.
-- **Attribution values** become `exact`, `inferred_temporal` and `unknown` (currently
-  `inferred`), and an aggregate shows its weakest member.
+- **Attribution values** stay `exact`, `inferred` and `unknown`. An aggregate will show its
+  weakest member and per-value counts (currently it keeps the strongest value and has no
+  counts; follow-ups task 7). A role-only identity is `inferred`, never `exact`.
 - **`last_test` and `gates[]`** are heuristic and non-authoritative. They will be replaced by
   `verification.observed` observations carrying a method and confidence; no heuristic value
   will count as a gate ([ADR 0011](adr/0011-evidence-trust-model.md)).

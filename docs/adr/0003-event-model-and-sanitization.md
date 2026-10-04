@@ -7,7 +7,7 @@
 - Supersedes: none
 - Superseded by: none
 - Related ADRs: 0001 (Q1, Q2), 0006 (self-reported events), 0007 (which hooks feed events), 0010 (reducer), 0011 (evidence tiers)
-- Implementation status: Divergent-from-code. Event schema is `"1.0"` not `"0.1"`; `attribution` uses `inferred` for role-only events and the reducer upgrades to the strongest value; `test.completed` exists and feeds TUI gates; command display defaults to ON. Details in "Amendment 2026-10-04" below. The hook to kind mapping for shell and file-edit hooks is narrowed by ADR 0007.
+- Implementation status: Divergent-from-code. Event schema is `"1.0"` not `"0.1"`; the reducer aggregates `attribution` to the strongest value instead of the weakest (the role-only to `inferred` mapping in the normalizer already matches the amended rule); `test.completed` exists and feeds TUI gates; command display defaults to ON. Details in "Amendment 2026-10-04" below. The hook to kind mapping for shell and file-edit hooks is narrowed by ADR 0007.
 - Review trigger: Q1 or Q2 answered; the first real fixture is committed; any change to the closed kind list
 - Release gate: schema version `0.1` in code and schemas; `verification.observed` replaces `test.completed`; no gate derived from heuristic events; command display default OFF; attribution never shows an inferred value as exact; privacy and forbidden-field tests green against real fixtures
 
@@ -41,7 +41,8 @@ Readers skip and count events with an unknown version instead of failing.
   equal the derived value.
 - `attribution` (`exact | inferred | unknown`, default `unknown`) records how
   firmly the event is tied to an agent. Added beyond the plan to degrade
-  gracefully if Q1 is refuted.
+  gracefully if Q1 is refuted. The meanings are fixed in "Amendment 2026-10-04",
+  section 2: a role-only identity is never `exact`.
 - `cursor_version`, `producer_version` stamped on every event so `doctor` can
   warn about unvalidated Cursor versions.
 - `source`: `observed` (hook payload), `self_reported` (agent artifact or emit
@@ -190,28 +191,61 @@ are real and are not fixed by this documentation pass; see
 
 ### 2. Attribution never overstates identity
 
-- `attribution` has three required meanings and no more may be conflated:
-  - `exact`: the event's own payload carries the explicit identifier for the identity
-    claimed (for example `subagent_id`, or `subagent_type` for a role-only claim, with
-    `agent_instance_id` absent meaning the instance is unknown).
-  - `inferred_temporal`: the identity was derived from timing, windows or ordering
-    (for example "this tool call happened while subagent X was open").
-  - `unknown`: nothing ties the event to a specific agent. This is the default.
-- CursorFleet v0.1 **does not emit `inferred_temporal`**: the reducer never attributes
-  unattributed events to a running subagent by timing (ADR 0010). The value is reserved so a
-  future inference cannot be labelled `exact`.
-- An inferred value is never rendered as exact in the TUI, in `status --json` or in
-  `events export`. JSON carries the literal enum value; the TUI shows
-  "inferred (temporal)" in words.
-- Aggregation takes the **weakest** value an agent entry has absorbed and the JSON also
-  exposes per-value counts; it never upgrades an entry to the strongest value seen.
-- Implementation status: **Divergent-from-code.** The enum is `exact | inferred | unknown`
-  (`events/kinds.py:Attribution`). The hook normalizer sets `inferred` when a payload has a
-  `subagent_type` but no `subagent_id` (`hook_normalize.py:_identity`); that is an explicit
-  role, not a temporal inference, so the label is wrong under this rule. The reducer keeps
-  the strongest rank seen (`reducer.py:_touch_agent`, `_ATTRIBUTION_RANK`), so one exact
-  `subagentStart` can make an agent entry read `exact` while its tool events are unknown.
-  `status.json` and the TUI print the enum value. Q1 and Q2 may change all of this.
+- The canonical `attribution` enum is exactly `exact | inferred | unknown`, with these
+  meanings. No other value exists in docs, schemas or code:
+  - `exact`: a **unique current agent instance** is directly identified by the event's own
+    payload (for example `subagent_id` on a tool hook inside that subagent), or is
+    deterministically linked to the event through an ID relationship that has been
+    empirically verified (for example a tool-hook id that equals exactly one
+    `subagentStart.subagent_id`, once the spike has shown that it does).
+  - `inferred`: the identity is a best guess from something weaker than a unique instance
+    id: a **role only** (`subagent_type` with no instance id), timing or a window ("this
+    tool call happened while subagent X was open"), worktree, branch, ordering, or
+    self-report.
+  - `unknown`: parent-only identity (`parent_conversation_id`, or the parent's
+    `conversation_id` on a tool hook) or no defensible association with a child agent. This
+    is the default.
+- **A role-only identity is NEVER `exact`.** Two concurrent subagents of one type are
+  indistinguishable by role, so a role claim cannot name an instance. It is `inferred`, with
+  `agent_role` set and `agent_instance_id` absent. (This replaces the earlier wording that
+  let `subagent_type` count as `exact` with the instance left absent.)
+- **Parent identity never makes a child `exact`.** It can at most support `unknown`.
+- Temporal attribution uses `attribution = inferred`. CursorFleet v0.1 does not emit
+  temporal attribution: the reducer never attributes unattributed events to a running
+  subagent by timing (ADR 0010). There is no temporal-specific enum value anywhere; the enum has exactly three members.
+- **Possible future field (not implemented, not part of v0.1):** if a consumer ever needs to
+  tell role-only from temporal from worktree inference, add a **separate** optional
+  `attribution_method` field (a closed enum such as `role | temporal | worktree | ordering |
+  self_report`) next to `attribution`. The `attribution` enum itself must not grow.
+- An `inferred` value is never rendered as exact in the TUI, in `status --json` or in
+  `events export`. JSON carries the literal enum value. Wherever the TUI explains an
+  `inferred` value in words it must say which basis applies; in v0.1 the only emitted basis
+  is "role only; instance not identified".
+- Aggregation takes the **weakest** value an agent entry has absorbed (order from weakest:
+  `unknown`, `inferred`, `exact`) and the JSON also exposes per-value counts; it never
+  upgrades an entry to the strongest value seen.
+- How ADR 0001 Q1 outcomes map onto this enum: CONFIRMED gives `exact`, PARTIAL (role only)
+  gives `inferred`, REFUTED (parent only or nothing) gives `unknown`, and OPEN (ambiguous or
+  undocumented fields) gives `unknown` until classified. All of that is unobserved today.
+- Implementation status: **Partly implemented, partly divergent-from-code.** The enum is
+  `exact | inferred | unknown` (`events/kinds.py:Attribution`), as required. The hook
+  normalizer (`hook_normalize.py:_identity`) sets `exact` when the payload has a
+  `subagent_id` and `inferred` when it has only a `subagent_type`; the role-only case now
+  matches this rule. It does not read `parent_conversation_id` at all, so parent identity
+  cannot make an event `exact`. Remaining divergences:
+  - `_identity` marks any payload with a `subagent_id` as `exact` for every hook it runs on.
+    That is right for `subagentStart` (the id names the instance that started) but whether a
+    `subagent_id` on a tool hook is the *current* instance is exactly Q1, and is unverified.
+  - The reducer keeps the **strongest** rank seen (`reducer.py:_touch_agent`,
+    `_ATTRIBUTION_RANK`), so one exact `subagentStart` can make an agent entry read `exact`
+    while its tool events are `unknown`. The rule above requires weakest-wins and per-value
+    counts, which are not implemented.
+  - Words and comments still describe the old model: the `Attribution` docstring and comment
+    on `INFERRED` (`events/kinds.py`: "temporal window, worktree or `tool_use_id` linkage"),
+    and `tui/views.py:_attr_explain` ("linked by tool_use_id or worktree"), neither of which
+    mentions role-only.
+  - `status.json` and the TUI print the bare enum value without per-value counts.
+  Q1 and Q2 may change all of this. Tracked as task 7 in [`../follow-ups.md`](../follow-ups.md).
 
 ### 3. `verification.observed` replaces `test.completed`; heuristic events never satisfy gates
 

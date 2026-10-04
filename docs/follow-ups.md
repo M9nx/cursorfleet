@@ -90,15 +90,26 @@ How to read an entry:
 - Tests: `test_tui_gates`, `test_tui_app`, `test_cli_state`, golden file.
 - Done when: no gate is PASS or FAIL from tier 1 to 3 data (ADR 0011 gate).
 
-## 7. Attribution: rename, correct the role-only case, weakest-wins (ADR 0003 section 2)
+## 7. Attribution: weakest-wins, per-value counts, honest wording (ADR 0003 section 2)
 
 - Waits for: rows 8 and 9 (Q1, Q2); the result decides whether `exact` is reachable for
   tool events at all.
-- Do: rename `Attribution.INFERRED` to `inferred_temporal` in `events/kinds.py`;
-  `hook_normalize.py:_identity` must emit `exact` for a payload that carries
-  `subagent_type` as an explicit role (instance unknown), and never `inferred_temporal`
-  in v0.1; `reducer.py` (`_touch_agent`, `_ATTRIBUTION_RANK`) aggregates to the **weakest**
-  value and exposes per-value counts; TUI shows "inferred (temporal)" in words.
+- Decided (owner, 2026-10-04): the enum stays exactly `exact | inferred | unknown`; a
+  role-only identity is `inferred`, never `exact`; temporal attribution is `inferred`;
+  no temporal-specific value exists. Do **not** rename or add to `Attribution`.
+- Do: `reducer.py` (`_touch_agent`, `_ATTRIBUTION_RANK`) aggregates to the **weakest** value
+  and exposes per-value counts (currently strongest-wins, no counts);
+  `hook_normalize.py:_identity` already emits `inferred` for a role-only payload and reads no
+  parent field, but must only emit `exact` from a `subagent_id` on tool hooks if row 8
+  shows that id is the current instance; fix the `Attribution` docstring and the `INFERRED`
+  comment in `events/kinds.py` and `tui/views.py:_attr_explain`, which still say "temporal
+  window, worktree or tool_use_id linkage" and do not mention role-only. The TUI must say
+  "role only; instance not identified" for the `inferred` value in v0.1. Optional, only if a
+  consumer needs it: a separate `attribution_method` field (ADR 0003); never a fourth enum
+  value.
+- Tests: `test_reducer` (weakest wins, counts), `test_hook_normalize` (role-only is
+  `inferred`, a payload with only `parent_conversation_id` is not attributed),
+  `test_tui_*`, golden file.
 - Docs after: `tui.md`, `governance.md`, `status-json.md`.
 - Done when: an inferred value is never shown as exact anywhere (ADR 0003 gate).
 
@@ -167,7 +178,23 @@ How to read an entry:
 - Update the supported-surface claims in `README.md`, `quickstart.md`, `platform-support.md`
   and `product-contract.md` to match the matrix exactly.
 
-## 13. Naming and publication (ADR 0005)
+## 13. Latency: first-run target, end-to-end measurement (ADR 0001 section D)
+
+- Waits for: rows 13A and 13B (the live spike).
+- Decided (owner, 2026-10-04): terms are steady-state, first-run, hook-internal and
+  end-to-end; the per-hook target is steady-state p95 <= 60 ms process wall time including
+  interpreter startup; the end-to-end release contract is PASS median <= 100 ms and p95
+  <= 200 ms, PARTIAL median <= 150 ms and p95 <= 300 ms, FAIL otherwise or on any
+  hook-induced failure, over at least 3 batches of 30 paired hooks-on/hooks-off calls, using
+  the paired delta, pooled, with each batch individually not FAIL.
+- Do, after the spike: record the numbers in `hook-latency.md` and `platform-support.md`;
+  decide whether first-run needs a target (none exists today); change the "cold start"
+  wording left in the docstrings of `scripts/bench_hook.py` and `spike/bench_latency.py`
+  (both measure steady-state) when the freeze lifts.
+- Done when: row 13B has a PASS (or a published PARTIAL) on every OS and surface claimed
+  (ADR 0001 release gate; release checklist item 6).
+
+## 14. Naming and publication (ADR 0005)
 
 - Waits for: nothing technical; a human decision.
 - Do: choose the public name, check PyPI, npm and GitHub on the day, get the trademark

@@ -9,7 +9,7 @@
 - Related ADRs: 0002 (storage, needs Q4/Q5), 0003 (identity fields, needs Q1/Q2), 0007 (hook list, needs permission-hook reply check), 0008 (enforcement boundaries), 0012 (worktree ownership)
 - Implementation status: Implemented-provisional (the hook, kit and doctor code encode section A; nothing was validated against live Cursor). The Decision's 12-hook list is narrowed by ADR 0007 and is Divergent-from-code until the follow-up lands.
 - Review trigger: the first live spike capture on any surface, or any Cursor release that changes hook payloads or worktree behaviour
-- Release gate: Q1 to Q6 answered (CONFIRMED / REFUTED / PARTIAL with `cursor_version` and surface), section B moved to section A or struck, sanitized real fixtures committed under `tests/fixtures/cursor/`, and the permission-hook reply shape confirmed
+- Release gate: Q1 to Q6 answered (CONFIRMED / REFUTED / PARTIAL with `cursor_version` and surface), section B moved to section A or struck, sanitized real fixtures committed under `tests/fixtures/cursor/`, the permission-hook reply shape confirmed, and the end-to-end latency contract in section D met (PASS, or PARTIAL with the measured numbers published) on every OS claimed
 
 CursorFleet is an unofficial tool and is not affiliated with Anysphere.
 
@@ -40,9 +40,9 @@ CursorFleet is an unofficial tool and is not affiliated with Anysphere.
   payloads only. The user must run `spike/README.md` and then update this ADR.
 - `spike/doc_examples/` contains payloads hand-built from the docs. They are
   not captured data and are not evidence of real behaviour.
-- The only empirical data in this ADR is the Linux cold-start latency of our
+- The only empirical data in this ADR is the Linux steady-state latency of our
   own stdlib hook, measured on the author's machine, not inside Cursor
-  (section C).
+  (section C; terms in section D).
 - No `cursor_version` is recorded anywhere yet, because nothing was captured.
 
 ## A. VERIFIED-FROM-DOCS
@@ -312,9 +312,23 @@ CursorFleet is an unofficial tool and is not affiliated with Anysphere.
 
 None of the following has been observed. Each maps to `spike/questions.md`.
 
-- Q1 agent identity: whether tool hooks fired inside a subagent carry any
-  subagent id, type or parent id. The docs document identity fields only on
-  `subagentStart` (and `subagent_type` on `subagentStop`).
+- Q1 identity of the current subagent: do tool hooks fired inside a subagent
+  identify the **current subagent instance**, or can they be deterministically linked
+  to it (an id relationship verified empirically, for example a tool-hook id that equals
+  exactly one `subagentStart.subagent_id`)? The docs document identity fields only on
+  `subagentStart` (and `subagent_type` on `subagentStop`). Outcome mapping, decided by the
+  owner on 2026-10-04 (every outcome is OPEN today):
+
+  | Observed on tool hooks inside a subagent | Q1 verdict | ADR 0003 `attribution` |
+  | --- | --- | --- |
+  | A field that uniquely identifies the current instance, or links to it deterministically | CONFIRMED | `exact` |
+  | The role only (`subagent_type`); two concurrent same-type subagents are indistinguishable | PARTIAL | `inferred` |
+  | The parent only (`parent_conversation_id`, the parent's `conversation_id`), or nothing | REFUTED | `unknown` |
+  | Fields whose meaning is undocumented or ambiguous (partly present, unlinked, inconsistent) | OPEN | `unknown` until classified by hand |
+
+  A parent identity never confirms a child identity. The per-hook-name procedure and the
+  EXACT / ROLE_ONLY / PARENT_ONLY / UNKNOWN vocabulary are in
+  [`empirical-test-plan.md`](../empirical-test-plan.md) row 8.
 - Q2 custom subagent names: whether `subagent_type` shows the custom `name`
   (for example `cf-reviewer`), the filename, or only `generalPurpose`; whether
   `matcher` works on custom names.
@@ -325,8 +339,9 @@ None of the following has been observed. Each maps to `spike/questions.md`.
   resolves identically from every worktree.
 - Q5 parallel interleaving: whether hook processes overlap; whether concurrent
   `O_APPEND` writes stay intact; whether Cursor serializes hooks.
-- Q6 latency inside Cursor: spawn and IPC overhead on top of section C numbers;
-  whether Cursor waits for non-permission hooks; Windows and macOS numbers.
+- Q6 latency inside Cursor: spawn and IPC overhead on top of section C numbers
+  (end-to-end, section D); whether Cursor waits for non-permission hooks; Windows and
+  macOS steady-state and first-run numbers.
 - Whether the `ask` prompt actually appears for `beforeShellExecution` and
   `beforeMCPExecution` (the docs offer it in the schema; behaviour unobserved).
 - Whether the `Task` tool's `tool_use_id` equals `subagentStart.tool_call_id`
@@ -346,25 +361,80 @@ None of the following has been observed. Each maps to `spike/questions.md`.
 ## C. Measured on this machine (not Cursor-measured)
 
 Measured with `python3 spike/bench_latency.py -n 60` on Linux 6.18 x86_64,
-CPython 3.14.7, 24 CPUs, warm page cache, run unsandboxed on 2026-10-04.
-Each run is a fresh process (cold interpreter start) with a doc-derived
-`preToolUse` payload on stdin. Wall time is measured by the parent and includes
-fork/exec, interpreter start, imports, work and exit. It excludes Cursor's own
-spawn and IPC overhead. Raw data: `spike/results/latency-linux.json`.
+CPython 3.14.7, 24 CPUs, run unsandboxed on 2026-10-04. These are **steady-state**
+numbers (section D): each run is a fresh process with a warm OS/page cache and a
+doc-derived `preToolUse` payload on stdin. Wall time is measured by the parent and
+includes fork/exec, interpreter start, imports, work and exit, so it is process wall
+time, not hook-internal time. It excludes Cursor's own spawn and IPC overhead. No
+first-run (cold-cache) number and no end-to-end number exists. Raw data:
+`spike/results/latency-linux.json`.
 
 - Interpreter floor, `python3 -c pass`: p50 14.4 ms, p95 20.4 ms.
 - Interpreter floor, `python3 -I -S -c pass`: p50 10.6 ms, p95 15.1 ms.
 - Capture hook, `python3 capture_hook.py preToolUse`: p50 24.2 ms, p95 27.7 ms,
   max 30.5 ms (n=60).
 - Capture hook with `-I -S`: p50 22.9 ms, p95 26.4 ms (n=60).
-- In-process time recorded by the hook itself (excludes interpreter startup):
+- Hook-internal time recorded by the hook itself (excludes interpreter startup):
   p50 7.7 ms, p95 8.7 ms. Most of it is `import json`, `import re`, regex
   compilation and a git-dir walk, so a production hook can trim it.
 - An earlier sandboxed run of the same script gave capture p95 32.8 ms: expect
   a few ms of noise between runs and environments.
-- Reading: the plan's budget (p95 under 60 ms warm) is met on this Linux
-  machine with margin for a stdlib-only hook. This says nothing yet about
-  Windows, macOS, antivirus-scanned paths, or Cursor's own overhead.
+- Reading: the steady-state target (p95 <= 60 ms process wall time, section D) is met
+  on this Linux machine with margin for a stdlib-only hook. This says nothing yet about
+  first-run, Windows, macOS, antivirus-scanned paths, or Cursor's own overhead
+  (end-to-end).
+
+## D. Latency terminology and release contract (owner decision 2026-10-04)
+
+Earlier documents mixed "warm", "cold" and "cold start". These four terms replace them
+everywhere (ADR 0001, [`hook-latency.md`](../hook-latency.md),
+[`platform-support.md`](../platform-support.md),
+[`empirical-test-plan.md`](../empirical-test-plan.md) row 13, `spike/questions.md`):
+
+- **Steady-state:** a fresh process per call, with the OS/page cache warm (repeated
+  back-to-back calls).
+- **First-run:** a fresh process with a cold or partially cold cache (the first call after a
+  cache drop, a reboot, or a long idle period).
+- **Hook-internal:** time measured after the hook process has started (for example the
+  capture hook's own `latency_ms`). It excludes spawn and interpreter startup.
+- **End-to-end:** the user-visible overhead of registering hooks, measured as paired
+  hooks-on versus hooks-off runs of the same action inside Cursor.
+
+**Per-hook target (outside Cursor).** Steady-state p95 <= 60 ms, measured as **process wall
+time including interpreter startup** (spawn to exit, exactly how
+[`hook-latency.md`](../hook-latency.md) and `bench_latency.py` measure). It is *not* a
+hook-internal budget: hook-internal time is reported next to it but has no target. No target
+is set for first-run in v0.1; it is reported, not judged, and a state that cannot be produced
+on an OS is recorded as "not measured", never extrapolated.
+
+**End-to-end release contract (owner decision; replaces the earlier placeholder for row
+13B).** Evidence comes from at least **3 batches of 30 paired hooks-on/hooks-off calls**
+(at least 90 pairs per OS and surface):
+
+- A *pair* is the same scripted action run once with hooks registered and once without,
+  adjacent in time, with the order alternated between pairs. Pairs are per call when
+  per-call times are available, otherwise one single-action run per side.
+- The metric is the **paired delta**: `delta = T(hooks-on) - T(hooks-off)` for each pair, in
+  milliseconds. Negative deltas are kept, not clipped. Percentiles use the nearest-rank
+  method on the deltas.
+- **Aggregation:** pool all pairs from all batches and compute the median and p95 of the
+  pooled deltas. Each batch's own median and p95 are also computed (a 30-pair p95 is close
+  to the maximum and is judged only for FAIL). The overall verdict is the pooled verdict,
+  except that a batch that individually FAILs makes the overall verdict FAIL.
+
+| Verdict | Condition (pooled paired delta) |
+| --- | --- |
+| PASS | median <= 100 ms **and** p95 <= 200 ms |
+| PARTIAL | not PASS, with median <= 150 ms **and** p95 <= 300 ms |
+| FAIL | median > 150 ms, **or** p95 > 300 ms, **or** any hook-induced failure or timeout |
+
+A *hook-induced failure or timeout* is any hooks-on call that fails, hangs, is blocked or is
+cut off by a hook timeout where its hooks-off partner is not. The verdict applies per OS and
+per Cursor surface, with the `cursor_version` recorded. Blocking and parallel stub tests
+(row 13C) and the A/A control are diagnostics and do not enter the verdict. A FAIL means that
+OS or surface is not claimed (or the hot path is slimmed and the run repeated, or the owner
+records a new decision). This contract is a release gate in
+[`release-checklist.md`](../release-checklist.md). **Every result is OPEN today.**
 
 ## Empirical test matrix
 
@@ -391,9 +461,13 @@ to `tests/fixtures/cursor/<surface>/` stamped with `cursor_version`; verdicts go
   `tests/fixtures/cursor/worktree-managed/`.
 - **Manual worktree (`git worktree add` opened in Cursor).** Pass: same criteria as the
   managed row. Evidence: `tests/fixtures/cursor/worktree-manual/`.
-- **Subagent identity (Q1).** Pass: tool hooks fired inside a subagent carry a field that
-  names the subagent or its parent, shown by `spike/analyze.py` Q1 verdict. Fail: attribution
-  stays `unknown` for tool events (ADR 0003). Evidence: `tests/fixtures/cursor/subagent/`.
+- **Subagent identity (Q1).** Pass (CONFIRMED): tool hooks fired inside a subagent identify
+  the **current subagent instance**, or are deterministically linked to it by an
+  empirically verified id relationship, so tool events can be `exact`. PARTIAL: role only;
+  tool events can be at most `inferred`. REFUTED: parent only or nothing; tool events stay
+  `unknown` (ADR 0003). OPEN: ambiguous or undocumented fields. A parent field never
+  confirms. The `spike/analyze.py` verdict is only a hint; classification is by hand
+  (row 8). Evidence: `tests/fixtures/cursor/subagent/`.
 - **Custom `subagent_type` naming (Q2).** Pass: the value for `.cursor/agents/cf-reviewer.md`
   is recorded verbatim for `subagentStart` and `subagentStop`. Evidence: same directory.
 - **Concurrency and parallel subagents (Q5).** Pass: two parallel subagents produce intact
@@ -405,9 +479,11 @@ to `tests/fixtures/cursor/<surface>/` stamped with `cursor_version`; verdicts go
 - **Permission-hook fail-open reply.** Pass: `{"permission":"allow"}` is accepted for
   `preToolUse` and `subagentStart` and the action proceeds; behaviour for `{}` and for
   empty output is recorded. This is a release gate. Evidence: spike notes plus a fixture.
-- **Hook latency inside Cursor (Q6).** Pass: p95 of the in-Cursor delay with the stdlib hook
-  is under 60 ms warm on each OS claimed, measured by `spike/bench_latency.py` and by the
-  capture's own timings. Evidence: `spike/results/latency-<os>.json`.
+- **Hook latency inside Cursor (Q6).** Pass needs both: (1) steady-state process wall time
+  p95 <= 60 ms outside Cursor on each OS claimed, measured by `spike/bench_latency.py` (row
+  13A), and (2) the end-to-end contract of section D (row 13B): PASS, or PARTIAL with the
+  numbers published, on each OS and surface claimed; FAIL means not claimed. Evidence:
+  `spike/results/latency-<os>.json` and the row 13B tables.
 - **`Task` linkage and ids.** Pass: whether `Task`'s `tool_use_id` equals
   `subagentStart.tool_call_id`, whether `generation_id` is stable across a subagent and
   whether subagents get their own `sessionStart`/`sessionEnd` are each recorded. Evidence:
@@ -447,8 +523,8 @@ We record the verified facts in section A as constraints on the v0.1 design:
 - Pairing `subagentStop` to `subagentStart` (docs list no `subagent_id` on
   stop; pairing may need type plus ordering or a transcript reference).
 - Coordinator as the main agent driven by a rule or skill (section A7 caveat).
-- Hot-path latency budget and the per-OS claim (Linux cold start measured;
-  macOS, Windows and in-Cursor overhead not).
+- Hot-path latency budget and the per-OS claim (Linux steady-state measured outside
+  Cursor; first-run, macOS, Windows and end-to-end overhead not).
 - Spool layout: one append file versus per-conversation or per-subagent files
   (needs Q5).
 - Any statement that hooks work under the Cursor CLI or in Agents Window

@@ -38,7 +38,11 @@ While frozen:
 "Unvalidated against live Cursor" means: hook payload shapes come from the Cursor
 documentation, not from captures. The permission-hook reply shape, agent identity inside
 subagent tool hooks, custom `subagent_type` naming, behaviour in the CLI, Agents Window and
-worktrees, and hook latency inside Cursor are all unobserved.
+worktrees, and hook latency inside Cursor are all unobserved. The only latency number is
+Linux steady-state process time outside Cursor; there is no first-run or end-to-end number.
+The end-to-end release contract (PASS median <= 100 ms and p95 <= 200 ms over paired
+hooks-on/hooks-off calls) is defined in [ADR 0001 section D](adr/0001-cursor-capabilities.md)
+and not yet measured.
 
 ## Supported surface for v0.1
 
@@ -51,8 +55,9 @@ worktrees, and hook latency inside Cursor are all unobserved.
 
 The architecture-owner decisions of 2026-10-04 (ADRs 0001 to 0012) differ from the current
 code in several places: the hook list, schema version, heuristic test events, command
-display default, hashing, locking, artifact format and gate derivation. They are listed in
-[`follow-ups.md`](follow-ups.md) and are **not** fixed yet.
+display default, hashing, locking, artifact format, gate derivation and attribution
+aggregation (the reducer keeps the strongest value; the rule is weakest-wins). They are
+listed in [`follow-ups.md`](follow-ups.md) and are **not** fixed yet.
 
 ## Gates before v0.1.0
 

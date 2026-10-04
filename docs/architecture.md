@@ -39,7 +39,7 @@ flowchart LR
 - **Hot path**: the `cursorfleet hook <event>` entrypoint (M2). Rules: stdlib
   only, lazy imports, no pydantic/typer/textual even transitively, no network,
   exits 0 with `{}` (`{"permission":"allow"}` for permission hooks) on any error,
-  p95 under 60 ms warm. It parses with a per-hook allowlist, sanitizes
+  steady-state p95 <= 60 ms (process wall time including interpreter startup, outside Cursor; [`hook-latency.md`](hook-latency.md)). It parses with a per-hook allowlist, sanitizes
   commands and paths, and appends one line to the spool.
 - **Spool**: one JSONL file per session writer, each line `<crc32> <json>`.
   Torn tails and bad CRCs are skipped and counted. Telemetry is best-effort: an append can
@@ -97,10 +97,13 @@ flowchart LR
 - Field map: `conversation_id` to `session_id`, `generation_id` kept,
   `subagent_id` to `agent_instance_id`, `subagent_type` to `agent_role` (mapped
   to a roster id when it matches), `agent_id` derived.
-- If tool hooks inside subagents carry no identity (Q1), those events get
-  `attribution` of `inferred` or `unknown`. Fallbacks are `tool_use_id` linkage,
-  worktree identity (only with isolation) and self-reported artifacts. Temporal
-  attribution is unsafe with parallel subagents and is labelled inferred.
+- `attribution` is exactly `exact | inferred | unknown` (ADR 0003 section 2). `exact` needs a
+  unique current instance identified or deterministically linked; a role-only identity is
+  `inferred`; parent-only or nothing is `unknown`. If tool hooks inside subagents carry no
+  instance identity (Q1), those events are `inferred` (role only) or `unknown`. Fallbacks are
+  `tool_use_id` linkage (exact only if the spike verifies it), worktree identity (only with
+  isolation, `inferred`) and self-reported artifacts. Temporal attribution is unsafe with
+  parallel subagents and uses `inferred`; v0.1 does not emit it.
 - `subagentStop` has no documented `subagent_id`; start/stop pairing may need
   type plus ordering.
 

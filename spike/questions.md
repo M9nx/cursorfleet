@@ -8,23 +8,33 @@ capture has been performed yet. Fill in the "Result" lines after running
 Result values: `CONFIRMED`, `REFUTED`, `PARTIAL`, `OPEN`. Always record the
 `cursor_version` and the surface (IDE, Agents Window, CLI) with the result.
 
-## Q1. Agent identity inside subagent tool hooks
+## Q1. Identity of the current subagent inside its tool hooks
 
 - Question: when a subagent calls a tool (Shell, Read, Write, ...), do the
   `preToolUse` / `postToolUse` / `beforeShellExecution` / `afterFileEdit`
-  payloads carry anything that identifies the subagent (an id, a type, a
-  parent id), or do they look identical to main-agent tool hooks?
+  payloads identify the **current subagent instance**, or can they be
+  deterministically linked to it (an id relationship verified empirically, for
+  example an id on the tool hook that equals exactly one
+  `subagentStart.subagent_id`)? Or do they carry only a role, only the parent,
+  or nothing, looking identical to main-agent tool hooks?
+- Outcome mapping (owner decision 2026-10-04; method in
+  `docs/empirical-test-plan.md` row 8):
+  unique current instance (EXACT) = CONFIRMED (attribution `exact`);
+  role only (ROLE_ONLY) = PARTIAL (`inferred`);
+  parent only (PARENT_ONLY) or nothing (UNKNOWN) = REFUTED (`unknown`);
+  ambiguous or undocumented fields = OPEN (`unknown` until classified).
+  A parent identity never confirms a child identity.
 - Docs say: base fields are `conversation_id` and `generation_id`;
   `subagent_id`, `subagent_type`, `parent_conversation_id` are documented only
   on `subagentStart`. `subagentStop` documents `subagent_type` but **no**
   `subagent_id`. Nothing documents identity on tool hooks.
 - Why it matters: per-agent timelines, the `agent_instance_id` field mapping,
   and attribution of edits/commands to roles in v0.1 and any v0.2 per-role guard.
-- Evidence in `analyze.py`: "Q1" verdict, `tool_hook_keys_with_agent_identity`,
-  `tool_conversation_id_relation`, the share of in-window tool events with the
-  same conversation+generation as the main agent.
-- Fallbacks if NOT identifiable: temporal attribution (unsafe with parallel
-  subagents), worktree/`workspace_roots` as the identity (only with isolation),
+- Evidence in `analyze.py`: "Q1" verdict (a hint only; classify by hand per row 8),
+  `tool_hook_keys_with_agent_identity`, `tool_conversation_id_relation`, the share of
+  in-window tool events with the same conversation+generation as the main agent.
+- Fallbacks if the instance is NOT identifiable (all would be `inferred`): temporal
+  attribution (unsafe with parallel subagents), worktree/`workspace_roots` as the identity (only with isolation),
   `tool_use_id` linkage of the `Task` call to `subagentStart.tool_call_id`,
   agent self-reported artifacts (plan section 3, item 4).
 - Result: OPEN
@@ -88,13 +98,21 @@ Result values: `CONFIRMED`, `REFUTED`, `PARTIAL`, `OPEN`. Always record the
 - Question: what is the real cost of a stdlib-only Python hook, measured by
   Cursor's own spawn (not only by our wall clock), on Linux, macOS and Windows?
   Does Cursor wait for `postToolUse`/`afterFileEdit` hooks before continuing?
-- Measured so far (this repo, Linux only, our wall clock, not Cursor-measured):
-  see `spike/results/latency-linux.json` and ADR 0001.
-- Evidence: `bench_latency.py` on each OS; in-process `latency_ms` and
+- Terms (ADR 0001 section D): steady-state = fresh process, warm OS/page cache;
+  first-run = fresh process, cold or partly cold cache; hook-internal = time after
+  process start; end-to-end = paired hooks-on versus hooks-off user-visible overhead.
+- Targets: per hook, steady-state p95 <= 60 ms process wall time including
+  interpreter startup. End-to-end (paired delta, hooks-on minus hooks-off, at least 3
+  batches of 30 pairs, pooled, each batch not FAIL): PASS median <= 100 ms and p95
+  <= 200 ms; PARTIAL median <= 150 ms and p95 <= 300 ms; FAIL above that or on any
+  hook-induced failure or timeout.
+- Measured so far (this repo, Linux only, steady-state process wall time on our
+  clock, not Cursor-measured): see `spike/results/latency-linux.json` and ADR 0001.
+- Evidence: `bench_latency.py` on each OS; hook-internal `latency_ms` and
   `stdin_read_ms` in "Q6" from live captures (`stdin_read_ms` hints at how
-  late Cursor writes stdin).
-- Result: PARTIAL (Linux cold-start measured; macOS, Windows and in-Cursor
-  overhead OPEN)
+  late Cursor writes stdin); the paired end-to-end batches of row 13B.
+- Result: PARTIAL (Linux steady-state measured; first-run, macOS, Windows and
+  end-to-end OPEN)
 
 ## Secondary questions worth answering in the same sessions
 
@@ -110,4 +128,4 @@ Result values: `CONFIRMED`, `REFUTED`, `PARTIAL`, `OPEN`. Always record the
 - Does `preCompact` fire in practice, and do its `context_*` counters appear?
 - Does the hook process get killed by `timeout`, and what does Cursor log?
 - Windows only: does `python .cursor/hooks/capture_hook.py <event>` work from
-  the shell Cursor uses, and what is cold-start latency there?
+  the shell Cursor uses, and what are its steady-state and first-run latencies there?

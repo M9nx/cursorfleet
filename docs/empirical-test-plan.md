@@ -4,7 +4,7 @@
 > stress test or benchmark described here has been performed. Every result is **OPEN**.
 > Statements about Cursor behaviour are quoted from the Cursor documentation ("per docs") or
 > are questions to answer; none is a verified fact. The only measured number anywhere near
-> this plan is the Linux cold-start latency of our own hook, measured outside Cursor
+> this plan is the Linux steady-state latency of our own hook, measured outside Cursor
 > (ADR 0001 section C).
 
 This is the contract for the live spike. It adds no code. New M2 and TUI work stays frozen
@@ -78,7 +78,7 @@ Rows 1 to 14 keep their old numbers, so inbound references in other docs (for ex
 | 10 | `generation_id` and `Task` linkage | 10 (criteria added) |
 | 11 | Permission-hook reply shape (release gate) | 11 (case matrix) |
 | 12 | `ask` on permission hooks | 12 |
-| 13 | Latency: hook-internal and end-to-end (Q6) | 13 (split) |
+| 13 | Latency: hook process outside Cursor (A) and end-to-end (B) (Q6) | 13 (split) |
 | 14 | Instruction loading with behavioural canaries | 14 (replaced) |
 | 15 | Privacy-boundary release gate | new |
 | 16 | Raw-capture permissions, retention and cleanup | new |
@@ -485,19 +485,22 @@ repository or a documented manual procedure. It adds no product code and changes
 
 ### 8. Subagent identity inside tool hooks (Q1)
 
-Question (ADR 0001 Q1): when a subagent calls a tool, does the hook payload say *which
-subagent instance* made the call? Per docs only `subagentStart` documents `subagent_id`,
+Question (ADR 0001 Q1): do tool hooks fired inside a subagent identify the **current
+subagent instance**, or can they be **deterministically linked** to it through an
+empirically verified id relationship? Per docs only `subagentStart` documents `subagent_id`,
 `subagent_type` and `parent_conversation_id`; `subagentStop` documents `subagent_type` but no
 id; tool hooks document no subagent identity.
 
-**Result vocabulary** (the only four allowed; classify per hook name, by hand):
+**Result vocabulary** (the only four outcomes; classify per hook name, by hand). Each outcome
+maps to one Q1 verdict and one ADR 0003 `attribution` value. The mapping is the owner
+decision of 2026-10-04; the canonical enum is exactly `exact | inferred | unknown`:
 
-| Outcome | Definition |
-| --- | --- |
-| EXACT | Tool hooks inside the subagent carry an id that uniquely identifies the *current subagent instance*, and that id equals `subagentStart.subagent_id` of exactly one start (so it is linkable to a role and a lifecycle). |
-| ROLE_ONLY | Tool hooks carry only the subagent type or role (for example `subagent_type`). It names the kind of agent, not the instance: two concurrent subagents of one type are indistinguishable. |
-| PARENT_ONLY | Tool hooks carry only the parent's conversation id (for example `parent_conversation_id`, or a `conversation_id` equal to the parent's). It says who spawned the work, not which subagent did it. |
-| UNKNOWN | None of the above, or the evidence is ambiguous or inconsistent (a field present on some hooks or runs only, a value shared where it should be unique, an id that never matches a `subagentStart`). |
+| Outcome | Definition | Q1 verdict | `attribution` |
+| --- | --- | --- | --- |
+| EXACT | Tool hooks inside the subagent carry an id that uniquely identifies the *current subagent instance*, and that id equals `subagentStart.subagent_id` of exactly one start (or is otherwise deterministically linkable to it by a relationship this row has verified), so it is linkable to a role and a lifecycle. | CONFIRMED | `exact` |
+| ROLE_ONLY | Tool hooks carry only the subagent type or role (for example `subagent_type`). It names the kind of agent, not the instance: two concurrent subagents of one type are indistinguishable. A role-only identity is never `exact`. | PARTIAL | `inferred` |
+| PARENT_ONLY | Tool hooks carry only the parent's conversation id (for example `parent_conversation_id`, or a `conversation_id` equal to the parent's). It says who spawned the work, not which subagent did it. | REFUTED | `unknown` |
+| UNKNOWN | No identity-bearing field of any kind is present on the tool hooks (inside subagent windows they look like main-agent tool hooks): REFUTED. If instead a candidate field exists but its meaning cannot be established, or the evidence is ambiguous or inconsistent (a field present on some hooks or runs only, a value shared where it should be unique, an id that never matches a `subagentStart`), the verdict stays **OPEN**. | REFUTED, or OPEN if ambiguous | `unknown` |
 
 Rules for classification:
 
@@ -510,11 +513,18 @@ Rules for classification:
 - If role and parent are both present but no instance id, the outcome is ROLE_ONLY; note
   that the parent field was also present.
 - A per-subagent unique value that never equals any `subagentStart.subagent_id` cannot be
-  linked to a start: classify UNKNOWN and note "unlinked discriminator".
-- Do not use the `analyze.py` Q1 verdict string. It prints "LIKELY YES" when any tool-hook
-  key contains `parent_`, which would turn PARENT_ONLY into a pass. Use its raw outputs
-  (`tool_hook_keys_with_agent_identity`, `tool_conversation_id_relation`) and classify by
-  hand with the definitions above. (The kit is not changed in this pass.)
+  linked to a start: classify UNKNOWN (ambiguous, so the verdict stays OPEN) and note
+  "unlinked discriminator".
+- Any other id-like key whose meaning the docs do not give is a *candidate*: record it, never
+  promote it automatically, and classify it by hand with the evidence below.
+- The `spike/analyze.py` Q1 output is a **hint requiring manual classification** per this
+  row. It reports four separate buckets: `direct_current_identity`, `role_only_identity`,
+  `parent_only_identity` and `unclassified_identity_candidates`. A key containing `parent_`
+  can only ever land in `parent_only_identity`. Its overall verdict follows this mapping
+  (CONFIRMED only from `direct_current_identity`, PARTIAL for role-only, REFUTED for
+  parent-only or nothing, OPEN when only unclassified candidates exist) but it does not
+  replace the hand classification; keep its raw outputs
+  (`tool_hook_keys_with_agent_identity`, `tool_conversation_id_relation`) as artifacts.
 
 - Procedure: README 2 and 3, extended to three run types, each with its own label.
   - R8.1: two concurrent subagents of the same type (`cf-writer` twice, README 3), 5 runs.
@@ -535,20 +545,23 @@ Rules for classification:
 - Also record, as separate sub-results: whether `subagentStop` carries any instance id equal
   to a start's `subagent_id` (needed for ADR 0010 pairing preference 1); whether tool-hook
   `conversation_id` equals the parent's.
-- Pass (hypothesis "tool hooks identify the subagent instance"): EXACT for every tool hook
-  name tested, in all valid runs of R8.1 and R8.2 (zero mismatches against ground truth).
-  PARTIAL: EXACT for some hook names only (list them). Refuted: ROLE_ONLY, PARENT_ONLY or
-  UNKNOWN, with the outcome recorded. Fixtures: `tests/fixtures/cursor/subagent/` (row 16
-  review).
+- Pass (CONFIRMED, hypothesis "tool hooks identify the current subagent instance"): EXACT for
+  every tool hook name tested, in all valid runs of R8.1 and R8.2 (zero mismatches against
+  ground truth). Overall PARTIAL: at least one hook name is EXACT or ROLE_ONLY but the
+  overall result is not CONFIRMED (list each hook name with its outcome; attribution is then
+  decided per hook name). Overall REFUTED: every hook name is PARENT_ONLY or UNKNOWN with
+  no ambiguity. Overall OPEN: ambiguity remains and no hook name is better than UNKNOWN. In
+  every case record the per-hook outcomes. Fixtures: `tests/fixtures/cursor/subagent/` (row
+  16 review).
 
 What each outcome means for the ADRs (all consequences are OPEN until a result exists):
 
-| Outcome | ADR 0003 attribution (`exact`, `inferred_temporal`, `unknown`) | ADR 0010 reducer and ADR 0002 |
+| Outcome | ADR 0003 attribution (`exact`, `inferred`, `unknown`) | ADR 0010 reducer and ADR 0002 |
 | --- | --- | --- |
 | EXACT | tool events may be `exact` with `agent_instance_id` and `agent_id` `role#instance` | the unattributed `main` accumulation shrinks; lanes can rest on observed activity per instance; writer = instance id becomes viable (topology T1, row 7); stop-to-start pairing still needs an id on `subagentStop` |
-| ROLE_ONLY | ADR 0003 section 2 would let a role-only claim be `exact` with `agent_instance_id` absent. This plan flags that wording as an OWNER DECISION: with concurrent same-type subagents a role claim cannot name the instance, so it must never be displayed or exported as instance attribution | tool events attach to a role at most, never to an instance entry; writer stays `main` (topology T2 matters); pairing unchanged (role plus start time against `stop_ts - duration_ms`, preference 2) |
-| PARENT_ONLY | `unknown` for the current subagent; never `exact`. The parent id only groups under the parent session, which `session_id` already does | tool events accumulate on `main` with `attribution: unknown`; `inferred_temporal` stays reserved and is not emitted in v0.1 |
-| UNKNOWN | `unknown` | as PARENT_ONLY; per-agent cards show lifecycle only (`lifecycle_only` basis). Worktree or `workspace_roots` identity could only ever be a heuristic (ADR 0011 tier 2), never `exact`, and only if isolation is honoured |
+| ROLE_ONLY | `inferred`, never `exact` (owner decision 2026-10-04; ADR 0003 section 2 now says so): with concurrent same-type subagents a role claim cannot name the instance, so it is never displayed or exported as instance attribution | tool events attach to a role at most, never to an instance entry; writer stays `main` (topology T2 matters); pairing unchanged (role plus start time against `stop_ts - duration_ms`, preference 2) |
+| PARENT_ONLY | `unknown` for the current subagent; never `exact`. The parent id only groups under the parent session, which `session_id` already does | tool events accumulate on `main` with `attribution: unknown`; temporal attribution (`inferred`) is not emitted in v0.1 |
+| UNKNOWN | `unknown` | as PARENT_ONLY; per-agent cards show lifecycle only (`lifecycle_only` basis). Worktree or `workspace_roots` identity could only ever be a heuristic (`inferred`, ADR 0011 tier 2), never `exact`, and only if isolation is honoured |
 
 Result table, per hook name (all cells OPEN; fill with one of the four outcomes):
 
@@ -563,8 +576,8 @@ Result table, per hook name (all cells OPEN; fill with one of the four outcomes)
   classification table above, the ground-truth comparison; fixtures as above.
 - Can change: ADR 0003 attribution and field map, ADR 0010 (lanes, pairing), ADR 0002 writer
   naming, ADR 0012 owner mapping, ADR 0011 (what counts as tier 2), the TUI per-agent view,
-  the per-role story in v0.2, and the wording of the ADR 0001 Q1 matrix row, which today
-  says "names the subagent or its parent".
+  and the per-role story in v0.2. (The ADR 0001 Q1 wording that said "names the subagent or
+  its parent" was replaced on 2026-10-04 by the current-instance question above.)
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0001 Q1, 0002, 0003, 0010, 0011, 0012.
 
@@ -757,102 +770,141 @@ N=1, repeated 3 times if it diverges from the docs expectation.
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0008.
 
-### 13. Hook latency (Q6): hook-internal (A) and end-to-end (B)
+### 13. Hook latency (Q6): hook process outside Cursor (A) and end-to-end (B)
 
-Two different quantities that the earlier plan mixed. Only the Linux cold-start of our own
-capture hook has ever been measured, outside Cursor (ADR 0001 section C; the product hook
-measurement in [hook-latency](hook-latency.md) is also Linux and also outside Cursor).
+Two different quantities that the earlier plan mixed. Only the Linux steady-state latency of
+our own capture hook has ever been measured, outside Cursor (ADR 0001 section C; the product
+hook measurement in [hook-latency](hook-latency.md) is also Linux and also outside Cursor).
 
-**Wording conflict to resolve (OWNER DECISION).** [`hook-latency.md`](hook-latency.md) states
-the budget as "p95 < 60 ms cold" and measures fresh-process samples with a warm page cache;
-the ADR 0001 matrix row for Q6 says "under 60 ms warm". This plan defines both terms below,
-applies the 60 ms budget to each column separately, and does not decide which one the
-published claim means. The owner picks one and the other documents are aligned.
+**Terminology (owner decision 2026-10-04; full text in
+[ADR 0001 section D](adr/0001-cursor-capabilities.md)).** This row uses exactly these four
+terms and no "warm", "cold" or "cold start" without them:
 
-#### 13A. Hook-internal latency
+- **Steady-state:** a fresh process per call with the OS/page cache warm.
+- **First-run:** a fresh process with a cold or partially cold cache.
+- **Hook-internal:** time measured after the process has started (the capture's own
+  `latency_ms`).
+- **End-to-end:** the paired hooks-on versus hooks-off user-visible overhead inside Cursor.
 
-What it measures: the wall time of one hook process (spawn, imports, repo discovery,
-normalisation, spool append), outside Cursor, on each OS claimed in
-[platform-support](platform-support.md).
+The earlier wording conflict ("p95 < 60 ms cold" in `hook-latency.md` versus "under 60 ms
+warm" in ADR 0001) is **resolved**: the target is steady-state p95 <= 60 ms, measured as
+process wall time **including interpreter startup**, which is how `hook-latency.md` already
+measures it. It is not a hook-internal budget.
 
-- Definitions: **warm** = repeated samples in a loop with the OS file cache populated (what
-  `hook-latency.md` measured). **Cold** = the first call after the file cache for the
-  interpreter and the package has been dropped or the machine has been idle and rebooted.
-  Cache-drop methods differ by OS (Linux needs root, for example in a throwaway VM; macOS
-  has `purge`; Windows has no simple equivalent, so a reboot or the first run after boot).
-  If a cold state cannot be produced on an OS, record "cold not measured" there; do not
-  extrapolate.
-- Procedure: `python scripts/bench_hook.py -n 100` per hook name and per OS for the warm
-  numbers (the existing tool, run by hand); for cold, at least 20 samples, each after a
-  cache drop. Use the exact command line that `cursorfleet init` would write into the hook
-  entry, not only the console script. Record the interpreter version, installation method
-  and whether antivirus scanning is on. Add the Windows check that
+#### 13A. Hook process latency outside Cursor (steady-state and first-run)
+
+What it measures: the wall time of one hook process (spawn, interpreter startup, imports,
+repo discovery, normalisation, spool append), outside Cursor, on each OS claimed in
+[platform-support](platform-support.md). It also records hook-internal time (from the
+capture's own `latency_ms`) as an informational column.
+
+- **Steady-state** is what `scripts/bench_hook.py` measures: repeated fresh-process samples
+  with the OS file cache populated (it discards warm-up samples). **First-run** is the first
+  call after the file cache for the interpreter and the package has been dropped, or after the
+  machine has been idle or rebooted. Cache-drop methods differ by OS (Linux needs root, for
+  example in a throwaway VM; macOS has `purge`; Windows has no simple equivalent, so a reboot
+  or the first run after boot). If a first-run state cannot be produced on an OS, record
+  "first-run not measured" there; do not extrapolate.
+- Procedure: `python scripts/bench_hook.py -n 100` per hook name and per OS for the
+  steady-state numbers (the existing tool, run by hand); for first-run, at least 20 samples,
+  each after a cache drop. Use the exact command line that `cursorfleet init` would write into
+  the hook entry, not only the console script. Record the interpreter version, installation
+  method and whether antivirus scanning is on. Add the Windows check that
   `python .cursor/hooks/capture_hook.py <event>` works from Cursor's shell. Record `timeout`
   behaviour: is the hook killed at the limit and what does Cursor log.
-- Report per OS, hook name, and warm or cold: sample size, p50, p95 and max in milliseconds.
-  For fewer than 100 samples label p95 as indicative (it is near the max); never report a
-  p95 without the sample size.
-- Budget: p95 under 60 ms ([hook-latency](hook-latency.md)).
-- Pass: p95 under 60 ms for every hook name of the product set, on every OS the docs claim,
-  for each of warm and cold that was measured. Refute: any p95 at or over 60 ms, or an OS
-  claimed without a measurement; then that OS is not claimed, or the hot path is slimmed, or
-  the budget in `hook-latency.md` changes (an owner decision).
+- Report per OS, hook name, and steady-state or first-run: sample size, p50, p95 and max in
+  milliseconds. For fewer than 100 samples label p95 as indicative (it is near the max);
+  never report a p95 without the sample size.
+- Target: **steady-state p95 <= 60 ms process wall time, including interpreter startup**
+  ([hook-latency](hook-latency.md)). First-run has no target in v0.1: it is reported and not
+  judged (a gap, recorded in [follow-ups](follow-ups.md)). Hook-internal time has no target.
+- Pass: steady-state p95 <= 60 ms for every hook name of the product set, on every OS the
+  docs claim. Refute: any steady-state p95 above 60 ms, or an OS claimed without a
+  measurement; then that OS is not claimed, or the hot path is slimmed, or the target in
+  `hook-latency.md` changes (an owner decision).
 
 Table 13A (all OPEN; one row per OS and state):
 
 | OS | State | Samples | p50 ms | p95 ms | max ms | Result |
 | --- | --- | --- | --- | --- | --- | --- |
-| Linux | warm | OPEN | OPEN | OPEN | OPEN | OPEN |
-| Linux | cold | OPEN | OPEN | OPEN | OPEN | OPEN |
-| macOS | warm | OPEN | OPEN | OPEN | OPEN | OPEN |
-| macOS | cold | OPEN | OPEN | OPEN | OPEN | OPEN |
-| Windows | warm | OPEN | OPEN | OPEN | OPEN | OPEN |
-| Windows | cold | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Linux | steady-state | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Linux | first-run | OPEN | OPEN | OPEN | OPEN | OPEN |
+| macOS | steady-state | OPEN | OPEN | OPEN | OPEN | OPEN |
+| macOS | first-run | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Windows | steady-state | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Windows | first-run | OPEN | OPEN | OPEN | OPEN | OPEN |
 
-#### 13B. End-to-end overhead inside Cursor
+#### 13B. End-to-end overhead inside Cursor (release contract)
 
 What it measures: the extra time a user waits for a Cursor action because hooks are
 registered, including Cursor's own spawn, stdin delivery and reply handling. This is not
 the same as 13A and can be much larger or smaller.
 
-- **Tolerance: OWNER DECISION.** No ADR defines an acceptable end-to-end overhead; the 60 ms
-  budget is a hook-internal figure. Until the owner sets one, row 13B reports the measured
-  overhead and the noise floor and gives no pass or refute against a number. Suggested
-  inputs for the decision: the median per-tool-call overhead and its confidence interval.
+- **Release contract (owner decision 2026-10-04; replaces the earlier OWNER DECISION
+  placeholder for the tolerance).** At least **3 batches of 30 paired hooks-on/hooks-off
+  calls** per OS and surface (at least 90 pairs), each batch run on a fresh Cursor session
+  with the Cursor version recorded.
+  - *Pair:* the same scripted action once with hooks registered (C1) and once without (C0),
+    adjacent in time, with the order alternated between pairs (ABBA) so drift cancels.
+    A pair is one tool call when per-call times are available; otherwise one single-action
+    headless run per side.
+  - *Metric:* the **paired delta** `delta = T(hooks-on) - T(hooks-off)` for each pair, in
+    ms. Negative deltas are kept, not clipped. Percentiles use the nearest-rank method.
+  - *Aggregation:* pool all pairs from all batches and compute the median and p95 of the
+    pooled deltas. Also compute each batch's median and p95. A batch that **individually
+    FAILs** (by the table below) makes the overall verdict FAIL; otherwise the overall
+    verdict is the pooled verdict. (A 30-pair p95 is close to the maximum, so per-batch
+    figures are judged only against FAIL.)
+
+  | Verdict | Condition on the pooled paired delta |
+  | --- | --- |
+  | PASS | median <= 100 ms and p95 <= 200 ms |
+  | PARTIAL | not PASS, with median <= 150 ms and p95 <= 300 ms |
+  | FAIL | median > 150 ms, or p95 > 300 ms, or any hook-induced failure or timeout |
+
+  A *hook-induced failure or timeout* is any hooks-on call that fails, hangs, is blocked or
+  is cut off by a hook timeout where its hooks-off partner is not. FAIL means the OS or
+  surface is not claimed (or the hot path is slimmed and the run repeated, or the owner
+  records a new decision). PARTIAL permits a claim only with the measured numbers
+  published. This is a release gate ([release checklist](release-checklist.md)).
 - Scripted task: fixed prompt for a scratch repo that triggers a known sequence (for
   example 10 sequential `Read` calls of scratch files, then 10 `echo` shell calls). Use
   headless `agent -p` (row 3) with `--output-format stream-json` where available so the
-  event timestamps, if the stream carries them, give per-tool-call times; otherwise compare
-  whole-run wall-clock medians over many repetitions.
-- Conditions (interleaved in ABAB order, not run in blocks, at least N=10 each; N=20 where
-  the noise floor is high):
-  - **C0**: no hooks file (baseline).
-  - **C0b**: A/A control, a second baseline run, to measure the noise floor.
-  - **C1**: the product hook set (nine hooks).
+  event timestamps, if the stream carries them, give per-tool-call times; otherwise use
+  single-action runs per the pair definition above.
+- Conditions (interleaved, not run in blocks):
+  - **C0**: no hooks file (hooks-off baseline).
+  - **C1**: the product hook set (nine hooks), hooks-on. The contract compares C1 with C0.
+  - **C0b**: A/A control, a second baseline run, to measure the noise floor. Diagnostic only;
+    it does not enter the verdict, but a C1 delta smaller than the A/A spread is reported as
+    "not detectable at this N" next to the verdict.
   - **C2**: a no-op hook that exits at once with the right reply, on the same events, to
-    separate Cursor's hook mechanism from our code.
+    separate Cursor's hook mechanism from our code. Diagnostic only.
 - Blocking versus non-blocking: for each hook name, register a stub that waits a fixed
   delay D (for example 500 ms and 2 s) before replying, one hook name at a time. If the
   action's per-call time grows by about D, Cursor waited for that hook; if it does not, the
   hook is non-blocking. Record this per hook name (the open question in `questions.md` Q6 is
   `postToolUse` and `afterFileEdit`). The stub is throwaway tooling outside the repository.
+  Diagnostic only; not part of the verdict.
 - Parallel hooks: register k = 1, 3 and 5 identical stubs (each waiting D) on one event. If
   the added time stays near D, they run in parallel; near k times D, sequentially. Record
   per hook name; ADR 0007's hook count and the sum over a tool call depend on this.
-- Report per OS and condition: N, median, p95 and max of the per-call (or per-run) time,
-  the difference to C0 with a bootstrap or simple min-max range, and the A/A spread. A
-  difference smaller than the A/A spread is reported as "not detectable at this N".
+- Report per OS and surface: per batch and pooled N, median, p95 and max of the paired
+  delta, the verdict, and the A/A spread.
 
-Table 13B (all OPEN):
+Table 13B (all OPEN; one row per OS, surface and batch, plus a pooled row):
 
-| OS | Condition | N | Median | p95 | max | Overhead vs C0 | A/A spread |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Linux | C1 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
-| Linux | C2 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
-| macOS | C1 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
-| macOS | C2 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
-| Windows | C1 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
-| Windows | C2 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| OS | Surface | Batch | Pairs | Median delta ms | p95 delta ms | max delta ms | Verdict | A/A spread |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Linux | IDE | 1 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Linux | IDE | 2 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Linux | IDE | 3 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Linux | IDE | pooled | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| macOS | IDE | pooled | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Windows | IDE | pooled | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+
+(Repeat the batch rows for macOS, Windows and any other surface claimed. C2 results are kept
+as a separate diagnostic table with the evidence.)
 
 Table 13C: blocking and parallel behaviour (record `waits`, `does not wait`, or `unknown`;
 all OPEN):
@@ -875,7 +927,7 @@ all OPEN):
   stdin).
 - Can change: ADR 0001 (Q6), [platform-support](platform-support.md),
   [hook-latency](hook-latency.md), ADR 0007 (hook count if latency or sequencing is bad),
-  the claim wording "cold" or "warm".
+  the latency terminology and contract of ADR 0001 section D.
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0001 Q6, 0007.
 
@@ -1317,7 +1369,7 @@ order (labels local to this plan):
 | SQ6 | Which `CURSOR_*` environment variables reach hook processes? |
 | SQ7 | Does `preCompact` fire in practice, and do its `context_*` counters appear? |
 | SQ8 | Is the hook process killed by `timeout`, and what does Cursor log? |
-| SQ9 | Windows: does `python .cursor/hooks/capture_hook.py <event>` work from Cursor's shell, and what is the cold-start latency? |
+| SQ9 | Windows: does `python .cursor/hooks/capture_hook.py <event>` work from Cursor's shell, and what is the first-run latency? |
 
 | Row | Topic | ADRs | Questions | ADR 0001 matrix row | Follow-up tasks that wait for it |
 | --- | --- | --- | --- | --- | --- |
@@ -1333,7 +1385,7 @@ order (labels local to this plan):
 | 10 | `generation_id` and `Task` linkage | 0001, 0003, 0010 | SQ1, SQ2, SQ4 | `Task` linkage and ids | - |
 | 11 | Permission-hook reply shape | 0001, 0007, 0008 | none (release gate) | Permission-hook fail-open reply | follow-ups: rows 1 and 11 |
 | 12 | `ask` on permission hooks | 0008 | none | `ask` behaviour | - |
-| 13 | Latency (A) hook-internal, (B) end-to-end | 0001, 0007 | Q6, SQ8, SQ9 | Hook latency inside Cursor (Q6) | - |
+| 13 | Latency (A) hook process outside Cursor, (B) end-to-end | 0001, 0007 | Q6, SQ8, SQ9 | Hook latency inside Cursor (Q6) | - |
 | 14 | Instruction loading canaries | 0006, 0009, 0012 | none | Rule, skill and nested `AGENTS.md` loading | follow-ups: row 14 |
 | 15 | Privacy-boundary release gate | 0002, 0003, 0004, 0007 | none | none yet | - |
 | 16 | Raw-capture hygiene | 0002, 0003 | none | none (applies to all) | - |
@@ -1342,30 +1394,49 @@ order (labels local to this plan):
 
 Rows 15 to 18 have no ADR 0001 matrix row and no follow-up task yet.
 
-## Inconsistencies found in other documents (not edited by this plan)
+## Missing or inconsistent references
 
-Recorded here for the owner; each needs a decision or a small edit outside this file:
+Recorded for the owner. Items marked **RESOLVED** were fixed by the architecture-owner
+decisions of 2026-10-04 (documentation only; the code and the live results are unchanged).
+**Resolving a wording problem does not verify any Cursor behaviour: every result field in
+this plan is still OPEN.**
 
-1. ADR 0001 matrix, Q1 row: the pass criterion says the field "names the subagent or its
-   parent". Row 8 treats a parent-only field as a refutation (PARENT_ONLY); the matrix
-   wording should follow the EXACT, ROLE_ONLY, PARENT_ONLY, UNKNOWN vocabulary.
-2. ADR 0001 matrix, Q6 row says "under 60 ms warm"; [hook-latency](hook-latency.md) says
-   "p95 < 60 ms cold"; `spike/questions.md` Q6 says "cold-start". Row 13A defines both.
-3. ADR 0003 section 2 lets a role-only identity be labelled `exact` (without an instance
-   id). Row 8 flags this as an OWNER DECISION. ADR 0003 names the temporal label
-   `inferred_temporal`; the code enum (`events/kinds.py`) uses `inferred` (ADR 0003 already
-   records this as a divergence).
-4. `spike/analyze.py` prints a Q1 verdict that counts any key containing `parent_` as
-   identity; row 8 says to classify by hand. The kit was not changed.
-5. `spike/questions.md` secondary questions have no ids (SQ1 to SQ9 above are local).
+1. **RESOLVED (2026-10-04).** ADR 0001 matrix, Q1 row said the field "names the subagent or
+   its parent", while row 8 treated a parent-only field as a refutation. The matrix, ADR 0001
+   Q1 and `spike/questions.md` Q1 now ask whether tool hooks identify the *current subagent
+   instance* (or link to it deterministically) and use the row 8 mapping: EXACT is CONFIRMED
+   (`exact`), ROLE_ONLY is PARTIAL (`inferred`), PARENT_ONLY is REFUTED (`unknown`), UNKNOWN is
+   REFUTED or, if ambiguous, OPEN (`unknown`).
+2. **RESOLVED (2026-10-04).** "Warm", "cold" and "cold start" were used inconsistently (ADR
+   0001 matrix and section C, `hook-latency.md`, `spike/questions.md`, `platform-support.md`,
+   `architecture.md`, `product-contract.md`). They are replaced by steady-state, first-run,
+   hook-internal and end-to-end (ADR 0001 section D). The per-hook target is steady-state p95
+   <= 60 ms process wall time including interpreter startup. Residual wording lives only in the
+   throwaway script docstrings `scripts/bench_hook.py` and `spike/bench_latency.py` ("cold
+   start"), which were not edited in this documentation-only pass.
+3. **RESOLVED (2026-10-04).** ADR 0003 section 2 let a role-only identity be labelled `exact`.
+   Role-only is now `inferred`, never `exact`. The earlier temporal-specific label is removed from
+   all documentation; the canonical enum is `exact | inferred | unknown`, temporal attribution
+   uses `inferred`, and a separate optional `attribution_method` field is noted in ADR 0003 as
+   a possible future addition (not implemented). Remaining code differences (reducer keeps the
+   strongest value, per-value counts absent, explanatory strings) are recorded in ADR 0003 and
+   `follow-ups.md` task 7; they are not fixed.
+4. **Documented, tool fix pending.** `spike/analyze.py` printed a Q1 verdict that counted any
+   key containing `parent_` as identity. Row 8 told the reader to classify by hand. The
+   analyzer is fixed in a separate commit so that parent fields can never confirm identity
+   and so that it reports four buckets; its verdict remains only a hint. The fix has never been
+   run against a live capture.
+5. `spike/questions.md` secondary questions have no ids (SQ1 to SQ9 above are local). Open.
 6. ADR 0001 has one matrix row for headless `agent -p`; row 3 tests without and with
-   `--force` separately. No matrix rows exist for rows 15, 17 and 18.
+   `--force` separately. No matrix rows exist for rows 15, 17 and 18. Open.
 7. [follow-ups](follow-ups.md) says to add rows 10 and 14 to the ADR 0001 matrix "if they are
-   not there"; ADR 0001 already lists both, so only rows 3, 15, 17 and 18 need adding.
-8. Gaps, not contradictions: no ADR defines an end-to-end hook overhead tolerance (row 13B,
-   OWNER DECISION); ADR 0002 and ADR 0009 do not say what `init` does in a non-git folder
-   or what a folder nested in another repository does (row 17); the release checklist does
-   not yet name the row 15 gate.
+   not there"; ADR 0001 already lists both, so only rows 3, 15, 17 and 18 need adding. Open.
+8. Gaps, not contradictions. **RESOLVED (2026-10-04):** the end-to-end hook overhead
+   tolerance (row 13B) is now the PASS / PARTIAL / FAIL contract in ADR 0001 section D, and
+   `release-checklist.md` names it as a gate. **Still open:** ADR 0002 and ADR 0009 do not
+   say what `init` does in a non-git folder or what a folder nested in another repository
+   does (row 17; see the later repository-root decision); the release checklist does not
+   yet name the row 15 gate; no first-run (cold cache) target exists.
 
 ## After the run
 

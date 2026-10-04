@@ -42,8 +42,18 @@ only then does the rest of this checklist apply.
    real Cursor for `preToolUse` and `subagentStart` (the two permission hooks left under
    [ADR 0007](adr/0007-narrower-v01-hook-policy.md); security review SO-01). A wrong reply
    shape blocks the action.
-6. *Non-blocking:* run `python scripts/bench_hook.py` (or `spike/bench_latency.py`) on macOS and
-   Windows and record the numbers in `docs/hook-latency.md`.
+6. **BLOCKING: latency gates** ([ADR 0001 section D](adr/0001-cursor-capabilities.md), row 13 of
+   the test plan), for each OS and Cursor surface you claim:
+   - steady-state hook p95 <= 60 ms process wall time including interpreter startup, from
+     `python scripts/bench_hook.py` (or `spike/bench_latency.py`) on that OS, recorded in
+     `docs/hook-latency.md`;
+   - the end-to-end contract from at least 3 batches of 30 paired hooks-on/hooks-off calls,
+     metric = paired delta (hooks-on minus hooks-off) per call, all pairs pooled and each
+     batch individually not FAIL: **PASS** median <= 100 ms and p95 <= 200 ms; **PARTIAL**
+     median <= 150 ms and p95 <= 300 ms (publish the numbers with the claim); **FAIL**
+     median > 150 ms, p95 > 300 ms, or any hook-induced failure or timeout (do not claim
+     that OS or surface, or slim the hot path and re-measure).
+   Neither has been measured yet.
 7. **BLOCKING: set `[cursor].validated_versions`** in `templates/cursor/config/config.toml`
    (and the docs) to the Cursor versions you actually verified, or leave it empty and keep the
    `doctor` warning.

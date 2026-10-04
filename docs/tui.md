@@ -51,9 +51,10 @@ if Cursor sent one. Token and cost are always "unknown (not exposed by Cursor ho
   artifact). Self-reported and heuristic items are labelled and never count as gate
   evidence ([ADR 0011](adr/0011-evidence-trust-model.md)).
 - **Attribution is a label, not a fact.** Per [ADR 0003](adr/0003-event-model-and-sanitization.md)
-  it is `exact`, `inferred_temporal` or `unknown`, and an aggregate shows its weakest
-  member. **Divergence:** the code still uses the older labels (`exact`, `inferred`,
-  `unknown`) and does not yet apply weakest-wins everywhere.
+  it is `exact`, `inferred` or `unknown`, and an aggregate shows its weakest member. A
+  role-only identity is `inferred`, never `exact`. **Divergence:** the code uses the right
+  labels, but the reducer still keeps the strongest value instead of the weakest and the
+  explanatory text for `inferred` does not mention role-only (follow-ups task 7).
 - **Basis tags.** Each card says how its lane was decided: `observed`, `lifecycle-only`,
   `SELF-REPORTED`, `derived` or `no telemetry`.
 

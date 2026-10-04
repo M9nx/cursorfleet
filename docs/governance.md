@@ -24,9 +24,9 @@ the live spike runs ([status](status.md)). Decisions behind this page:
   forge artifacts, or edit files CursorFleet watches ([threat model](threat-model.md)).
 - **Unverified against live Cursor.** Whether tool hooks identify which subagent made a call,
   how custom subagent names appear, and whether hooks fire in the CLI and Agents Window are
-  open questions (ADR 0001 Q1 to Q4). Attribution is `exact`, `inferred_temporal` or
-  `unknown` ([ADR 0003](adr/0003-event-model-and-sanitization.md); the code still says
-  `inferred`) and is **PROVISIONAL**.
+  open questions (ADR 0001 Q1 to Q4). Attribution is `exact`, `inferred` or `unknown`
+  ([ADR 0003](adr/0003-event-model-and-sanitization.md); a role-only identity is `inferred`,
+  never `exact`) and is **PROVISIONAL**.
 - **Local Cursor IDE only.** The CLI, Agents Window, worktrees, parallel subagents and `ask`
   are not claimed until tested ([ADR 0001](adr/0001-cursor-capabilities.md)).
 

@@ -127,9 +127,11 @@ From the reviewed plan, section 6. Each has a verification method.
   (**PROVISIONAL**).
 - **Corruption tolerance:** killing a hook mid-write or truncating a JSONL file
   never crashes the TUI, and `replay` rebuilds identical state.
-- **Latency and fail-open:** hook p95 under 60 ms warm on Linux, macOS and
-  Windows (Linux cold start measured at 27.7 ms p95; others open); hooks fail
-  open on any internal error.
+- **Latency and fail-open:** steady-state hook p95 <= 60 ms process wall time (including
+  interpreter startup, outside Cursor) on Linux, macOS and Windows (Linux steady-state
+  measured at 27.7 ms p95; others open), plus the end-to-end paired-delta contract of
+  [ADR 0001 section D](adr/0001-cursor-capabilities.md) (PASS: median <= 100 ms and p95
+  <= 200 ms; not measured yet); hooks fail open on any internal error.
 - **Honest docs:** README and docs state no enforcement, no forced approvals, no
   cloud-agent visibility.
 

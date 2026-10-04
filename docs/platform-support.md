@@ -6,7 +6,7 @@ anything stronger than the table.
 
 | OS | Level | What that means |
 | --- | --- | --- |
-| Linux | **Tested** | Developed and run here: full test suite, hook latency benchmark (27.7 ms p95 cold start, `spike/results/latency-linux.json`), the demo, the built wheel smoke-tested in a clean venv. Not verified against live Cursor. |
+| Linux | **Tested** | Developed and run here: full test suite, hook latency benchmark (27.7 ms steady-state p95 process wall time, outside Cursor, `spike/results/latency-linux.json`), the demo, the built wheel smoke-tested in a clean venv. Not verified against live Cursor. |
 | macOS | **CI-tested only** | The CI matrix runs the whole suite and the wheel smoke test on `macos-latest`. Nobody has run it by hand; hook latency is unmeasured. Not verified against live Cursor. |
 | Windows | **CI-tested only, least certain** | The CI matrix runs the suite and wheel smoke test on `windows-latest`. Several Windows behaviours below are reasoned about from documentation, not observed. Not verified against live Cursor. |
 
@@ -59,9 +59,13 @@ the TUI polls.
 - **`MAX_PATH`.** A deep repository path can exceed 260 characters; the hook may then fail to
   open its spool and silently drop the event (it fails open by design).
 - **Hook latency on macOS and Windows is unmeasured.** Interpreter start-up there is slower than
-  on Linux, especially with antivirus scanning. The 60 ms p95 budget is only evidenced on Linux
-  (`docs/hook-latency.md`). Run `python scripts/bench_hook.py` or `spike/bench_latency.py` on
-  each OS to get a number before relying on it.
+  on Linux, especially with antivirus scanning. The steady-state target (p95 <= 60 ms process
+  wall time, outside Cursor) is only evidenced on Linux (`docs/hook-latency.md`), and no
+  first-run or end-to-end number exists on any OS. Run `python scripts/bench_hook.py` or
+  `spike/bench_latency.py` on each OS to get a steady-state number before relying on it. The
+  end-to-end release contract (paired hooks-on versus hooks-off; PASS median <= 100 ms and
+  p95 <= 200 ms) is defined in [ADR 0001 section D](adr/0001-cursor-capabilities.md) and must
+  be met per OS before that OS is claimed.
 - **Terminals.** The TUI uses Textual. Windows Terminal, iTerm2 and modern Linux terminals are
   expected to work; legacy `conhost` rendering, unusual locales and non-UTF-8 code pages are not
   tested. Redirected output on Windows consoles may need `PYTHONUTF8=1` if you see encoding errors.

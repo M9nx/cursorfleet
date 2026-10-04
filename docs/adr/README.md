@@ -21,7 +21,7 @@ release gate in one line. The full gate text is in each ADR.
 - [0001: Cursor capabilities and limits](0001-cursor-capabilities.md)
   - Status: **provisional**. Supersedes: none. Related: 0002, 0003, 0007, 0008, 0012.
   - Implementation: Implemented-provisional; its 12-hook list is amended by 0007.
-  - Gate: Q1 to Q6 answered, section B resolved, real fixtures, permission-hook reply confirmed.
+  - Gate: Q1 to Q6 answered, section B resolved, real fixtures, permission-hook reply confirmed, end-to-end latency contract (section D: paired hooks-on/hooks-off, PASS median <= 100 ms and p95 <= 200 ms) met per OS claimed.
   - Local Cursor IDE (desktop) is the only supported v0.1 surface until the empirical test matrix passes.
 - [0002: Storage layout and runtime directory](0002-storage-layout-and-runtime-directory.md)
   - Status: provisional (git-common-dir design kept). Supersedes: none.
@@ -29,7 +29,7 @@ release gate in one line. The full gate text is in each ADR.
   - Gate: Q4 and Q5 answered on each OS claimed; BLAKE2s, HMAC ids and the lock implemented.
 - [0003: Event model and sanitization allowlist](0003-event-model-and-sanitization.md)
   - Status: provisional (amended 2026-10-04). Supersedes: none.
-  - Implementation: Divergent-from-code (schema `1.0`, `test.completed`, command display on, attribution labels).
+  - Implementation: Divergent-from-code (schema `1.0`, `test.completed`, command display on, attribution aggregation keeps the strongest value instead of the weakest).
   - Gate: schema `0.1`; `verification.observed`; no heuristic gates; display default off.
 - [0004: No chain-of-thought; never register content hooks](0004-no-chain-of-thought-and-hook-policy.md)
   - Status: **superseded by [0007](0007-narrower-v01-hook-policy.md)**. Content kept.

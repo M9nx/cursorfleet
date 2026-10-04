@@ -46,7 +46,7 @@ enforcement, no forced approvals, no cloud-agent visibility.
 
 - **M0 foundations:** project scaffold, ADRs 0001 to 0006, product contract, threat model,
   privacy statement, JSON Schemas for events, config, roster and policy (reserved), a throwaway
-  capture kit under `spike/` and a Linux hook-latency benchmark (27.7 ms p95 cold start).
+  capture kit under `spike/` and a Linux hook-latency benchmark (27.7 ms steady-state p95).
 - **M1 kit:** `cursorfleet init --cursor`, `uninstall`, `doctor` and `validate`. Deterministic
   generation of subagent files, rules, skills, `AGENTS.md` blocks and a merged
   `.cursor/hooks.json` of twelve passive hooks (ADR 0007 later narrowed this to nine; code not yet changed), with a visible diff, confirmation, an install
