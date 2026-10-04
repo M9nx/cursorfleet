@@ -125,7 +125,8 @@ repeat the subset marked in the surface grid below.
   equality relations (`conversation_id`, `generation_id`, `session_id`, `tool_use_id`,
   `tool_call_id`, `subagent_id`, `parent_conversation_id`); enums, booleans and counters
   (`vals`); `cursor_version`; whether `model`, `model_id` and `model_params` are present;
-  the surface; whether the Hooks output channel logged errors.
+  the names (never values) of `CURSOR_*` and `CLAUDE_*` environment variables seen by the
+  hook process (`env_names_seen`); the surface; whether the Hooks output channel logged errors.
 - The kit cannot see values, so it cannot say whether `postToolUse.tool_output` for Shell
   carries an exit code (ADR 0007 open question). Answer that with a one-off throwaway hook
   in the scratch repo that writes one boolean per call (is an `exitCode` key present), never
@@ -1300,10 +1301,77 @@ Live coexistence (IDE, scratch repository, harmless actions; separate from the f
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; raw-capture sign-off: -; ADRs affected: 0008, 0009.
 
+## Traceability
+
+Question ids Q1 to Q6 are those of [`spike/questions.md`](../spike/questions.md). That file
+does not number its nine "secondary questions"; this plan labels them SQ1 to SQ9 in file
+order (labels local to this plan):
+
+| Id | Secondary question |
+| --- | --- |
+| SQ1 | Do tool hooks fire for `Task`, and does its `tool_use_id` equal `subagentStart.tool_call_id`? |
+| SQ2 | Is `generation_id` constant across a subagent's work? |
+| SQ3 | Does `subagentStart.git_branch` differ for isolated subagents; is `is_parallel_worker` true for parallel runs? |
+| SQ4 | Does `sessionStart.session_id` equal `conversation_id`; do subagents get their own `sessionStart` and `sessionEnd`? |
+| SQ5 | Are `model`, `model_id` and `model_params` present on every hook? |
+| SQ6 | Which `CURSOR_*` environment variables reach hook processes? |
+| SQ7 | Does `preCompact` fire in practice, and do its `context_*` counters appear? |
+| SQ8 | Is the hook process killed by `timeout`, and what does Cursor log? |
+| SQ9 | Windows: does `python .cursor/hooks/capture_hook.py <event>` work from Cursor's shell, and what is the cold-start latency? |
+
+| Row | Topic | ADRs | Questions | ADR 0001 matrix row | Follow-up tasks that wait for it |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Scenario-to-hook matrix, IDE | 0001, 0003, 0007, 0010 | SQ5, SQ6, SQ7 | IDE (desktop), main agent only | follow-ups: rows 1 and 11 |
+| 2 | CLI interactive | 0001 | Q3 | CLI interactive `agent` | - |
+| 3 | CLI headless, no `--force` and `--force` | 0001, 0003, 0007 | Q3 | CLI headless `agent -p` (one matrix row for both modes) | - |
+| 4 | Agents Window | 0001, 0012 | Q3 | Agents Window | - |
+| 5 | Cursor-managed worktree | 0001, 0002, 0012 | Q3, Q4, SQ3 | Cursor-managed worktree | follow-ups: rows 5, 6, 7 |
+| 6 | Manual worktree | 0002, 0012 | Q4 | Manual worktree | follow-ups: rows 5, 6, 7 |
+| 7 | Concurrency (a) real overlap, (b) synthetic stress | 0001, 0002, 0010, 0012 | Q5, SQ3 | Concurrency and parallel subagents (Q5) | follow-ups: rows 5, 6, 7 |
+| 8 | Subagent identity | 0001, 0002, 0003, 0010, 0011, 0012 | Q1 | Subagent identity (Q1) | follow-ups: rows 8 and 9; row 8 |
+| 9 | Custom `subagent_type` | 0001, 0003, 0012 | Q2 | Custom `subagent_type` naming (Q2) | follow-ups: rows 8 and 9 |
+| 10 | `generation_id` and `Task` linkage | 0001, 0003, 0010 | SQ1, SQ2, SQ4 | `Task` linkage and ids | - |
+| 11 | Permission-hook reply shape | 0001, 0007, 0008 | none (release gate) | Permission-hook fail-open reply | follow-ups: rows 1 and 11 |
+| 12 | `ask` on permission hooks | 0008 | none | `ask` behaviour | - |
+| 13 | Latency (A) hook-internal, (B) end-to-end | 0001, 0007 | Q6, SQ8, SQ9 | Hook latency inside Cursor (Q6) | - |
+| 14 | Instruction loading canaries | 0006, 0009, 0012 | none | Rule, skill and nested `AGENTS.md` loading | follow-ups: row 14 |
+| 15 | Privacy-boundary release gate | 0002, 0003, 0004, 0007 | none | none yet | - |
+| 16 | Raw-capture hygiene | 0002, 0003 | none | none (applies to all) | - |
+| 17 | Non-git workspace | 0002 | none | none yet | - |
+| 18 | Existing-hooks coexistence and round trip | 0008, 0009 | none | none yet | - |
+
+Rows 15 to 18 have no ADR 0001 matrix row and no follow-up task yet.
+
+## Inconsistencies found in other documents (not edited by this plan)
+
+Recorded here for the owner; each needs a decision or a small edit outside this file:
+
+1. ADR 0001 matrix, Q1 row: the pass criterion says the field "names the subagent or its
+   parent". Row 8 treats a parent-only field as a refutation (PARENT_ONLY); the matrix
+   wording should follow the EXACT, ROLE_ONLY, PARENT_ONLY, UNKNOWN vocabulary.
+2. ADR 0001 matrix, Q6 row says "under 60 ms warm"; [hook-latency](hook-latency.md) says
+   "p95 < 60 ms cold"; `spike/questions.md` Q6 says "cold-start". Row 13A defines both.
+3. ADR 0003 section 2 lets a role-only identity be labelled `exact` (without an instance
+   id). Row 8 flags this as an OWNER DECISION. ADR 0003 names the temporal label
+   `inferred_temporal`; the code enum (`events/kinds.py`) uses `inferred` (ADR 0003 already
+   records this as a divergence).
+4. `spike/analyze.py` prints a Q1 verdict that counts any key containing `parent_` as
+   identity; row 8 says to classify by hand. The kit was not changed.
+5. `spike/questions.md` secondary questions have no ids (SQ1 to SQ9 above are local).
+6. ADR 0001 has one matrix row for headless `agent -p`; row 3 tests without and with
+   `--force` separately. No matrix rows exist for rows 15, 17 and 18.
+7. [follow-ups](follow-ups.md) says to add rows 10 and 14 to the ADR 0001 matrix "if they are
+   not there"; ADR 0001 already lists both, so only rows 3, 15, 17 and 18 need adding.
+8. Gaps, not contradictions: no ADR defines an end-to-end hook overhead tolerance (row 13B,
+   OWNER DECISION); ADR 0002 and ADR 0009 do not say what `init` does in a non-git folder
+   or what a folder nested in another repository does (row 17); the release checklist does
+   not yet name the row 15 gate.
+
 ## After the run
 
 - Fill in `spike/questions.md` results and the ADR 0001 matrix (move the row from NOT RUN to
-  PASS, FAIL or PARTIAL with the version and date).
+  PASS, FAIL or PARTIAL with the version and date). Add matrix rows for rows 3 (split by
+  `--force`), 15, 17 and 18.
 - Update the status of dependent ADRs (see the "Can change" lines) and
   [follow-ups](follow-ups.md): each task there names the row it waits for.
 - Update README, quickstart, platform-support and product-contract so the supported-surface
@@ -1316,3 +1384,7 @@ Live coexistence (IDE, scratch repository, harmless actions; separate from the f
 - Cursor versions other than the ones you ran.
 - Enterprise or team-level hooks, beyond what `doctor` can read from disk.
 - Anything that needs network access from hooks (forbidden).
+- Other operating system versions, shells, and filesystems than the ones recorded in each
+  result record; a result holds only for what was run.
+- Models other than the ones recorded for rows 1 and 14; instruction following varies by
+  model.
