@@ -156,7 +156,8 @@ states what the code does today; the divergences are tracked in
   removed. `doctor` reports a non-empty `quarantine/`.
 - Implementation status: **Divergent-from-code (minor).** `Projection.quarantine()` in
   `state/indexer.py` renames aside, but if `os.replace` fails it falls back to
-  `os.remove`, which deletes silently. Follow-up: leave the file and report instead.
+  `os.remove`, which deletes silently. Also not implemented: `doctor` does not report a non-empty
+  `quarantine/`. Follow-up: leave the file in place and report instead.
 
 ### Segment fingerprints use BLAKE2s
 
@@ -225,4 +226,5 @@ Hooks stay **lock-free and append-only**. Only two background roles lock.
   the indexer rules. Not implemented: `maintenance.lock`; any locking in
   `state/retention.py` or `cli/commands/events.py` (purge can race the indexer); the
   contention-versus-unsupported distinction (any `OSError` is treated as busy); the
-  diagnostic pid content. Windows behaviour is unverified.
+  diagnostic pid content; `O_NOFOLLOW` when opening the lock file. Windows behaviour is
+  unverified.
