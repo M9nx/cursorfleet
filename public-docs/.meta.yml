@@ -1,4 +1,6 @@
+title: CursorFleet
 description: >-
-  Local TUI and workflow harness for observing Cursor agent teams. Pre-alpha,
-  unofficial — not affiliated with Anysphere or Cursor.
+  Observe local Cursor agent teams from your machine — passive hooks, read-only
+  git, and a TUI dashboard. Pre-alpha, unofficial, not affiliated with Cursor
+  or Anysphere.
 image: assets/og-card.png

@@ -17,7 +17,7 @@ toggle.name = "Switch to light mode"
 [project]
 site_name = "CursorFleet"
 site_url = "https://m9nx.github.io/cursorfleet/"
-site_description = "Local TUI and workflow harness for observing Cursor agent teams. Pre-alpha, unofficial — not affiliated with Anysphere or Cursor."
+site_description = "Observe local Cursor agent teams — passive hooks, read-only git, and a TUI dashboard. Pre-alpha, unofficial, not affiliated with Cursor or Anysphere."
 site_author = "M9nx"
 docs_dir = "public-docs"
 site_dir = "site"
