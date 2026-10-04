@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block extrahead %}
+<link rel="apple-touch-icon" href="{{ 'assets/apple-touch-icon.png' | url }}">
+{% set desc = page.meta.description if page.meta and page.meta.description else config.site_description %}
+{% if desc %}
+<meta property="og:description" content="{{ desc }}">
+<meta name="twitter:description" content="{{ desc }}">
+{% endif %}
+{% set img_path = page.meta.image if page.meta and page.meta.image else 'assets/og-card.png' %}
+{% if config.site_url %}
+<meta property="og:image" content="{{ config.site_url ~ img_path }}">
+<meta name="twitter:image" content="{{ config.site_url ~ img_path }}">
+{% else %}
+<meta property="og:image" content="{{ img_path | url }}">
+<meta name="twitter:image" content="{{ img_path | url }}">
+{% endif %}
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+{% if page.canonical_url %}
+<meta property="og:url" content="{{ page.canonical_url }}">
+{% endif %}
+<meta property="og:title" content="{% if page.title and not page.is_homepage %}{{ page.title | striptags }} - {% endif %}{{ config.site_name }}">
+<meta name="twitter:title" content="{% if page.title and not page.is_homepage %}{{ page.title | striptags }} - {% endif %}{{ config.site_name }}">
+{% endblock %}

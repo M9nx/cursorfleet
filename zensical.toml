@@ -17,6 +17,8 @@ toggle.name = "Switch to light mode"
 [project]
 site_name = "CursorFleet"
 site_url = "https://m9nx.github.io/cursorfleet/"
+site_description = "Local TUI and workflow harness for observing Cursor agent teams. Pre-alpha, unofficial — not affiliated with Anysphere or Cursor."
+site_author = "M9nx"
 docs_dir = "public-docs"
 site_dir = "site"
 extra_css = [
@@ -52,7 +54,14 @@ nav = [
 ]
 
 [project.theme]
+custom_dir = "public-docs/overrides"
+logo = "assets/logo-circle.png"
+favicon = "assets/favicon-32.png"
 features = ["navigation.footer"]
+
+[project.plugins.meta]
+enabled = true
+meta_file = ".meta.yml"
 
 [project.extra]
 generator = false

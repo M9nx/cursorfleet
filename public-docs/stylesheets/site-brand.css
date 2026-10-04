@@ -1,3 +1,12 @@
+/* Header / drawer: circular brand mark (theme logo PNG is pre-masked). */
+.md-header .md-logo img,
+.md-sidebar .md-logo img {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 /* Subtle CursorFleet wordmark — footer background only (all pages). */
 
 /* --- Footer (horizontal lockup, right-aligned) --- */
