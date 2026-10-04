@@ -192,17 +192,44 @@ def test_undocumented_id_like_key_goes_to_unclassified_and_is_never_promoted(
     az: ModuleType,
 ) -> None:
     res = az.identity_analysis(
-        window(tool(extra_keys={"agent_run_id": "str", "worker_uuid": "str", "session_id": "str"}))
+        window(tool(extra_keys={"agent_run_id": "str", "worker_uuid": "str"}))
     )
     assert set(res["unclassified_identity_candidates"]) == {
         "agent_run_id",
         "worker_uuid",
-        "session_id",
     }
     assert res["direct_current_identity"] == {}
     assert res["role_only_identity"] == {}
     # the shared parent conversation is still reported, but the candidates win: OPEN, not REFUTED
     assert res["verdict_code"] == "OPEN"
+
+
+def test_session_id_is_session_correlation_not_agent_identity(az: ModuleType) -> None:
+    res = az.identity_analysis(
+        window(
+            tool(
+                extra_keys={"session_id": "str"},
+                extra_ids={"session_id": "ses_synthetic_1"},
+            )
+        )
+    )
+    for bucket in (
+        "direct_current_identity",
+        "role_only_identity",
+        "parent_only_identity",
+        "unclassified_identity_candidates",
+    ):
+        assert "session_id" not in res[bucket]
+    assert az.classify_key("session_id", "preToolUse") is None
+    assert az.classify_key("session_id", "sessionStart") is None
+    sc = res["session_correlation"]
+    assert "not agent identity" in sc["note"]
+    tool_vs_conv = sc["tool_session_id_vs_tool_conversation_id"]
+    assert tool_vs_conv["observed"] == 1
+    assert tool_vs_conv["comparable"] == 1
+    assert tool_vs_conv["mismatches"] == 1  # ses_synthetic_1 != conv-main
+    # parent conversation only; session_id is not a candidate
+    assert res["verdict_code"] == "REFUTED"
 
 
 def test_documented_tool_hook_keys_are_not_candidates(az: ModuleType) -> None:
@@ -478,7 +505,11 @@ def test_parent_conversation_id_still_parent_only_when_tool_call_candidate_absen
     assert az.classify_key("parent_subagent_id", "preToolUse") == "parent_only_identity"
 
 
-# -------------------------------- relationship equalities
+# -------------------------------- linkage evidence (matches / mismatches / unavailable)
+
+
+def _link(res: dict[str, Any], name: str) -> dict[str, int]:
+    return res["linkage"][name]  # type: ignore[no-any-return]
 
 
 def test_task_tool_use_id_equals_subagent_start_tool_call_id(az: ModuleType) -> None:
@@ -489,15 +520,23 @@ def test_task_tool_use_id_equals_subagent_start_tool_call_id(az: ModuleType) -> 
     )
     recs = [task, linked_start(), linked_stop()]
     res = az.identity_analysis(recs)
-    assert res["task_tool_use_ids_matching_subagentStart_tool_call_id"] == 1
-    assert res["task_tool_use_id_eq_subagentStart_tool_call_id"] == 1
+    ev = _link(res, "task_tool_use_id_vs_subagentStart_tool_call_id")
+    assert ev["observed"] == 1
+    assert ev["comparable"] == 1
+    assert ev["matches"] == 1
+    assert ev["mismatches"] == 0
+    assert ev["unavailable"] == 0
+    assert ev["collisions"] == 0
     assert res["task_tool_events"] == 1
 
 
 def test_inner_parent_tool_call_id_equals_subagent_start_tool_call_id(az: ModuleType) -> None:
     recs = [linked_start(), inner_tool(), linked_stop(child_conversation_id=CHILD)]
     res = az.identity_analysis(recs)
-    assert res["inner_tool_parent_tool_call_id_eq_subagentStart_tool_call_id"] == 1
+    ev = _link(res, "innerTool_parent_tool_call_id_vs_subagentStart_tool_call_id")
+    assert ev["comparable"] == 1
+    assert ev["matches"] == 1
+    assert ev["unavailable"] == 0
     assert res["inner_tool_association"]["parent_tool_call_id"] == 1
     assert res["tool_events_inside_subagent_windows"] == 1
 
@@ -506,15 +545,22 @@ def test_stop_subagent_id_equals_start_subagent_id_and_tool_call_id(az: ModuleTy
     match_sid = az.identity_analysis(
         [linked_start(), linked_stop(subagent_id=SUB, child_conversation_id=CHILD)]
     )
-    assert match_sid["subagentStop_subagent_id_eq_subagentStart_subagent_id"] == 1
-    assert match_sid["subagentStop_subagent_id_eq_subagentStart_tool_call_id"] == 0
+    sid_vs_sid = _link(match_sid, "subagentStop_subagent_id_vs_subagentStart_subagent_id")
+    sid_vs_call = _link(match_sid, "subagentStop_subagent_id_vs_subagentStart_tool_call_id")
+    assert sid_vs_sid["matches"] == 1
+    assert sid_vs_sid["mismatches"] == 0
+    assert sid_vs_call["mismatches"] == 1
+    assert sid_vs_call["matches"] == 0
     assert match_sid["windows_paired_by_subagent_id"] == 1
 
     match_call = az.identity_analysis(
         [linked_start(), linked_stop(subagent_id=TC, child_conversation_id=CHILD)]
     )
-    assert match_call["subagentStop_subagent_id_eq_subagentStart_subagent_id"] == 0
-    assert match_call["subagentStop_subagent_id_eq_subagentStart_tool_call_id"] == 1
+    sid_vs_sid = _link(match_call, "subagentStop_subagent_id_vs_subagentStart_subagent_id")
+    sid_vs_call = _link(match_call, "subagentStop_subagent_id_vs_subagentStart_tool_call_id")
+    assert sid_vs_sid["mismatches"] == 1
+    assert sid_vs_sid["matches"] == 0
+    assert sid_vs_call["matches"] == 1
     assert match_call["windows_paired_by_subagent_id"] == 1
 
 
@@ -525,7 +571,9 @@ def test_inner_conversation_id_equals_stop_child_conversation_id(az: ModuleType)
         linked_stop(child_conversation_id=CHILD),
     ]
     res = az.identity_analysis(recs)
-    assert res["inner_tool_conversation_id_eq_subagentStop_child_conversation_id"] == 1
+    ev = _link(res, "innerTool_conversation_id_vs_subagentStop_child_conversation_id")
+    assert ev["matches"] == 1
+    assert ev["unavailable"] == 0
     assert res["inner_tool_association"]["child_conversation_id"] == 1
     assert res["tool_events_inside_subagent_windows"] == 1
     assert "conversation_id==parent_conversation_id" not in res["parent_only_identity"]
@@ -542,10 +590,15 @@ def test_missing_optional_stop_fields_fall_back_to_type_order(az: ModuleType) ->
     res = az.identity_analysis(recs)
     assert res["windows_paired_by_type_order"] == 1
     assert res["windows_paired_by_subagent_id"] == 0
-    assert res["subagentStop_subagent_id_eq_subagentStart_subagent_id"] == 0
-    assert res["subagentStop_subagent_id_eq_subagentStart_tool_call_id"] == 0
-    assert res["inner_tool_parent_tool_call_id_eq_subagentStart_tool_call_id"] == 0
-    assert res["inner_tool_conversation_id_eq_subagentStop_child_conversation_id"] == 0
+    # start() has no tool_call_id; stop() has no subagent_id / child_conversation_id
+    stop_vs_sid = _link(res, "subagentStop_subagent_id_vs_subagentStart_subagent_id")
+    stop_vs_call = _link(res, "subagentStop_subagent_id_vs_subagentStart_tool_call_id")
+    ptc = _link(res, "innerTool_parent_tool_call_id_vs_subagentStart_tool_call_id")
+    child = _link(res, "innerTool_conversation_id_vs_subagentStop_child_conversation_id")
+    assert stop_vs_sid["unavailable"] == 1 and stop_vs_sid["matches"] == 0
+    assert stop_vs_call["unavailable"] == 1 and stop_vs_call["comparable"] == 0
+    assert ptc["unavailable"] == 1 and ptc["comparable"] == 0
+    assert child["unavailable"] == 1 and child["comparable"] == 0
     assert res["tool_events_inside_subagent_windows"] == 1
     assert res["inner_tool_association"]["temporal"] == 1
     assert res["temporal_association_is_not_exact"] is True
@@ -601,6 +654,10 @@ def test_duplicate_start_tool_call_id_is_ambiguous_not_unique_link(az: ModuleTyp
     assert res["inner_tool_association"].get("child_conversation_id") == 1
     assert "parent_tool_call_id" in res["unclassified_identity_candidates"]
     assert res["verdict_code"] == "OPEN"
+    ptc = _link(res, "innerTool_parent_tool_call_id_vs_subagentStart_tool_call_id")
+    assert ptc["collisions"] == 1
+    assert ptc["matches"] == 0
+    assert ptc["comparable"] == 1
 
 
 def test_shared_child_conversation_id_is_ambiguous(az: ModuleType) -> None:
@@ -689,3 +746,163 @@ def test_pairing_id_collision_is_counted(az: ModuleType) -> None:
     assert res["pairing_id_collisions"] == 1
     assert res["windows_paired_by_subagent_id"] == 1
     assert res["windows_without_matching_stop"] == 0
+    stop_vs_call = _link(res, "subagentStop_subagent_id_vs_subagentStart_tool_call_id")
+    # one unique start tool_call_id: each stop is a match; pairing_id_collisions is separate
+    assert stop_vs_call["matches"] == 2
+    assert stop_vs_call["collisions"] == 0
+
+
+def test_linkage_mismatch_when_ids_differ(az: ModuleType) -> None:
+    recs = [
+        linked_start(),
+        inner_tool(parent_tool_call_id="tc_synthetic_other"),
+        linked_stop(subagent_id="sub_synthetic_other", child_conversation_id="ses_synthetic_other"),
+    ]
+    res = az.identity_analysis(recs)
+    ptc = _link(res, "innerTool_parent_tool_call_id_vs_subagentStart_tool_call_id")
+    stop_vs_sid = _link(res, "subagentStop_subagent_id_vs_subagentStart_subagent_id")
+    child = _link(res, "innerTool_conversation_id_vs_subagentStop_child_conversation_id")
+    start_pair = _link(res, "subagentStart_subagent_id_vs_subagentStart_tool_call_id")
+    assert ptc["comparable"] == 1 and ptc["mismatches"] == 1 and ptc["unavailable"] == 0
+    assert stop_vs_sid["comparable"] == 1 and stop_vs_sid["mismatches"] == 1
+    assert child["comparable"] == 1 and child["mismatches"] == 1
+    # same-record start ids differ (sub-1 vs tc_synthetic_1)
+    assert start_pair["comparable"] == 1 and start_pair["mismatches"] == 1
+
+
+def test_old_capture_missing_new_id_fields_is_unavailable_not_zero_matches(
+    az: ModuleType,
+) -> None:
+    # Pre-allowlist capture: start has tool_call_id, inner tool and stop lack the new fields.
+    recs = [linked_start(), tool(t=1500, conversation_id=PARENT), linked_stop()]
+    res = az.identity_analysis(recs)
+    ptc = _link(res, "innerTool_parent_tool_call_id_vs_subagentStart_tool_call_id")
+    child = _link(res, "innerTool_conversation_id_vs_subagentStop_child_conversation_id")
+    stop_sid = _link(res, "subagentStop_subagent_id_vs_subagentStart_subagent_id")
+    assert ptc["observed"] == 1
+    assert ptc["unavailable"] == 1
+    assert ptc["comparable"] == 0
+    assert ptc["matches"] == 0
+    assert child["unavailable"] == 1
+    assert child["comparable"] == 0
+    assert child["matches"] == 0
+    assert stop_sid["unavailable"] == 1
+    assert "unavailable" in res["linkage_note"]
+
+
+def test_mixed_old_and_new_captures_split_unavailable_from_matches(az: ModuleType) -> None:
+    old_inner = tool(t=1400, conversation_id=CHILD)
+    new_inner = inner_tool(t=1600)
+    recs = [
+        linked_start(),
+        old_inner,
+        new_inner,
+        linked_stop(subagent_id=SUB, child_conversation_id=CHILD),
+    ]
+    res = az.identity_analysis(recs)
+    ptc = _link(res, "innerTool_parent_tool_call_id_vs_subagentStart_tool_call_id")
+    child = _link(res, "innerTool_conversation_id_vs_subagentStop_child_conversation_id")
+    assert ptc["observed"] == 2
+    assert ptc["unavailable"] == 1
+    assert ptc["matches"] == 1
+    assert ptc["mismatches"] == 0
+    assert ptc["comparable"] == 1
+    assert child["observed"] == 2
+    assert child["matches"] == 2
+    assert child["unavailable"] == 0
+
+
+def test_render_lists_unavailable_not_a_zero_match_refutation(
+    az: ModuleType, tmp_path: Path
+) -> None:
+    path = write_capture(tmp_path, [linked_start(), tool(), linked_stop()])
+    text = az.render(az.analyze(str(path)))
+    assert "unavailable" in text
+    assert "session_correlation" in text
+    assert "not Q1 identity" in text or "not agent identity" in text
+    assert "missing = unavailable" in text
+
+
+# -------------------------------- capture_hook ID allowlist (synthetic only)
+
+
+def _load_capture_hook() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "spike_capture_hook", SPIKE_DIR / "capture_hook.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _record(ch: ModuleType, payload: dict[str, Any]) -> dict[str, Any]:
+    rec, _event = ch.build_record(payload, None, 0, False, True, 0.0, "unused-cap-dir", "env")
+    return rec  # type: ignore[no-any-return]
+
+
+def test_capture_hook_retains_only_scalar_new_ids() -> None:
+    ch = _load_capture_hook()
+    assert "parent_tool_call_id" in ch.ID_FIELDS
+    assert "child_conversation_id" in ch.ID_FIELDS
+    payload = {
+        "hook_event_name": "preToolUse",
+        "parent_tool_call_id": "tc_synthetic_ok",
+        "child_conversation_id": "ses_synthetic_ok",
+        "tool_call_id": "tc_synthetic_start",
+        "subagent_id": "sub_synthetic_1",
+        "task": "synthetic prompt text about quarterly layoffs",
+        "prompt": "synthetic chain of thought about the password",
+        "tool_input": {"command": "cat /home/alice-synthetic/private/secret"},
+        "tool_output": "file contents of quarterly.xlsx",
+        "user_email": "alice.synthetic@example.com",
+        "file_path": "/home/alice-synthetic/private/.env",
+    }
+    rec = _record(ch, payload)
+    ids = rec["ids"]
+    assert ids["parent_tool_call_id"] == "tc_synthetic_ok"
+    assert ids["child_conversation_id"] == "ses_synthetic_ok"
+    assert ids["tool_call_id"] == "tc_synthetic_start"
+    assert ids["subagent_id"] == "sub_synthetic_1"
+    dumped = json.dumps(rec)
+    for leaked in (
+        "quarterly layoffs",
+        "chain of thought",
+        "alice-synthetic",
+        "alice.synthetic@example.com",
+        "/home/alice-synthetic",
+        "quarterly.xlsx",
+        "cat /home",
+    ):
+        assert leaked not in dumped
+    for banned in ("task", "prompt", "tool_input", "tool_output", "user_email", "file_path"):
+        assert banned not in ids
+
+
+def test_capture_hook_rejects_invalid_oversized_and_non_string_new_ids() -> None:
+    ch = _load_capture_hook()
+    cases = [
+        {"parent_tool_call_id": "alice.synthetic@example.com"},
+        {"parent_tool_call_id": "tc synthetic spaces"},
+        {"parent_tool_call_id": "x" * 129},
+        {"parent_tool_call_id": 12345},
+        {"parent_tool_call_id": {"wrapped": "tc_synthetic_nested"}},
+        {"child_conversation_id": ["ses_synthetic_list"]},
+        {"child_conversation_id": None},
+    ]
+    for extra in cases:
+        rec = _record(ch, {"hook_event_name": "subagentStop", **extra})
+        key = next(iter(extra))
+        if extra[key] is None:
+            assert rec["ids"][key] is None
+        else:
+            assert rec["ids"][key] == "<invalid>"
+        dumped = json.dumps(rec)
+        assert "tc_synthetic_nested" not in dumped
+        assert "ses_synthetic_list" not in dumped
+        assert "alice.synthetic@example.com" not in dumped
+
+
+def test_capture_hook_selftest_covers_new_ids() -> None:
+    ch = _load_capture_hook()
+    assert ch.selftest() == 0
