@@ -1,50 +1,32 @@
-# CursorFleet
+<div class="cf-home-hero" markdown="0">
+<div class="cf-home-hero__layout">
+<div class="cf-home-hero__copy">
+<h1 class="cf-home-hero__title">CursorFleet</h1>
+<p class="cf-home-hero__subtitle">A local TUI and workflow harness for Cursor agent teams.</p>
+<p class="cf-home-hero__disclaimer"><strong>Unofficial.</strong> Not affiliated with or endorsed by Anysphere or Cursor. &ldquo;Cursor&rdquo; is a trademark of its respective owner. &ldquo;CursorFleet&rdquo; is a working name.</p>
+<ul class="cf-home-hero__actions">
+<li><a href="getting-started/installation/" class="md-button md-button--primary">Install</a></li>
+<li><a href="getting-started/quickstart/" class="md-button">Quickstart</a></li>
+</ul>
+</div>
+<div class="cf-home-hero__media" aria-hidden="true">
+<video class="cf-home-hero__video" autoplay muted loop playsinline poster="assets/hero-poster.jpg">
+<source src="assets/hero-loop.mp4" type="video/mp4">
+</video>
+<img class="cf-home-hero__poster" src="assets/hero-poster.jpg" alt="">
+</div>
+</div>
+</div>
 
-A local TUI and workflow harness for Cursor agent teams: see which local
-agents and worktrees are doing what, from passive hooks and read-only git,
-without sending anything anywhere.
+<div class="cf-home-below" markdown="1">
 
-**Unofficial.** CursorFleet is not affiliated with or endorsed by Anysphere or
-Cursor. "Cursor" is a trademark of its respective owner. The name
-"CursorFleet" is a working name.
+**Pre-alpha, not released.** v0.1 is **Observe** only: passive hooks and read-only git, local Cursor sessions, no enforcement and no cloud-agent visibility. [Known limitations](known-limitations.md) cover open spike questions (Q1/Q2) and parallel-identity **BLOCKED/OPEN** on Cursor 3.22.7 Linux.
 
-## Status
-
-**Pre-alpha, not released.** There is no PyPI package, tag, or GitHub release.
-Install from a git checkout. See [Installation](getting-started/installation.md).
-
-- v0.1 is **Observe** only: no enforcement, no forced approvals, and no
-  cloud-agent visibility (local Cursor sessions only). It is not a security
-  boundary: a malicious or prompt-injected agent can bypass or forge what it
-  shows.
-- Hook payload shapes come from Cursor's documentation. The project has **not**
-  been verified against a live Cursor as a completed spike. **Q1** (identity of
-  the current subagent inside its tool hooks) and **Q2** (how custom subagent
-  names appear in `subagent_type`) remain **OPEN**.
-- Parallel-identity classification is **BLOCKED/OPEN** on the Cursor **3.22.7**
-  Linux surface that has been exercised. Do not treat that single observation
-  as a Q1 result.
-- The Textual dashboard (`cursorfleet tui`) is **under development**: the
-  command exists in the checkout, but it is provisional and unvalidated against
-  live Cursor. New TUI work is frozen until the live spike is finished.
-- **Supported surface (intended):** the local Cursor IDE (desktop) only, once
-  the spike confirms it. The Cursor CLI, the Agents Window, Cursor-managed and
-  manual worktrees, parallel subagents, and cloud agents are not claimed.
-- Linux is the tested platform; macOS and Windows are CI-tested only.
-- Cursor is the only officially supported IDE. Internals are adapter-ready; no
-  other adapter is planned for v0.1.
-- Local only: no network calls, no telemetry, no accounts. CursorFleet does not
-  store prompts, model thinking, responses, file contents, command output,
-  environment variables, emails, or transcript paths.
-
-## Get started
-
-1. [Install from a checkout](getting-started/installation.md)
-2. [Quickstart](getting-started/quickstart.md) — `init`, `doctor`, `status`
-3. [CLI](cli/init.md), [privacy](privacy-and-security.md), and
-   [known limitations](known-limitations.md)
-
-Git is required for `init`. There is no `--allow-non-git` flag.
+<ul class="cf-home-cards">
+<li><a href="getting-started/installation/">Install</a><p>Clone the repo and install with uv. Git is required for <code>init</code>.</p></li>
+<li><a href="privacy-and-security/">Privacy</a><p>No network calls, no telemetry. Prompts and file contents are not stored.</p></li>
+<li><a href="known-limitations/">Known limitations</a><p>Spike status, TUI freeze, and supported surfaces.</p></li>
+</ul>
 
 ## What you get in the checkout
 
@@ -55,6 +37,6 @@ Git is required for `init`. There is no `--allow-non-git` flag.
 | Dashboard | `cursorfleet tui` — under development, observe-only |
 | Scope | One Git repository; runtime state under that repo's Git common directory |
 
-## License
-
 MIT. Source: [github.com/M9nx/cursorfleet](https://github.com/M9nx/cursorfleet).
+
+</div>
