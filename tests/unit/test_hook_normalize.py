@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -112,12 +113,19 @@ def test_failure_hook_marks_error_outcome() -> None:
     assert events[0].outcome is not None
 
 
-def test_paths_are_relative_and_external_marked() -> None:
+def test_paths_are_relative_and_external_marked(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    resolver = PathResolver([str(root)])
     payload = doc_payload("afterFileEdit")
     payload["file_path"] = "/etc/passwd"
-    assert [x.path for x in validated("afterFileEdit", payload)[0].paths] == ["<external>"]
-    payload["file_path"] = "/project/src/auth.ts"
-    assert [x.path for x in validated("afterFileEdit", payload)[0].paths] == ["src/auth.ts"]
+    assert [x.path for x in validated("afterFileEdit", payload, resolver=resolver)[0].paths] == [
+        "<external>"
+    ]
+    payload["file_path"] = str(root / "src" / "auth.ts")
+    assert [x.path for x in validated("afterFileEdit", payload, resolver=resolver)[0].paths] == [
+        "src/auth.ts"
+    ]
 
 
 def test_subagent_identity_is_provisional_and_degrades() -> None:

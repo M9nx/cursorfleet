@@ -266,8 +266,13 @@ def test_planted_projection_row_is_quarantined_and_rebuilt(tmp_path: Path) -> No
 
     import sqlite3  # noqa: PLC0415
 
-    with sqlite3.connect(paths.db) as conn:
+    conn = sqlite3.connect(paths.db)
+    try:
         conn.execute('UPDATE sessions SET state = \'{"not": "a session"}\'')
+        conn.commit()
+    finally:
+        # Windows cannot rename the projection while this handle (or its WAL) is open.
+        conn.close()
     assert append_event(paths, "s1", "main", dump(make_event("s1", 2)), now_ms=2)
     stats = Indexer(paths).sync()
     assert stats.db_recovered

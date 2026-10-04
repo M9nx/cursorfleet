@@ -148,8 +148,13 @@ def test_rebuild_recreates_identical_state(paths: RuntimePaths) -> None:
 def test_planted_session_row_is_quarantined_and_rebuilt(paths: RuntimePaths) -> None:
     put(paths, ev(1, 1, "session.started"))
     Indexer(paths).sync()
-    with sqlite3.connect(paths.db) as conn:
+    conn = sqlite3.connect(paths.db)
+    try:
         conn.execute('UPDATE sessions SET state = \'{"not": "a session"}\'')
+        conn.commit()
+    finally:
+        # Windows cannot rename the projection while this handle (or its WAL) is open.
+        conn.close()
     put(paths, ev(2, 2, tool_name="Write"))
     stats = Indexer(paths).sync()
     assert stats.db_recovered
