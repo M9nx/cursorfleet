@@ -38,6 +38,7 @@ DOC_KEYS = {  # per docs https://cursor.com/docs/hooks (verified when this spike
                       "subagent_model", "is_parallel_worker", "git_branch"},
     "subagentStop": {"subagent_type", "status", "task", "description", "summary", "duration_ms",
                      "message_count", "tool_call_count", "loop_count", "modified_files", "agent_transcript_path"},
+                     # optional observed (not documented, not guaranteed): subagent_id, child_conversation_id
     "beforeShellExecution": {"command", "cwd", "sandbox"},
     "afterShellExecution": {"command", "output", "duration", "sandbox"},
     "afterFileEdit": {"file_path", "edits"},
@@ -150,6 +151,13 @@ PARENT_ONLY_KEYS = frozenset({"parent_conversation_id"})
 # parent-only until row 8 concurrent repetitions verify the relationship.
 LINK_CANDIDATE_KEYS = frozenset({"parent_tool_call_id"})
 HINT_NOTE = "hint only; requires manual classification per docs/empirical-test-plan.md row 8"
+PAIR_SUBAGENT_ID = "subagent_id"
+PAIR_TYPE_ORDER = "type_order"
+ASSOC_PARENT_TOOL = "parent_tool_call_id"
+ASSOC_CHILD_CONV = "child_conversation_id"
+ASSOC_TEMPORAL = "temporal"
+# subagentStop.subagent_id and subagentStop.child_conversation_id are optional,
+# empirically observed fields (one Cursor 3.22.7 sequential run). Not guaranteed.
 
 
 def _dict(x):
@@ -212,6 +220,106 @@ def identity_verdict(buckets, starts, in_win):
     return code, "%s: %s (%s)" % (code, why, HINT_NOTE)
 
 
+def pair_start_stop(starts, stops):
+    """Pair each start with one stop.
+
+    Prefer a matching optional subagent_id on the stop (equal to the start's
+    subagent_id or tool_call_id). Fall back to type plus chronological order
+    only when that id is unavailable on the stop. A stop that carries a
+    non-matching subagent_id is never stolen by type+order.
+    """
+    unmatched = [x for x in stops if _when(x) is not None]
+    windows = []
+    id_collisions = 0
+    for s in starts:
+        sids = _dict(s.get("ids"))
+        t0 = _when(s)
+        st = sids.get("subagent_type")
+        start_sid = _sid(sids.get("subagent_id"))
+        start_call = _sid(sids.get("tool_call_id"))
+        m = None
+        method = None
+        if t0 is not None:
+            id_hits = []
+            for cand in unmatched:
+                csid = _sid(_dict(cand.get("ids")).get("subagent_id"))
+                if csid is None:
+                    continue
+                ct = _when(cand)
+                if ct is not None and ct >= t0 and (
+                    (start_sid is not None and csid == start_sid)
+                    or (start_call is not None and csid == start_call)
+                ):
+                    id_hits.append(cand)
+            if len(id_hits) > 1:
+                id_collisions += 1
+            if id_hits:
+                m = id_hits[0]
+                method = PAIR_SUBAGENT_ID
+            else:
+                for cand in unmatched:
+                    if _sid(_dict(cand.get("ids")).get("subagent_id")) is not None:
+                        continue
+                    if _dict(cand.get("ids")).get("subagent_type") == st and _when(cand) >= t0:
+                        m = cand
+                        method = PAIR_TYPE_ORDER
+                        break
+        if m:
+            unmatched.remove(m)
+        mids = _dict(m.get("ids")) if m else {}
+        windows.append({
+            "subagent_id": sids.get("subagent_id"),
+            "subagent_type": st,
+            "parent": sids.get("parent_conversation_id"),
+            "tool_call_id": start_call,
+            "child_conversation_id": _sid(mids.get("child_conversation_id")),
+            "stop_subagent_id": _sid(mids.get("subagent_id")),
+            "t0": t0,
+            "t1": _when(m) if m else None,
+            "matched_stop": bool(m),
+            "pair_method": method,
+        })
+    return windows, id_collisions
+
+
+def associate_tool(r, windows):
+    """Associate one tool event with at most one window.
+
+    Order: parent_tool_call_id, then child_conversation_id, then temporal.
+    A unique hit at an earlier level wins. Ambiguous (2+) hits at a level are
+    skipped. Temporal matching is never treated as exact.
+    """
+    ids = _dict(r.get("ids"))
+    t = _when(r)
+    ambiguous = None
+    ptc = _sid(ids.get("parent_tool_call_id"))
+    if ptc is not None:
+        hits = [w for w in windows if _sid(w.get("tool_call_id")) == ptc]
+        if len(hits) == 1:
+            return hits[0], ASSOC_PARENT_TOOL, None
+        if len(hits) > 1:
+            ambiguous = "ambiguous_parent_tool_call_id"
+    cid = _sid(ids.get("conversation_id"))
+    if cid is not None:
+        hits = [w for w in windows if w.get("child_conversation_id") == cid]
+        if len(hits) == 1:
+            return hits[0], ASSOC_CHILD_CONV, None
+        if len(hits) > 1 and ambiguous is None:
+            ambiguous = "ambiguous_child_conversation_id"
+    if t is not None:
+        hits = [w for w in windows
+                if w["t0"] is not None and w["t1"] is not None and w["t0"] <= t <= w["t1"]]
+        if len(hits) == 1:
+            return hits[0], ASSOC_TEMPORAL, None
+        if len(hits) > 1 and ambiguous is None:
+            ambiguous = "ambiguous_temporal"
+    return None, None, ambiguous
+
+
+def _is_task(r):
+    return _dict(r.get("ids")).get("tool_name") == "Task"
+
+
 def identity_analysis(recs):
     recs = [r for r in recs if isinstance(r, dict)]
     starts = [r for r in recs if r.get("hook_event_name") == "subagentStart"]
@@ -219,6 +327,8 @@ def identity_analysis(recs):
     tools = [r for r in recs if r.get("hook_event_name") in TOOL_EVENTS]
     parents = {_sid(_dict(r.get("ids")).get("parent_conversation_id")) for r in starts} - {None}
     sub_ids = {_sid(_dict(r.get("ids")).get("subagent_id")) for r in starts} - {None}
+    call_ids = {_sid(_dict(r.get("ids")).get("tool_call_id")) for r in starts} - {None}
+    child_cids = {_sid(_dict(r.get("ids")).get("child_conversation_id")) for r in stops} - {None}
     res = {"subagent_starts": len(starts), "subagent_stops": len(stops), "tool_events": len(tools)}
 
     # (a) classify every identity-like key that appears on tool hooks into the four buckets.
@@ -257,71 +367,87 @@ def identity_analysis(recs):
             rel["conversation_id==subagent_id"] += 1
         elif cid is not None and cid in parents:
             rel["conversation_id==parent_conversation_id"] += 1
+        elif cid is not None and cid in child_cids:
+            rel["conversation_id==subagentStop.child_conversation_id"] += 1
         else:
             rel["conversation_id=other"] += 1
     res["tool_conversation_id_relation"] = dict(rel)
     if rel.get("conversation_id==subagent_id"):
         buckets["direct_current_identity"]["conversation_id==subagent_id"] += rel["conversation_id==subagent_id"]
 
-    # (c) temporal attribution: pair each start with the next unmatched stop of same type.
-    unmatched = [x for x in stops if _when(x) is not None]
-    windows = []
-    for s in starts:
-        sids = _dict(s.get("ids"))
-        t0 = _when(s)
-        st = sids.get("subagent_type")
-        m = None
-        if t0 is not None:
-            for cand in unmatched:
-                if _dict(cand.get("ids")).get("subagent_type") == st and _when(cand) >= t0:
-                    m = cand
-                    break
-        if m:
-            unmatched.remove(m)
-        windows.append({
-            "subagent_id": sids.get("subagent_id"),
-            "subagent_type": st,
-            "parent": sids.get("parent_conversation_id"),
-            "t0": t0,
-            "t1": _when(m) if m else None,
-            "matched_stop": bool(m),
-        })
+    # (c) start/stop pairing, then inner-tool association (never call temporal exact).
+    windows, pairing_id_collisions = pair_start_stop(starts, stops)
     res["windows"] = len(windows)
     res["windows_without_matching_stop"] = sum(1 for w in windows if not w["matched_stop"])
-    note_matching = "subagentStop has no subagent_id per docs; start/stop pairing is by type+order and is approximate"
-    res["pairing_caveat"] = note_matching
+    res["windows_paired_by_subagent_id"] = sum(1 for w in windows if w["pair_method"] == PAIR_SUBAGENT_ID)
+    res["windows_paired_by_type_order"] = sum(1 for w in windows if w["pair_method"] == PAIR_TYPE_ORDER)
+    res["pairing_id_collisions"] = pairing_id_collisions
+    res["pairing_caveat"] = (
+        "subagentStop.subagent_id and child_conversation_id are optional, empirically "
+        "observed fields (not guaranteed). Pair by matching subagent_id when present; "
+        "otherwise type+order (approximate). Temporal inner-tool association is never exact."
+    )
 
-    def inside(r):
-        t = _when(r)
-        cid = _dict(r.get("ids")).get("conversation_id")
-        return t is not None and any(
-            w["t0"] is not None and w["t1"] is not None and w["t0"] <= t <= w["t1"] and w["parent"] == cid
-            for w in windows)
-
-    in_win, same_conv_gen = 0, 0
+    assoc_counts = Counter()
+    ambiguous_links = Counter()
+    in_win, same_conv_gen, parent_cid_in_win = 0, 0, 0
     main_pairs = set()
-    flags = [(r, inside(r)) for r in tools]
-    for r, ins in flags:
-        if not ins:
+    flags = []
+    for r in tools:
+        win, method, amb = associate_tool(r, windows)
+        if amb:
+            ambiguous_links[amb] += 1
+        flags.append((r, win, method))
+        if method:
+            assoc_counts[method] += 1
+        elif not _is_task(r):
+            assoc_counts["unassociated"] += 1
+    for r, win, method in flags:
+        if win is None:
             ids = _dict(r.get("ids"))
             main_pairs.add((_sid(ids.get("conversation_id")), _sid(ids.get("generation_id"))))
-    for r, ins in flags:
-        if ins:
-            ids = _dict(r.get("ids"))
-            in_win += 1
-            if (_sid(ids.get("conversation_id")), _sid(ids.get("generation_id"))) in main_pairs:
-                same_conv_gen += 1
+    for r, win, method in flags:
+        if win is None:
+            continue
+        ids = _dict(r.get("ids"))
+        in_win += 1
+        cid = _sid(ids.get("conversation_id"))
+        if (cid, _sid(ids.get("generation_id"))) in main_pairs:
+            same_conv_gen += 1
+        # Only the parent's conversation_id is parent-only; child conversation is not.
+        if cid is not None and cid == _sid(win.get("parent")):
+            parent_cid_in_win += 1
     res["tool_events_inside_subagent_windows"] = in_win
     res["of_which_same_conversation_and_generation_as_main"] = same_conv_gen
-    if in_win:  # inside a subagent window the hooks carry the parent's conversation_id: parent identity
-        buckets["parent_only_identity"]["conversation_id==parent_conversation_id"] += in_win
+    res["inner_tool_association"] = dict(assoc_counts)
+    res["ambiguous_links"] = dict(ambiguous_links)
+    res["temporal_association_is_not_exact"] = True
+    if parent_cid_in_win:
+        buckets["parent_only_identity"]["conversation_id==parent_conversation_id"] += parent_cid_in_win
 
-    # (d) Task tool linkage
-    task_ids = {_sid(_dict(r.get("ids")).get("tool_use_id")) for r in tools
-                if _dict(r.get("ids")).get("tool_name") == "Task"} - {None}
-    call_ids = {_sid(_dict(r.get("ids")).get("tool_call_id")) for r in starts} - {None}
+    # (d) relationship counters (equalities). None of these is an EXACT verdict.
+    task_ids = {_sid(_dict(r.get("ids")).get("tool_use_id")) for r in tools if _is_task(r)} - {None}
     res["task_tool_use_ids_matching_subagentStart_tool_call_id"] = len(task_ids & call_ids)
-    res["task_tool_events"] = sum(1 for r in tools if _dict(r.get("ids")).get("tool_name") == "Task")
+    res["task_tool_events"] = sum(1 for r in tools if _is_task(r))
+    res["task_tool_use_id_eq_subagentStart_tool_call_id"] = sum(
+        1 for r in tools
+        if _is_task(r) and _sid(_dict(r.get("ids")).get("tool_use_id")) in call_ids
+    )
+    inner = [r for r in tools if not _is_task(r)]
+    res["inner_tool_parent_tool_call_id_eq_subagentStart_tool_call_id"] = sum(
+        1 for r in inner
+        if _sid(_dict(r.get("ids")).get("parent_tool_call_id")) in call_ids
+    )
+    res["subagentStop_subagent_id_eq_subagentStart_subagent_id"] = sum(
+        1 for r in stops if _sid(_dict(r.get("ids")).get("subagent_id")) in sub_ids
+    )
+    res["subagentStop_subagent_id_eq_subagentStart_tool_call_id"] = sum(
+        1 for r in stops if _sid(_dict(r.get("ids")).get("subagent_id")) in call_ids
+    )
+    res["inner_tool_conversation_id_eq_subagentStop_child_conversation_id"] = sum(
+        1 for r in inner
+        if _sid(_dict(r.get("ids")).get("conversation_id")) in child_cids
+    )
 
     for b in BUCKETS:
         res[b] = dict(buckets[b])
@@ -407,19 +533,12 @@ def interleaving(recs):
                 break
             if x[2] != y[2]:
                 overlap_pairs += 1
-    # parallel subagent windows
+    # parallel subagent windows (same pairing as Q1: id when present, else type+order)
     starts = [r for r in recs if r.get("hook_event_name") == "subagentStart"]
     stops = [r for r in recs if r.get("hook_event_name") == "subagentStop"]
     win_overlap = 0
-    wins = []
-    unmatched = list(stops)
-    for s in starts:
-        st = (s.get("ids") or {}).get("subagent_type")
-        m = next((c for c in unmatched if (c.get("ids") or {}).get("subagent_type") == st
-                  and c["start_epoch_ms"] >= s["start_epoch_ms"]), None)
-        if m:
-            unmatched.remove(m)
-            wins.append((s["start_epoch_ms"], m["start_epoch_ms"]))
+    paired, _ = pair_start_stop(starts, stops)
+    wins = [(w["t0"], w["t1"]) for w in paired if w["t0"] is not None and w["t1"] is not None]
     for i, a in enumerate(wins):
         for b in wins[i + 1:]:
             if a[0] < b[1] and b[0] < a[1]:
