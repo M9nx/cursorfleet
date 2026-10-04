@@ -1,11 +1,29 @@
 # ADR 0001: Cursor capabilities and limits that CursorFleet builds on
 
-- Status: provisional (docs-verified; empirical spike NOT yet run)
+- Status: provisional (docs-verified; empirical spike NOT yet run). Remains provisional until the empirical test matrix below is complete.
 - Date: 2026-10-04
 - Deciders: project owner (M9nx)
 - Evidence level: verified-from-docs for section A; unverified for section B
+- Supersedes: none
+- Superseded by: none
+- Related ADRs: 0002 (storage, needs Q4/Q5), 0003 (identity fields, needs Q1/Q2), 0007 (hook list, needs permission-hook reply check), 0008 (enforcement boundaries), 0012 (worktree ownership)
+- Implementation status: Implemented-provisional (the hook, kit and doctor code encode section A; nothing was validated against live Cursor). The Decision's 12-hook list is narrowed by ADR 0007 and is Divergent-from-code until the follow-up lands.
+- Review trigger: the first live spike capture on any surface, or any Cursor release that changes hook payloads or worktree behaviour
+- Release gate: Q1 to Q6 answered (CONFIRMED / REFUTED / PARTIAL with `cursor_version` and surface), section B moved to section A or struck, sanitized real fixtures committed under `tests/fixtures/cursor/`, and the permission-hook reply shape confirmed
 
 CursorFleet is an unofficial tool and is not affiliated with Anysphere.
+
+## Supported surface for v0.1 (stated before the facts)
+
+- The **local Cursor IDE (desktop) is the only supported v0.1 surface**, and only once the
+  spike has run on it.
+- The Cursor CLI (`agent`), the Agents Window, Cursor-managed worktrees, manual
+  worktrees, subagent identity, concurrent and parallel subagents, `ask` behaviour and
+  hook latency inside Cursor are **not** supported and not claimed until the empirical
+  test matrix below passes for each.
+- Cloud agents and cloud subagents are out of scope for v0.1 regardless of the matrix.
+- No README, quickstart, `doctor` message or platform page may claim support for an item
+  that is not marked PASS in the matrix.
 
 ## Read this first: what this ADR is and is not
 
@@ -348,6 +366,49 @@ spawn and IPC overhead. Raw data: `spike/results/latency-linux.json`.
   machine with margin for a stdlib-only hook. This says nothing yet about
   Windows, macOS, antivirus-scanned paths, or Cursor's own overhead.
 
+## Empirical test matrix
+
+Every row is **NOT RUN** today. A surface or behaviour is supported in v0.1 only when its
+row is PASS. Procedure for each row: [`docs/empirical-test-plan.md`](../empirical-test-plan.md)
+and [`spike/README.md`](../../spike/README.md). Raw captures stay under
+`<git-common-dir>/cursorfleet-spike/` (never committed). Reviewed, hand-sanitized subsets go
+to `tests/fixtures/cursor/<surface>/` stamped with `cursor_version`; verdicts go to
+`spike/questions.md` and then into this ADR.
+
+- **IDE (desktop), main agent only.** Pass: every hook registered under ADR 0007 fires with
+  a payload matching section A5 fields; `cursor_version` present. Evidence:
+  `tests/fixtures/cursor/ide/`.
+- **CLI interactive `agent`.** Pass: the list of hooks that fire is recorded per hook name
+  and each fired hook is on a documented-field payload. Fail or partial: README says "CLI
+  not supported". Evidence: `tests/fixtures/cursor/cli/`.
+- **CLI headless `agent -p`.** Pass: same as above, recorded separately. Evidence:
+  `tests/fixtures/cursor/cli-print/`.
+- **Agents Window.** Pass: hooks fire for an agent started from the Agents Window into a
+  worktree, and `workspace_roots` is recorded. Evidence: `tests/fixtures/cursor/agents-window/`.
+- **Cursor-managed worktree (IDE `/worktree`, `/best-of-n`).** Pass: project hooks fire
+  from the worktree, `workspace_roots` and hook cwd are recorded, and the common dir
+  resolves identically to the main checkout (Q4). Evidence:
+  `tests/fixtures/cursor/worktree-managed/`.
+- **Manual worktree (`git worktree add` opened in Cursor).** Pass: same criteria as the
+  managed row. Evidence: `tests/fixtures/cursor/worktree-manual/`.
+- **Subagent identity (Q1).** Pass: tool hooks fired inside a subagent carry a field that
+  names the subagent or its parent, shown by `spike/analyze.py` Q1 verdict. Fail: attribution
+  stays `unknown` for tool events (ADR 0003). Evidence: `tests/fixtures/cursor/subagent/`.
+- **Custom `subagent_type` naming (Q2).** Pass: the value for `.cursor/agents/cf-reviewer.md`
+  is recorded verbatim for `subagentStart` and `subagentStop`. Evidence: same directory.
+- **Concurrency and parallel subagents (Q5).** Pass: two parallel subagents produce intact
+  appended lines with no torn writes in the capture file and overlap is recorded, on each
+  OS tested. Fail: ADR 0002 spool split must change. Evidence: `spike/results/`.
+- **`ask` behaviour.** Pass: the prompt does or does not appear for `ask` on
+  `beforeShellExecution`, `preToolUse` and `subagentStart`, observed once per hook. This
+  is informational for v0.2 and does not affect v0.1 support. Evidence: spike notes.
+- **Permission-hook fail-open reply.** Pass: `{"permission":"allow"}` is accepted for
+  `preToolUse` and `subagentStart` and the action proceeds; behaviour for `{}` and for
+  empty output is recorded. This is a release gate. Evidence: spike notes plus a fixture.
+- **Hook latency inside Cursor (Q6).** Pass: p95 of the in-Cursor delay with the stdlib hook
+  is under 60 ms warm on each OS claimed, measured by `spike/bench_latency.py` and by the
+  capture's own timings. Evidence: `spike/results/latency-<os>.json`.
+
 ## Decision
 
 We record the verified facts in section A as constraints on the v0.1 design:
@@ -359,7 +420,10 @@ We record the verified facts in section A as constraints on the v0.1 design:
   `subagentStop`, `beforeShellExecution`, `afterShellExecution`,
   `afterFileEdit`, `preCompact`, `stop`) and never register the four hooks in
   A11. Every registered hook always exits 0 with the correct empty or allow
-  response.
+  response. **Amended 2026-10-04 by [ADR 0007](0007-narrower-v01-hook-policy.md):** the
+  registered set is narrowed to nine hooks; `beforeShellExecution`,
+  `afterShellExecution` and `afterFileEdit` are no longer registered. The list in this
+  bullet is the original plan and is kept for the record.
 - Drop `user_email`, `transcript_path` and all content fields at the parser
   boundary, before any write.
 - Local sessions only; state that cloud agents and cloud subagents are not seen.
