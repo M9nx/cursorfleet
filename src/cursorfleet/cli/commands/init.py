@@ -28,7 +28,7 @@ def register(app: typer.Typer) -> None:
         ] = False,
         path: Annotated[
             Path,
-            typer.Option("--path", help="Directory inside the git repo (default: current)."),
+            typer.Option("--path", help="Repository root (default: current directory)."),
         ] = Path(),
     ) -> None:
         """Generate subagents, skills, rules, AGENTS.md blocks and observe-only hooks.
@@ -39,7 +39,7 @@ def register(app: typer.Typer) -> None:
         """
         if not cursor:
             raise fail("error: choose a target, e.g. `cursorfleet init --cursor`.", 2)
-        root = workspace_root(path)
+        root = workspace_root(path, command="init")
         plan = installer.build_install_plan(root)
         if plan.conflicts:
             typer.echo(

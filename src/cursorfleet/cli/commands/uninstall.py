@@ -26,7 +26,7 @@ def register(app: typer.Typer) -> None:
             typer.Option("--force", help="Also remove installed items that were modified since."),
         ] = False,
         path: Annotated[
-            Path, typer.Option("--path", help="Directory inside the git repo (default: current).")
+            Path, typer.Option("--path", help="Repository root (default: current directory).")
         ] = Path(),
     ) -> None:
         """Remove the files, AGENTS.md blocks and hook entries CursorFleet installed.
@@ -35,7 +35,7 @@ def register(app: typer.Typer) -> None:
         they still match their recorded hash. Modified items are reported and skipped
         (unless --force). Your own hooks and AGENTS.md content are left as they were.
         """
-        root = workspace_root(path)
+        root = workspace_root(path, command="uninstall")
         plan = installer.build_uninstall_plan(root, force=force)
         if plan.conflicts:
             typer.echo("Cannot uninstall (nothing was written):", err=True)
