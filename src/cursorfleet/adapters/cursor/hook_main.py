@@ -40,6 +40,7 @@ from cursorfleet.state.runtime import (
     has_install_marker,
     resolve_inherited_location,
     runtime_paths,
+    safe_realpath,
     untrusted_reason,
     write_private_file,
 )
@@ -267,7 +268,7 @@ def _ambiguous_workspace_roots(payload: dict[str, object]) -> bool:
         if not isinstance(item, str) or not item:
             continue
         try:
-            real = os.path.normcase(os.path.realpath(item))
+            real = os.path.normcase(safe_realpath(item))
         except (OSError, ValueError):
             return True
         seen.add(real)
@@ -286,7 +287,7 @@ def _is_external_symlink_anchor(raw: str) -> bool:
                 parent = os.path.dirname(current)
                 parent_loc = find_git_location(parent)
                 if parent_loc is not None:
-                    real = os.path.realpath(current)
+                    real = safe_realpath(current)
                     top = parent_loc.top_level
                     prefix = top if top.endswith(os.sep) else top + os.sep
                     real_n, top_n, prefix_n = (
@@ -319,7 +320,7 @@ def _resolve_runtime_location(
     if anchor is None or _is_external_symlink_anchor(anchor):
         return None
     try:
-        real = os.path.realpath(anchor)
+        real = safe_realpath(anchor)
     except (OSError, ValueError):
         return None
     location = resolve_inherited_location(real)

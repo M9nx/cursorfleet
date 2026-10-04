@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from cursorfleet.git.runner import git_common_dir, git_toplevel
-from cursorfleet.state.runtime import find_git_location, runtime_paths
+from cursorfleet.state.runtime import find_git_location, runtime_paths, safe_realpath
 from m2_helpers import git, init_repo
 
 
@@ -58,6 +58,18 @@ def test_symlinked_start_resolves_to_the_real_repo(repo: Path, tmp_path: Path) -
     via = find_git_location(str(link))
     assert via is not None and via.top_level == str(repo)
     assert via.common_dir == git_common_dir(str(link))
+
+
+def test_safe_realpath_survives_getcwd_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = os.path.abspath(str(tmp_path))
+
+    def boom() -> str:
+        raise OSError("no cwd")
+
+    monkeypatch.setattr(os, "getcwd", boom)
+    assert os.path.normcase(safe_realpath(raw)) == os.path.normcase(os.path.normpath(raw))
 
 
 def test_not_a_repo_is_none(tmp_path: Path) -> None:

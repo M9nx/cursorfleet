@@ -95,6 +95,22 @@ def runtime_paths(common_dir: str | os.PathLike[str]) -> RuntimePaths:
     return RuntimePaths(os.path.join(os.fspath(common_dir), RUNTIME_DIRNAME))
 
 
+def safe_realpath(path: str) -> str:
+    """``os.path.realpath`` that still works when ``getcwd`` is unusable.
+
+    Windows ``ntpath.realpath`` can call ``getcwd`` even for a drive-absolute path.
+    If that raises and ``path`` is already absolute, fall back to ``normpath``
+    (no further symlink resolution). Never used for relative paths: those stay
+    rejected so a broken cwd cannot silently mean "somewhere else".
+    """
+    try:
+        return os.path.realpath(path)
+    except OSError:
+        if os.path.isabs(path):
+            return os.path.normpath(path)
+        raise
+
+
 def _read_small(path: str) -> str:
     with open(path, "rb") as handle:
         return handle.read(_MAX_SMALL_READ).decode("utf-8", "replace")
@@ -115,15 +131,13 @@ def _resolve_gitfile(entry: str) -> tuple[str, str] | None:
         return None
     if not os.path.isabs(gitdir):
         gitdir = os.path.join(os.path.dirname(entry), gitdir)
-    gitdir = os.path.realpath(gitdir)
+    gitdir = safe_realpath(gitdir)
     common = gitdir
     commondir_file = os.path.join(gitdir, "commondir")
     if os.path.isfile(commondir_file):
         value = _first_line(_read_small(commondir_file))
         if value:
-            common = os.path.realpath(
-                value if os.path.isabs(value) else os.path.join(gitdir, value)
-            )
+            common = safe_realpath(value if os.path.isabs(value) else os.path.join(gitdir, value))
     return gitdir, common
 
 
@@ -137,12 +151,12 @@ def find_git_location(start: str) -> GitLocation | None:  # noqa: PLR0911
     if not start or not os.path.isabs(start):
         return None  # relative/empty starts would silently mean "the cwd"
     try:
-        current = os.path.realpath(start)
+        current = safe_realpath(start)
         for _ in range(_MAX_WALK):
             entry = os.path.join(current, ".git")
             if os.path.lexists(entry):
                 if os.path.isdir(entry):
-                    real = os.path.realpath(entry)
+                    real = safe_realpath(entry)
                     return GitLocation(current, real, real)
                 resolved = _resolve_gitfile(entry)
                 if resolved is None:
@@ -185,9 +199,9 @@ def has_install_marker(top_level: str) -> bool:
         marker = os.path.join(directory, INSTALL_MARKER_NAME)
         dir_info = os.lstat(directory)
         file_info = os.lstat(marker)
-        real = os.path.realpath(marker)
+        real = safe_realpath(marker)
         real_info = os.lstat(real)
-        root_real = os.path.realpath(top_level)
+        root_real = safe_realpath(top_level)
         prefix = root_real if root_real.endswith(os.sep) else root_real + os.sep
         return (
             not _is_link_like(dir_info)

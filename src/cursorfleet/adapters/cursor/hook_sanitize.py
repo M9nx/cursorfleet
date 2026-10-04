@@ -16,6 +16,8 @@ import math
 import os
 import re
 
+from cursorfleet.state.runtime import safe_realpath
+
 EXTERNAL = "<external>"
 REDACTED = "<redacted>"
 EMAIL = "<email>"
@@ -415,7 +417,7 @@ class PathResolver:
         for root in roots:
             if isinstance(root, str) and root and os.path.isabs(root):
                 try:
-                    real = os.path.realpath(root)
+                    real = safe_realpath(root)
                 except (OSError, ValueError):
                     continue
                 if real not in resolved:
@@ -432,9 +434,9 @@ class PathResolver:
             return EXTERNAL
         try:
             if os.path.isabs(raw):
-                candidate = os.path.realpath(raw)
+                candidate = safe_realpath(raw)
             elif self._roots:
-                candidate = os.path.realpath(os.path.join(self._roots[0], raw))
+                candidate = safe_realpath(os.path.join(self._roots[0], raw))
             else:
                 return EXTERNAL
         except (OSError, ValueError):
