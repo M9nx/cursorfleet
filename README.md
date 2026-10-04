@@ -1,8 +1,19 @@
-# CursorFleet
+<div align="center">
+
+<a href="https://m9nx.github.io/cursorfleet/">
+  <img src="public-docs/assets/logo-circle.png" alt="CursorFleet logo" width="96" />
+</a>
+<br />
+<a href="https://m9nx.github.io/cursorfleet/">
+  <img src="public-docs/assets/cursorfleet-wordmark.png" alt="CursorFleet" width="360" />
+</a>
+<br />
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+
+</div>
 
 A local TUI and workflow harness for Cursor agent teams: see which local agents and worktrees
 are doing what, from passive hooks and read-only git, without sending anything anywhere.
