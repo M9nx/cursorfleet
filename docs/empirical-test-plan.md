@@ -100,21 +100,112 @@ Rows 1 to 14 keep their old numbers, so inbound references in other docs (for ex
 
 ## Rows
 
-### 1. IDE (desktop), main agent only
+### 1. IDE (desktop), main agent: scenario-to-hook matrix
 
-- Procedure: README 1, then a plain agent prompt that edits a file and runs one shell
-  command. Use `python3 spike/analyze.py`.
-- Expected artifacts: `captures.jsonl` with one record per hook that fired; analysis
-  section listing hooks seen and `cursor_versions`; fixtures in `tests/fixtures/cursor/ide/`.
-- Pass: every hook registered under ADR 0007 (`sessionStart`, `sessionEnd`, `preToolUse`,
-  `postToolUse`, `postToolUseFailure`, `subagentStart`, `subagentStop`, `preCompact`,
-  `stop`) that the scenario can trigger fires with the documented fields; `cursor_version`
-  is present.
-- Fail: a hook never fires or fields are missing: record which.
-- Can change: ADR 0001 section A5, the matrix row; ADR 0007 (hook set); `hook_normalize`
-  field assumptions; whether the IDE claim can be made at all.
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
-  reviewer sign-off: -; ADRs affected: 0001, 0007.
+Purpose: replace "every hook fires" with a verdict per scenario and per hook, so a gap names
+the exact trigger and hook. Scenarios 1.1 to 1.17 run first in the IDE; rows 2, 3 and 4
+repeat the subset marked in the surface grid below.
+
+- Procedure: README 1 (scratch repo, kit installed, `.cursor/` committed, workspace
+  trusted). Before each scenario set a label that names it and the repetition:
+  `python3 .cursor/hooks/capture_hook.py --set-label ide-1.4-r1`. Start a fresh agent chat
+  per scenario unless stated. Prompts name the tool to use ("use the shell tool to run ..."),
+  and the Cursor transcript must show that tool call. Repeat each scenario 3 times.
+- Reading the capture (read-only; one line per hook call):
+
+  ```sh
+  jq -c '{e:.hook_event_name,t:.ids.tool_name,u:.ids.tool_use_id,s:.start_epoch_ms,l:.label}' \
+    "$(python3 .cursor/hooks/capture_hook.py --print-capture-dir)/captures.jsonl"
+  ```
+
+- Record for every scenario (from the kit's records, which hold key names and value types,
+  not values): hooks fired by name and count per label; order by `start_epoch_ms`; payload
+  key shapes (`keys`, with nested key names for `tool_input` and `edits`); ids and their
+  equality relations (`conversation_id`, `generation_id`, `session_id`, `tool_use_id`,
+  `tool_call_id`, `subagent_id`, `parent_conversation_id`); enums, booleans and counters
+  (`vals`); `cursor_version`; whether `model`, `model_id` and `model_params` are present;
+  the surface; whether the Hooks output channel logged errors.
+- The kit cannot see values, so it cannot say whether `postToolUse.tool_output` for Shell
+  carries an exit code (ADR 0007 open question). Answer that with a one-off throwaway hook
+  in the scratch repo that writes one boolean per call (is an `exitCode` key present), never
+  the text.
+
+Table 1A: what to expect per scenario. "Expected" is per docs (hooks reference, sections
+for each hook; ADR 0001 A1 to A5). "Do not assume" lists hooks that must not be expected, or
+that the docs are silent on: record them if they appear, and never require them.
+
+| ID | Scenario and trigger | Expected to fire (per docs) | Must NOT be expected | Result |
+| --- | --- | --- | --- | --- |
+| 1.1 | Open a new agent chat | `sessionStart` (fire-and-forget; `session_id` same as `conversation_id` per docs) | `stop` or `sessionEnd` before the first turn ends; `workspaceOpen` (not registered) | OPEN |
+| 1.2 | Successful Shell: run `echo hello` | `preToolUse` (Shell), then `postToolUse` (Shell), same `tool_use_id`; diagnostic set adds `beforeShellExecution`, `afterShellExecution` | `postToolUseFailure` for that `tool_use_id`; `subagentStart` | OPEN |
+| 1.3 | Successful Read: read `README.md` | `preToolUse` (Read), `postToolUse` (Read) | `beforeReadFile` (content hook, never registered; if it appears the scratch `hooks.json` is wrong, stop and fix it) | OPEN |
+| 1.4 | Write or edit: (a) create a file, (b) edit an existing file, (c) delete a file | `preToolUse` and `postToolUse` with a write-class tool (`Write`, and `Delete` for (c); record each `tool_name` verbatim); diagnostic set adds `afterFileEdit` for edits | `postToolUseFailure`; `afterFileEdit` for the delete (docs silent: record) | OPEN |
+| 1.5 | Grep: search the repo for the word `scratch` | `preToolUse` (Grep), `postToolUse` (Grep) | `postToolUseFailure` | OPEN |
+| 1.6 | MCP tool, only if a harmless read-only MCP server is already configured; otherwise record `not reachable` | `preToolUse` and `postToolUse` with `tool_name` of the form `MCP:<tool_name>` (matcher docs) | `beforeMCPExecution`, `afterMCPExecution` (not registered in the kit or the product) | OPEN |
+| 1.7 | Failed tool call: (a) Shell `cat does-not-exist.txt`; (b) Read a missing file | `preToolUse`, then `postToolUseFailure` (`failure_type` `error`) or, if Cursor treats a non-zero exit as a normal Shell result, `postToolUse`; record which, for (a) and (b) separately | both `postToolUse` and `postToolUseFailure` for one `tool_use_id` (docs describe success-only and failure-only); `permission_denied` | OPEN |
+| 1.8 | Tool denied, if reachable harmlessly: (a) decline an approval prompt in the UI; (b) ask `cf-reviewer` (`readonly: true`) to create a file; (c) a scratch `preToolUse` deny, only through row 11 | `postToolUseFailure` with `failure_type` `permission_denied` (docs: runs when a tool "fails, times out, or is denied") | a `postToolUse` for the denied call | OPEN |
+| 1.9 | Subagent, foreground: README 2 prompt (`cf-reviewer`, then `cf-writer`, sequential) | parent: `preToolUse` and `postToolUse` with `Task`; `subagentStart`, tool hooks from inside the subagent, then `subagentStop` with `status` `completed` | `subagent_id` on `subagentStop` (docs list none); subagents having their own `sessionStart` or `sessionEnd` (docs silent) | OPEN |
+| 1.10 | Subagent, background: a scratch agent with `is_background: true` (made by hand in the scratch repo, not under `spike/`), or the UI's background option | same hooks as 1.9; the `Task` call may return before `subagentStop` | `subagentStop` before the parent's `stop`; `postToolUse` (`Task`) after `subagentStop` | OPEN |
+| 1.11 | Subagent aborted (stop it from the UI) or errored (only if it happens naturally) | `subagentStop` with `status` `aborted` or `error` | a `followup_message` effect (the kit never returns one) | OPEN |
+| 1.12 | Manual compaction, if the UI offers a manual control (record its exact name and Cursor version; otherwise `not reachable`) | `preCompact` with `trigger` `manual` | any hook able to block or alter compaction (observational per docs) | OPEN |
+| 1.13 | Auto compaction: grow the context with harmless synthetic filler (repeated Reads of a large generated text file); give up after 10 turns | `preCompact` with `trigger` `auto` and the `context_*` counters | `trigger` `manual`; compaction without a `preCompact` | OPEN |
+| 1.14 | Agent stop, completed: let a normal turn end | `stop` with `status` `completed`, `loop_count` 0 | `loop_count` above 0 (the kit returns `{}`); `sessionEnd` as a consequence of `stop` | OPEN |
+| 1.15 | Agent stop, aborted: press Stop while a harmless `sleep 20` Shell call runs | `stop` with `status` `aborted`; possibly `postToolUseFailure` with `is_interrupt` true | `stop` with `status` `completed` | OPEN |
+| 1.16 | Agent stop, error: only if it happens naturally; never force an error | `stop` with `status` `error` | none | OPEN |
+| 1.17 | Session end: (a) close the chat tab; (b) close the window; (c) a conversation that simply finished | `sessionEnd` with `reason` from `completed`, `aborted`, `error`, `window_close`, `user_close`; record which action gives which value | `sessionEnd` for every conversation (fire-and-forget, the window may be gone); `sessionEnd` after (c) with no close action | OPEN |
+
+Table 1B: extra evidence and refute conditions. The general rule applies to every
+scenario, then the scenario-specific rows add to it.
+
+- **PASS** (per scenario): in 3 of 3 valid repetitions every expected hook fired the stated
+  number of times with the documented keys present and ids related as stated, and no
+  "must NOT be expected" hook appeared.
+- **PARTIAL**: an expected hook fired in 1 or 2 of 3 repetitions, or documented keys are
+  missing (list them).
+- **REFUTED**: an expected hook fired in 0 of 3 valid repetitions, or a hook the docs say
+  must not appear did.
+- Undocumented keys and doc-silent behaviours are recorded, never counted for or against.
+
+| ID | Also record | Specific refute |
+| --- | --- | --- |
+| 1.1 | `session_id` equals `conversation_id`; `is_background_agent`; `composer_mode` | two `sessionStart` for one new chat |
+| 1.2 | `duration` on `postToolUse`; order of `preToolUse` against `beforeShellExecution` (diagnostic); exit-code boolean (manual check above) | `tool_use_id` differs between pre and post |
+| 1.3 | nested key names of `tool_input` (is there a path-like key?) | no `preToolUse` for a Read the transcript shows |
+| 1.4 | nested key names of `tool_input` and `edits` items (ADR 0007: is there a path key to allowlist?); `tool_name` per sub-run; whether (a) gives `afterFileEdit` | no write-class tool event for a file that exists afterwards (then `file.changed` can come only from git) |
+| 1.5 | `tool_name` verbatim | none beyond the general rule |
+| 1.6 | exact `tool_name` form; whether a `matcher` of `MCP:` style works | no `preToolUse` for an MCP call (ADR 0007: omitting the MCP hooks then loses data) |
+| 1.7 | for (a) and (b) which of `postToolUse` and `postToolUseFailure` fired; `failure_type`; `is_interrupt`; `duration` | both fire for one `tool_use_id` |
+| 1.8 | which route produced which hook and `failure_type` | a denied call still yields `postToolUse` |
+| 1.9 | order of `Task` pre, `subagentStart`, inner tool hooks, `subagentStop`, `Task` post; keys on `subagentStart` and `subagentStop`; number of inner tool hooks against `subagentStop.tool_call_count` (a lower count means missed hooks) | no `subagentStart` for a subagent the UI shows |
+| 1.10 | order of `stop`, `subagentStop` and `postToolUse` (`Task`) | none beyond the general rule |
+| 1.11 | `status` on `subagentStop`; whether `stop` also fires | none beyond the general rule |
+| 1.12, 1.13 | `context_usage_percent`, `context_tokens`, `context_window_size`, `message_count`, `messages_to_compact`, `is_first_compaction`; whether `preCompact` precedes the next `preToolUse` | `trigger` does not match how it was triggered |
+| 1.14 | `stop` count per user message (should be 1) | two `stop` for one turn |
+| 1.15 | `stop.status`; whether the in-flight tool gave `postToolUseFailure` | none beyond the general rule |
+| 1.16 | `stop.status` | not applicable if it never happened (record `not reachable`) |
+| 1.17 | `reason`, `duration_ms`, type of `final_status`; time between the UI action and the hook; order against the last `stop` | no `sessionEnd` after (a) in 3 of 3 |
+
+Surface grid (which hooks fired where). Fill each cell with the list of hooks seen, once the
+scenario was run on that surface: rows 1 to 4 supply the cells. All cells OPEN.
+
+| Scenario | IDE (row 1) | CLI interactive (row 2) | `-p` without `--force` (row 3) | `-p --force` (row 3) | Agents Window (row 4) |
+| --- | --- | --- | --- | --- | --- |
+| 1.1 session start | OPEN | OPEN | OPEN | OPEN | OPEN |
+| 1.2 Shell success | OPEN | OPEN | OPEN | OPEN | OPEN |
+| 1.4 write or edit | OPEN | OPEN | OPEN | OPEN | OPEN |
+| 1.7 failed tool | OPEN | OPEN | OPEN | OPEN | OPEN |
+| 1.9 subagent foreground | OPEN | OPEN | OPEN | OPEN | OPEN |
+| 1.14 stop completed | OPEN | OPEN | OPEN | OPEN | OPEN |
+| 1.17 session end | OPEN | OPEN | OPEN | OPEN | OPEN |
+
+- Artifacts: `captures.jsonl` per label; analysis section listing hooks seen and
+  `cursor_versions`; reviewed fixtures in `tests/fixtures/cursor/ide/` (row 16 rules).
+- Can change: ADR 0001 A5 and the matrix row; ADR 0007 (hook set, `file.changed` source,
+  exit-code source); ADR 0003 hook-to-kind mapping; ADR 0010 (`postToolUse` against
+  `postToolUseFailure`, `stop` against `sessionEnd`); `hook_normalize` field assumptions;
+  whether the IDE claim can be made at all.
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
+  reviewer sign-off: -; ADRs affected: 0001, 0003, 0007, 0010.
 
 ### 2. CLI interactive `agent`
 
