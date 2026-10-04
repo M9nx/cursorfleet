@@ -439,15 +439,22 @@ class PathResolver:
                 return EXTERNAL
         except (OSError, ValueError):
             return EXTERNAL
-        norm_candidate = os.path.normcase(candidate)
+        norm_candidate = os.path.normcase(os.path.normpath(candidate))
         for root in self._roots:
-            norm_root = os.path.normcase(root)
+            try:
+                norm_root = os.path.normcase(os.path.normpath(root))
+                common = os.path.commonpath([norm_candidate, norm_root])
+            except (OSError, ValueError):
+                continue
+            if os.path.normcase(os.path.normpath(common)) != norm_root:
+                continue
             if norm_candidate == norm_root:
                 return EXTERNAL  # the root itself is not a file path worth recording
-            prefix = norm_root if norm_root.endswith(os.sep) else norm_root + os.sep
-            if norm_candidate.startswith(prefix):
-                relative = candidate[len(prefix) :].replace(os.sep, "/")
-                return _validated_relative(relative)
+            try:
+                relative = os.path.relpath(candidate, root).replace(os.sep, "/")
+            except ValueError:
+                return EXTERNAL
+            return _validated_relative(relative)
         return EXTERNAL
 
 

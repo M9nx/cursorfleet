@@ -168,6 +168,7 @@ def test_paths_are_workspace_relative(tmp_path: Path) -> None:
     assert resolver.relativize(str(root / "src" / "a.py")) == "src/a.py"
     assert resolver.relativize("src/b.py") == "src/b.py"  # relative -> first root
     assert resolver.relativize(str(root / "new" / "deep" / "c.py")) == "new/deep/c.py"
+    assert resolver.relativize(root.as_posix() + "/src/a.py") == "src/a.py"
 
 
 def test_paths_outside_roots_and_junk_are_external(tmp_path: Path) -> None:
