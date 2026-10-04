@@ -1,0 +1,652 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/M9nx/cursorfleet/main/schemas/event.schema.json",
+  "$defs": {
+    "AgentStatus": {
+      "enum": [
+        "idle",
+        "working",
+        "waiting",
+        "blocked",
+        "done",
+        "error",
+        "unknown"
+      ],
+      "title": "AgentStatus",
+      "type": "string"
+    },
+    "Attribution": {
+      "description": "How confidently the event is tied to ``agent_role``/``agent_instance_id``.\n\nPROVISIONAL (ADR 0001 Q1): tool hooks may not identify the subagent, so most\ntool events may legitimately be ``unknown`` or ``inferred``.",
+      "enum": [
+        "exact",
+        "inferred",
+        "unknown"
+      ],
+      "title": "Attribution",
+      "type": "string"
+    },
+    "EventKind": {
+      "enum": [
+        "session.started",
+        "session.stopped",
+        "status.changed",
+        "tool.started",
+        "tool.completed",
+        "tool.failed",
+        "file.changed",
+        "test.completed",
+        "subagent.started",
+        "subagent.stopped",
+        "context.compacted",
+        "plan.created",
+        "handoff.created",
+        "blocker.raised",
+        "gate.changed",
+        "context.loaded"
+      ],
+      "title": "EventKind",
+      "type": "string"
+    },
+    "GateRef": {
+      "additionalProperties": false,
+      "description": "Display-only gate signal (v0.1 never enforces gates).",
+      "properties": {
+        "name": {
+          "pattern": "^[a-z][a-z0-9_\\-]{0,31}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/GateState"
+        }
+      },
+      "required": [
+        "name",
+        "state"
+      ],
+      "title": "GateRef",
+      "type": "object"
+    },
+    "GateState": {
+      "enum": [
+        "passing",
+        "failing",
+        "stale",
+        "unknown"
+      ],
+      "title": "GateState",
+      "type": "string"
+    },
+    "Metrics": {
+      "additionalProperties": false,
+      "description": "Bounded counters Cursor exposes. Token usage appears only via compaction.",
+      "properties": {
+        "duration_ms": {
+          "anyOf": [
+            {
+              "maximum": 1000000000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "tool_call_count": {
+          "anyOf": [
+            {
+              "maximum": 1000000000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Call Count"
+        },
+        "message_count": {
+          "anyOf": [
+            {
+              "maximum": 1000000000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message Count"
+        },
+        "loop_count": {
+          "anyOf": [
+            {
+              "maximum": 1000000000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Loop Count"
+        },
+        "context_usage_percent": {
+          "anyOf": [
+            {
+              "maximum": 1000,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Usage Percent"
+        },
+        "context_tokens": {
+          "anyOf": [
+            {
+              "maximum": 1000000000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Tokens"
+        },
+        "context_window_size": {
+          "anyOf": [
+            {
+              "maximum": 1000000000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Window Size"
+        }
+      },
+      "title": "Metrics",
+      "type": "object"
+    },
+    "Outcome": {
+      "enum": [
+        "ok",
+        "failed",
+        "timeout",
+        "permission_denied",
+        "interrupted",
+        "unknown"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "PathOp": {
+      "enum": [
+        "created",
+        "modified",
+        "deleted",
+        "unknown"
+      ],
+      "title": "PathOp",
+      "type": "string"
+    },
+    "Producer": {
+      "enum": [
+        "cursor_hook",
+        "work_artifact",
+        "emit_cli",
+        "indexer"
+      ],
+      "title": "Producer",
+      "type": "string"
+    },
+    "Risk": {
+      "description": "Informational label only; v0.1 never acts on it.",
+      "enum": [
+        "none",
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Risk",
+      "type": "string"
+    },
+    "SanitizedCommand": {
+      "additionalProperties": false,
+      "description": "A shell command reduced to non-sensitive facts. Never the raw command line.",
+      "properties": {
+        "argv0": {
+          "description": "Executable basename only (no directory).",
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9._+\\-]{0,63}$",
+          "title": "Argv0",
+          "type": "string"
+        },
+        "subcommand": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9:_\\-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "First non-flag word for known multi-command tools.",
+          "title": "Subcommand"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "maximum": 1024,
+              "minimum": -1024,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exit Code"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "maximum": 1000000000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "display": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Redacted and truncated single-line display string (best effort, not a security guarantee).",
+          "title": "Display"
+        },
+        "display_truncated": {
+          "default": false,
+          "title": "Display Truncated",
+          "type": "boolean"
+        },
+        "command_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{16,64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Keyed (HMAC) hash of the normalized argv for dedupe; key is local.",
+          "title": "Command Hash"
+        }
+      },
+      "required": [
+        "argv0"
+      ],
+      "title": "SanitizedCommand",
+      "type": "object"
+    },
+    "SanitizedPath": {
+      "additionalProperties": false,
+      "description": "A path reduced to a workspace-relative POSIX string, or ``<external>``.",
+      "properties": {
+        "path": {
+          "description": "Workspace-relative, symlink-resolved, '/' separated; '<external>' for anything outside the workspace roots.",
+          "title": "Path",
+          "type": "string"
+        },
+        "op": {
+          "$ref": "#/$defs/PathOp",
+          "default": "unknown"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "SanitizedPath",
+      "type": "object"
+    },
+    "Source": {
+      "description": "How we know an event happened. Never display self_reported as fact.",
+      "enum": [
+        "observed",
+        "self_reported",
+        "derived"
+      ],
+      "title": "Source",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One normalized CursorFleet event (schema_version \"1.0\").",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "ULID-style id (26 Crockford base32 chars).",
+      "maxLength": 26,
+      "minLength": 26,
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "ts": {
+      "description": "Timezone-aware event time.",
+      "format": "date-time",
+      "title": "Ts",
+      "type": "string"
+    },
+    "producer": {
+      "$ref": "#/$defs/Producer"
+    },
+    "producer_version": {
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+\\-]{0,63}$",
+      "title": "Producer Version",
+      "type": "string"
+    },
+    "cursor_version": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+\\-]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Cursor version from the payload; absent for non-hook producers.",
+      "title": "Cursor Version"
+    },
+    "source": {
+      "$ref": "#/$defs/Source",
+      "description": "observed | self_reported | derived. Show it in the UI."
+    },
+    "kind": {
+      "$ref": "#/$defs/EventKind"
+    },
+    "session_id": {
+      "description": "Cursor conversation_id.",
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:\\-]{0,127}$",
+      "title": "Session Id",
+      "type": "string"
+    },
+    "generation_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:\\-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Generation Id"
+    },
+    "agent_role": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:\\-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Roster id when subagent_type maps to it, else the raw subagent_type. PROVISIONAL (ADR 0001 Q2).",
+      "title": "Agent Role"
+    },
+    "agent_instance_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:\\-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Cursor subagent_id. PROVISIONAL (ADR 0001 Q1).",
+      "title": "Agent Instance Id"
+    },
+    "agent_id": {
+      "anyOf": [
+        {
+          "maxLength": 257,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:\\-]{0,127}(#[A-Za-z0-9][A-Za-z0-9._:\\-]{0,127})?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Derived as 'role#instance'; if given it must equal the derived value.",
+      "title": "Agent Id"
+    },
+    "attribution": {
+      "$ref": "#/$defs/Attribution",
+      "default": "unknown"
+    },
+    "risk": {
+      "$ref": "#/$defs/Risk",
+      "default": "none"
+    },
+    "worktree_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:\\-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Worktree Id"
+    },
+    "branch": {
+      "anyOf": [
+        {
+          "maxLength": 255,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Branch"
+    },
+    "commit": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{7,64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Commit"
+    },
+    "issue_ref": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9_.\\-/#]{1,100}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Issue Ref"
+    },
+    "tool_name": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9_:.\\-]{1,128}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Name"
+    },
+    "tool_use_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:\\-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Opaque Cursor tool_use_id (tool hooks) or tool_call_id (subagentStart); pairs started/completed and is the candidate Task-to-subagent link. PROVISIONAL (ADR 0001 section B).",
+      "title": "Tool Use Id"
+    },
+    "hook": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Cursor hook_event_name that produced the event; lets the reducer de-duplicate overlapping hooks (preToolUse vs beforeShellExecution).",
+      "title": "Hook"
+    },
+    "outcome": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Outcome"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "status": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AgentStatus"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "gate": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GateRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "command": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SanitizedCommand"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "paths": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SanitizedPath"
+      },
+      "maxItems": 200,
+      "title": "Paths",
+      "type": "array"
+    },
+    "metrics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Metrics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "event_id",
+    "ts",
+    "producer",
+    "producer_version",
+    "source",
+    "kind",
+    "session_id"
+  ],
+  "title": "CursorFleet event",
+  "type": "object"
+}
