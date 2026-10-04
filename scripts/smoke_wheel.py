@@ -5,9 +5,10 @@ Usage: ``python scripts/smoke_wheel.py <venv-dir>`` where the venv has the wheel
 then runs the console scripts exactly as a user would:
 
 * ``cursorfleet --version``
+* ``cursorfleet init --cursor --dry-run`` (must write nothing)
+* ``cursorfleet init --cursor --yes`` (writes the ``.cursorfleet/config.toml`` marker)
 * ``cursorfleet-hook`` with a synthetic sessionStart payload (reply ``{}``, event spooled)
 * ``cursorfleet-hook`` with a synthetic preToolUse payload (reply ``{"permission":"allow"}``)
-* ``cursorfleet init --cursor --dry-run`` (must write nothing)
 * ``cursorfleet doctor --no-probe-cursor --json`` and ``cursorfleet status --json``
 
 Everything is synthetic; Cursor is never started. Standard library only.
@@ -110,6 +111,27 @@ def main(argv: list[str]) -> int:
         )
         print(f"    {version.stdout.strip()}")
 
+        dry = run(
+            [exe(venv, "cursorfleet"), "init", "--cursor", "--dry-run", "--path", str(repo)], repo
+        )
+        expect(dry.returncode == 0, "init --cursor --dry-run succeeds", dry)
+        expect("hooks.json" in dry.stdout, "the dry run shows the hooks.json change", dry)
+        expect(
+            not (repo / ".cursor").exists() and not (repo / ".cursorfleet").exists(),
+            "the dry run wrote nothing",
+            dry,
+        )
+        # Hooks record nothing until the install marker exists (ADR 0002).
+        installed = run(
+            [exe(venv, "cursorfleet"), "init", "--cursor", "--yes", "--path", str(repo)], repo
+        )
+        expect(installed.returncode == 0, "init --cursor --yes installs the kit", installed)
+        expect(
+            (repo / ".cursorfleet" / "config.toml").is_file(),
+            "init wrote the .cursorfleet/config.toml marker",
+            installed,
+        )
+
         start = run([exe(venv, "cursorfleet-hook")], repo, stdin=payload("sessionStart", repo))
         expect(
             start.returncode == 0 and json.loads(start.stdout) == {},
@@ -129,17 +151,6 @@ def main(argv: list[str]) -> int:
             '"kind":"session.started"' in raw and '"kind":"tool.started"' in raw,
             "spooled events are session.started and tool.started",
             None,
-        )
-
-        dry = run(
-            [exe(venv, "cursorfleet"), "init", "--cursor", "--dry-run", "--path", str(repo)], repo
-        )
-        expect(dry.returncode == 0, "init --cursor --dry-run succeeds", dry)
-        expect("hooks.json" in dry.stdout, "the dry run shows the hooks.json change", dry)
-        expect(
-            not (repo / ".cursor").exists() and not (repo / ".cursorfleet").exists(),
-            "the dry run wrote nothing",
-            dry,
         )
 
         doctor = run(
