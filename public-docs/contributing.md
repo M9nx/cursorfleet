@@ -52,6 +52,23 @@ uv run zensical build --clean
 Preview locally with `uv run zensical serve` (default `localhost:8000`). Do not
 edit the generated `site/` directory.
 
+### Site branding assets
+
+Header logo, favicon, and Open Graph card live under `public-docs/assets/`:
+
+- `cursorfleet-icon-source.png` — master mark (replace this, then regenerate)
+- `logo-circle.png`, `favicon-32.png`, `apple-touch-icon.png` — circular variants
+- `cursorfleet-wordmark.png` — footer watermark only
+- `og-card.png` — default social preview (1200×630)
+
+Theme paths and metadata are in [`zensical.toml`](../zensical.toml) and
+[`public-docs/.meta.yml`](.meta.yml). Head tags (Open Graph, apple-touch-icon)
+are extended in [`public-docs/overrides/main.html`](overrides/main.html).
+
+To regenerate derivatives after updating the source PNG, re-run the image
+pipeline locally (ffmpeg/Pillow) and commit the outputs so CI/Pages stay
+image-tool-free.
+
 ## Conventions
 
 Read `AGENTS.md` in the repository. Highlights:
