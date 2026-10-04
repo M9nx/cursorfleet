@@ -1,9 +1,15 @@
 # ADR 0003: Event model and sanitization allowlist
 
-- Status: provisional (agent identity fields depend on the spike)
+- Status: provisional (agent identity fields depend on the spike; amended 2026-10-04 by the architecture owner)
 - Date: 2026-10-04
 - Deciders: project owner (M9nx)
 - Evidence level: verified-from-docs for payload fields; assumption for identity behavior
+- Supersedes: none
+- Superseded by: none
+- Related ADRs: 0001 (Q1, Q2), 0006 (self-reported events), 0007 (which hooks feed events), 0010 (reducer), 0011 (evidence tiers)
+- Implementation status: Divergent-from-code. Event schema is `"1.0"` not `"0.1"`; `attribution` uses `inferred` for role-only events and the reducer upgrades to the strongest value; `test.completed` exists and feeds TUI gates; command display defaults to ON. Details in "Amendment 2026-10-04" below. The hook to kind mapping for shell and file-edit hooks is narrowed by ADR 0007.
+- Review trigger: Q1 or Q2 answered; the first real fixture is committed; any change to the closed kind list
+- Release gate: schema version `0.1` in code and schemas; `verification.observed` replaces `test.completed`; no gate derived from heuristic events; command display default OFF; attribution never shows an inferred value as exact; privacy and forbidden-field tests green against real fixtures
 
 ## Context
 
@@ -21,7 +27,8 @@ how custom subagent names appear in `subagent_type`.
 
 The Pydantic models in `cursorfleet.events.models` are the source of truth;
 `schemas/event.schema.json` is generated from them. Event `schema_version` is
-`"1.0"`. Readers skip and count events with an unknown version instead of failing.
+`"1.0"` (**amended: it becomes `"0.1"` until the first public release, see below**).
+Readers skip and count events with an unknown version instead of failing.
 
 **Field map**
 
@@ -48,7 +55,8 @@ The Pydantic models in `cursorfleet.events.models` are the source of truth;
 `plan.created`, `handoff.created`, `blocker.raised`, `gate.changed`,
 `context.loaded`. There is no thought, prompt or response kind.
 
-**Hook to kind mapping (PROVISIONAL, finalized in M2):** `sessionStart` and
+**Hook to kind mapping (PROVISIONAL, finalized in M2; the shell and file-edit rows are
+removed by ADR 0007):** `sessionStart` and
 `sessionEnd` to `session.started`/`stopped`; `stop` to `status.changed`;
 `preToolUse` to `tool.started`; `postToolUse` to `tool.completed`;
 `postToolUseFailure` to `tool.failed`; `subagentStart`/`subagentStop` to
@@ -154,3 +162,102 @@ is contract-tested against the models.
   naming), pairing `subagentStop` with `subagentStart` by role then start time versus
   `duration_ms`, `workspace_roots` inside worktrees, and `session_id` equal to
   `conversation_id` for subagents.
+
+## Amendment 2026-10-04 (architecture-owner decisions)
+
+These decisions override the text above where they conflict. The divergences from the code
+are real and are not fixed by this documentation pass; see
+[`../follow-ups.md`](../follow-ups.md).
+
+### 1. Schema version is 0.1 until the first public release
+
+- `schema_version` is `"0.1"` for events, and the same rule applies to every
+  CursorFleet-owned versioned document (config, roster, artifact, and the `status`,
+  `doctor`, `validate` and `replay` output ids, written `cursorfleet.<name>/0.1`).
+- No breaking-change promise exists before the first public release: fields may be added,
+  removed or retyped without upcasters. The project owner decides at release whether the
+  first public version is `1.0` or stays `0.x`, and records a migration note then.
+- Readers still skip and count events with an unknown version. Local spools written with
+  `"1.0"` become `unknown_version` after the change; they are pre-release scratch data and
+  the projection rebuilds.
+- Implementation status: **Divergent-from-code.** `"1.0"` appears in
+  `events/kinds.py:SCHEMA_VERSION`, `events/models.py`, `adapters/cursor/hook_normalize.py`,
+  `config/models.py`, `config/roster.py`, `schemas/*.schema.json`,
+  `templates/cursor/config/config.toml`, `adapters/cursor/kit.py`, and the `/1` ids
+  (`cursorfleet.status/1`, `cursorfleet.artifact/1`, `cursorfleet.doctor/1`,
+  `cursorfleet.validate/1`, `cursorfleet.replay/1`), pinned by
+  `tests/fixtures/status/status.v1.golden.json`.
+
+### 2. Attribution never overstates identity
+
+- `attribution` has three required meanings and no more may be conflated:
+  - `exact`: the event's own payload carries the explicit identifier for the identity
+    claimed (for example `subagent_id`, or `subagent_type` for a role-only claim, with
+    `agent_instance_id` absent meaning the instance is unknown).
+  - `inferred_temporal`: the identity was derived from timing, windows or ordering
+    (for example "this tool call happened while subagent X was open").
+  - `unknown`: nothing ties the event to a specific agent. This is the default.
+- CursorFleet v0.1 **does not emit `inferred_temporal`**: the reducer never attributes
+  unattributed events to a running subagent by timing (ADR 0010). The value is reserved so a
+  future inference cannot be labelled `exact`.
+- An inferred value is never rendered as exact in the TUI, in `status --json` or in
+  `events export`. JSON carries the literal enum value; the TUI shows
+  "inferred (temporal)" in words.
+- Aggregation takes the **weakest** value an agent entry has absorbed and the JSON also
+  exposes per-value counts; it never upgrades an entry to the strongest value seen.
+- Implementation status: **Divergent-from-code.** The enum is `exact | inferred | unknown`
+  (`events/kinds.py:Attribution`). The hook normalizer sets `inferred` when a payload has a
+  `subagent_type` but no `subagent_id` (`hook_normalize.py:_identity`); that is an explicit
+  role, not a temporal inference, so the label is wrong under this rule. The reducer keeps
+  the strongest rank seen (`reducer.py:_touch_agent`, `_ATTRIBUTION_RANK`), so one exact
+  `subagentStart` can make an agent entry read `exact` while its tool events are unknown.
+  `status.json` and the TUI print the enum value. Q1 and Q2 may change all of this.
+
+### 3. `verification.observed` replaces `test.completed`; heuristic events never satisfy gates
+
+- The kind `test.completed` is removed from the closed enum. It is replaced by
+  `verification.observed`: CursorFleet observed a shell tool call that **looks like** a
+  verification step (tests, lint, type check, security scan) and records what happened.
+- Fields on the event: `command` (class and hash only by default, see 4), `outcome`, and a
+  `classification` object with `heuristic` (always `true` in v0.1; the model rejects
+  `false`), `method` (the classifier name and version, for example `argv0-subcommand-v1`),
+  `confidence` (`low | medium`; never `high` for a heuristic) and `class` (`unit_tests`,
+  `integration_tests`, `type_check`, `lint`, `security_checks`, or `unknown_verification`).
+  `source` is `derived`.
+- **Rule R1: heuristic events never satisfy gates.** A gate may only be satisfied by
+  evidence from a deterministic runner bound to a commit SHA, planned for v0.3 (ADR 0011,
+  tier 4). In v0.1 no gate can be PASS or FAIL from CursorFleet data. The UI may list
+  `verification.observed` events as "observed, heuristic" next to a gate named "not
+  evaluated".
+- A heuristic may still colour a display hint such as the VERIFYING lane, provided the lane
+  basis is shown as heuristic (ADR 0010).
+- Reduced by ADR 0007: `afterShellExecution` is no longer registered, so the only source of
+  an exit code is `postToolUse` `tool_output`, whose shape is documented by example only and
+  is unverified. Where the code is absent, the outcome is `unknown`.
+- Implementation status: **Divergent-from-code, and the TUI is in violation of R1.**
+  `hook_normalize.py` emits `test.completed` (around the `is_verify_command` call) with
+  `source=derived`; `events/kinds.py` lists the kind; `reducer.py` has `_on_test`,
+  `last_test` and uses `is_verify_command` for the VERIFYING lane; `status_doc.py` exports
+  `last_test`; **`tui/gates.py` turns `test.completed` and `gate.changed` events into PASS,
+  FAIL and STALE gate states and the Evidence screen lists them.** That is a gate derived
+  from a heuristic and must be fixed in a follow-up. Until then [`../tui.md`](../tui.md)
+  labels gate display as heuristic and non-authoritative. Affected tests include
+  `tests/unit/test_hook_normalize.py`, `tests/unit/test_reducer.py`,
+  `tests/tui/test_tui_gates.py`, `tests/tui/test_tui_app.py` and the status golden file.
+
+### 4. Command display defaults OFF
+
+- By default an event stores only `argv0` (executable basename), `subcommand` (first
+  non-flag word for known multi-command tools), `exit_code`, `duration_ms` and `command_hash`
+  (HMAC-SHA256 with the per-repo key, with a domain label, truncated; for deduplication).
+  No `display` string is stored.
+- The redacted, truncated (at most 200 characters) `display` string is **opt-in**:
+  `[privacy] store_command_display = true`. Redaction stays best-effort and the docs say so.
+  Config can only reduce what is stored from this default, never add content-bearing fields.
+- Without display, classification uses `argv0` and `subcommand` only, which lowers
+  `classification.confidence`.
+- Implementation status: **Divergent-from-code.** `config/models.py` defaults
+  `store_command_display` to `True`, `templates/cursor/config/config.toml` writes `true`, and
+  `docs/privacy.md` and `docs/threat-model.md` describe display storage as the default.
+  `tui/gates.py:classify_command` and `hook_sanitize.is_verify_command` read the display
+  string; they must be reworked to run without it.
