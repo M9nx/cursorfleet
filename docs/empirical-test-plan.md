@@ -483,16 +483,88 @@ repository or a documented manual procedure. It adds no product code and changes
 
 ### 8. Subagent identity inside tool hooks (Q1)
 
-- Procedure: README 2, then read the Q1 verdict from `analyze.py`.
-- Artifacts: `tool_hook_keys_with_agent_identity`, `tool_conversation_id_relation`;
-  fixtures in `tests/fixtures/cursor/subagent/`.
-- Pass: tool hooks inside a subagent carry a field naming the subagent or its parent.
-- Fail: attribution stays `unknown` for tool events and `inferred_temporal` at best
-  (ADR 0003); per-agent cards show lifecycle only.
-- Can change: ADR 0003 attribution, ADR 0010, the TUI per-agent view, the whole per-role
-  story in v0.2.
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
-  reviewer sign-off: -; ADRs affected: 0001 Q1, 0003, 0010.
+Question (ADR 0001 Q1): when a subagent calls a tool, does the hook payload say *which
+subagent instance* made the call? Per docs only `subagentStart` documents `subagent_id`,
+`subagent_type` and `parent_conversation_id`; `subagentStop` documents `subagent_type` but no
+id; tool hooks document no subagent identity.
+
+**Result vocabulary** (the only four allowed; classify per hook name, by hand):
+
+| Outcome | Definition |
+| --- | --- |
+| EXACT | Tool hooks inside the subagent carry an id that uniquely identifies the *current subagent instance*, and that id equals `subagentStart.subagent_id` of exactly one start (so it is linkable to a role and a lifecycle). |
+| ROLE_ONLY | Tool hooks carry only the subagent type or role (for example `subagent_type`). It names the kind of agent, not the instance: two concurrent subagents of one type are indistinguishable. |
+| PARENT_ONLY | Tool hooks carry only the parent's conversation id (for example `parent_conversation_id`, or a `conversation_id` equal to the parent's). It says who spawned the work, not which subagent did it. |
+| UNKNOWN | None of the above, or the evidence is ambiguous or inconsistent (a field present on some hooks or runs only, a value shared where it should be unique, an id that never matches a `subagentStart`). |
+
+Rules for classification:
+
+- **Parent identity is not current-subagent identity.** `parent_conversation_id`, or the
+  parent's `conversation_id` appearing on a tool hook, must never be reported as EXACT. It
+  can at most produce PARENT_ONLY.
+- If several fields are present, the outcome is the strongest level that holds in 100% of
+  valid runs; a field that is present only part of the time counts as absent for that level
+  (so the outcome drops, usually to UNKNOWN) and its rate is recorded.
+- If role and parent are both present but no instance id, the outcome is ROLE_ONLY; note
+  that the parent field was also present.
+- A per-subagent unique value that never equals any `subagentStart.subagent_id` cannot be
+  linked to a start: classify UNKNOWN and note "unlinked discriminator".
+- Do not use the `analyze.py` Q1 verdict string. It prints "LIKELY YES" when any tool-hook
+  key contains `parent_`, which would turn PARENT_ONLY into a pass. Use its raw outputs
+  (`tool_hook_keys_with_agent_identity`, `tool_conversation_id_relation`) and classify by
+  hand with the definitions above. (The kit is not changed in this pass.)
+
+- Procedure: README 2 and 3, extended to three run types, each with its own label.
+  - R8.1: two concurrent subagents of the same type (`cf-writer` twice, README 3), 5 runs.
+  - R8.2: two concurrent subagents of different types (`cf-reviewer` and `cf-writer`), 5 runs.
+  - R8.3: baseline, the same agents one at a time (3 runs), plus one built-in `explore`
+    subagent. Sequential windows are clean, so they give per-instance ground truth.
+- Ground truth must not come from the hook data under test. Use the Cursor task cards (which
+  subagent did what), a distinct target file per subagent, and per-subagent tool-call counts:
+  ask the subagents for clearly different numbers of tool calls (for example 3 and 6). The
+  `tool_call_count` on each `subagentStop` and the count of tool hooks per candidate field
+  value must then agree.
+- For each hook name (`preToolUse`, `postToolUse`, `postToolUseFailure`, and in the
+  diagnostic set `beforeShellExecution`, `afterShellExecution`, `afterFileEdit`) compare the
+  key set and ids of tool hooks inside subagent windows with those of main-agent tool hooks
+  in the same conversation. Record the field(s), their presence rate, whether the value is
+  distinct between the two concurrent subagents, whether it equals a `subagent_id`, and the
+  agreement with the ground-truth counts.
+- Also record, as separate sub-results: whether `subagentStop` carries any instance id equal
+  to a start's `subagent_id` (needed for ADR 0010 pairing preference 1); whether tool-hook
+  `conversation_id` equals the parent's.
+- Pass (hypothesis "tool hooks identify the subagent instance"): EXACT for every tool hook
+  name tested, in all valid runs of R8.1 and R8.2 (zero mismatches against ground truth).
+  PARTIAL: EXACT for some hook names only (list them). Refuted: ROLE_ONLY, PARENT_ONLY or
+  UNKNOWN, with the outcome recorded. Fixtures: `tests/fixtures/cursor/subagent/` (row 16
+  review).
+
+What each outcome means for the ADRs (all consequences are OPEN until a result exists):
+
+| Outcome | ADR 0003 attribution (`exact`, `inferred_temporal`, `unknown`) | ADR 0010 reducer and ADR 0002 |
+| --- | --- | --- |
+| EXACT | tool events may be `exact` with `agent_instance_id` and `agent_id` `role#instance` | the unattributed `main` accumulation shrinks; lanes can rest on observed activity per instance; writer = instance id becomes viable (topology T1, row 7); stop-to-start pairing still needs an id on `subagentStop` |
+| ROLE_ONLY | ADR 0003 section 2 would let a role-only claim be `exact` with `agent_instance_id` absent. This plan flags that wording as an OWNER DECISION: with concurrent same-type subagents a role claim cannot name the instance, so it must never be displayed or exported as instance attribution | tool events attach to a role at most, never to an instance entry; writer stays `main` (topology T2 matters); pairing unchanged (role plus start time against `stop_ts - duration_ms`, preference 2) |
+| PARENT_ONLY | `unknown` for the current subagent; never `exact`. The parent id only groups under the parent session, which `session_id` already does | tool events accumulate on `main` with `attribution: unknown`; `inferred_temporal` stays reserved and is not emitted in v0.1 |
+| UNKNOWN | `unknown` | as PARENT_ONLY; per-agent cards show lifecycle only (`lifecycle_only` basis). Worktree or `workspace_roots` identity could only ever be a heuristic (ADR 0011 tier 2), never `exact`, and only if isolation is honoured |
+
+Result table, per hook name (all cells OPEN; fill with one of the four outcomes):
+
+| Hook | R8.1 same type, concurrent | R8.2 different types, concurrent | R8.3 sequential baseline |
+| --- | --- | --- | --- |
+| `preToolUse` | OPEN | OPEN | OPEN |
+| `postToolUse` | OPEN | OPEN | OPEN |
+| `postToolUseFailure` | OPEN | OPEN | OPEN |
+| diagnostic shell and edit hooks | OPEN | OPEN | OPEN |
+
+- Artifacts: `tool_hook_keys_with_agent_identity`, `tool_conversation_id_relation`, the hand
+  classification table above, the ground-truth comparison; fixtures as above.
+- Can change: ADR 0003 attribution and field map, ADR 0010 (lanes, pairing), ADR 0002 writer
+  naming, ADR 0012 owner mapping, ADR 0011 (what counts as tier 2), the TUI per-agent view,
+  the per-role story in v0.2, and the wording of the ADR 0001 Q1 matrix row, which today
+  says "names the subagent or its parent".
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
+  reviewer sign-off: -; ADRs affected: 0001 Q1, 0002, 0003, 0010, 0011, 0012.
 
 ### 9. Custom `.cursor/agents` `subagent_type` naming (Q2)
 
