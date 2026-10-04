@@ -64,4 +64,38 @@ UNKNOWN     (no telemetry yet)
 </div>
 </div>
 </section>
+
+<section class="cf-home-section cf-home-install" aria-labelledby="cf-home-install-title">
+<div class="cf-home-container cf-home-install__inner">
+<h2 id="cf-home-install-title" class="cf-home-section__title">Get started</h2>
+<p class="cf-home-install__note">Not on PyPI yet — install from a git checkout (Python 3.11+ and git required).</p>
+<div class="cf-home-install__cmd">
+<code id="cf-install-cmd">git clone https://github.com/M9nx/cursorfleet &amp;&amp; cd cursorfleet &amp;&amp; uv tool install .</code>
+<button type="button" class="cf-home-install__copy" data-copy-target="cf-install-cmd">Copy</button>
 </div>
+<p class="cf-home-install__next"><a href="getting-started/quickstart/">Quickstart</a> · <a href="getting-started/installation/">Full installation</a></p>
+</div>
+</section>
+
+<footer class="cf-home-legal">
+<div class="cf-home-container">
+<p>CursorFleet is an unofficial open-source project and is not affiliated with or endorsed by Anysphere or Cursor. &ldquo;Cursor&rdquo; is a trademark of its respective owner. CursorFleet is currently a working name.</p>
+</div>
+</footer>
+</div>
+<script>
+(function () {
+  var btn = document.querySelector(".cf-home-install__copy");
+  if (!btn) return;
+  btn.addEventListener("click", function () {
+    var id = btn.getAttribute("data-copy-target");
+    var el = id && document.getElementById(id);
+    if (!el || !navigator.clipboard) return;
+    var text = el.textContent || "";
+    navigator.clipboard.writeText(text).then(function () {
+      btn.textContent = "Copied";
+      window.setTimeout(function () { btn.textContent = "Copy"; }, 1600);
+    });
+  });
+})();
+</script>
