@@ -1,14 +1,16 @@
 # Architecture (v0.1 Observe)
 
 Statuses: **PROVISIONAL** items depend on Cursor behavior not yet captured live
-([ADR 0001](adr/0001-cursor-capabilities.md), section B).
+([ADR 0001](adr/0001-cursor-capabilities.md), section B). The implementation is
+provisional and unvalidated against live Cursor; where it differs from an accepted ADR the
+difference is marked **Divergence** and listed in [follow-ups](follow-ups.md).
 
 ## Data flow
 
 ```mermaid
 flowchart LR
     subgraph cursor[Cursor, local session]
-        hooks[Passive hooks x12]
+        hooks[Passive hooks x9 decided<br/>x12 in code today]
     end
     hooks -- stdin JSON --> adapter[Cursor hook adapter]
     adapter --> hot[Hot path<br/>stdlib only, fail open<br/>allowlist + sanitizer]
@@ -32,21 +34,28 @@ flowchart LR
 - **Hook adapter** (`cursorfleet.adapters.cursor`): maps Cursor hook names to
   normalized events. `hook_policy.py` holds `ALLOWED_V01_HOOKS`,
   `FORBIDDEN_HOOKS` and the fail-open replies. Adapter-ready: a second IDE would
-  add a sibling package emitting the same events.
+  add a sibling package emitting the same events. **Divergence:**
+  [ADR 0007](adr/0007-narrower-v01-hook-policy.md) decides nine hooks; the code lists twelve.
 - **Hot path**: the `cursorfleet hook <event>` entrypoint (M2). Rules: stdlib
   only, lazy imports, no pydantic/typer/textual even transitively, no network,
   exits 0 with `{}` (`{"permission":"allow"}` for permission hooks) on any error,
   p95 under 60 ms warm. It parses with a per-hook allowlist, sanitizes
   commands and paths, and appends one line to the spool.
 - **Spool**: one JSONL file per session writer, each line `<crc32> <json>`.
-  Torn tails and bad CRCs are skipped and counted. Layout in
+  Torn tails and bad CRCs are skipped and counted. Telemetry is best-effort: an append can
+  fail or be skipped without notice, so the spool can have gaps. Layout in
   [ADR 0002](adr/0002-storage-layout-and-runtime-directory.md) (**PROVISIONAL**
   until Q5 is answered).
 - **Indexer**: the only writer to SQLite. Tails the spool, reduces events into
-  tables, holds an advisory lock so only one indexer runs. Runs inside the TUI
+  tables, holds an advisory lock so only one indexer runs
+  (`indexer.lock`; the full cross-platform lock spec and a separate maintenance lock for
+  purge are in ADR 0002 and not yet implemented). Runs inside the TUI
   or as `cursorfleet index`. Hooks never open the database.
 - **Projection**: SQLite in WAL mode, rebuildable from the spool (`replay`);
-  corruption means delete and rebuild.
+  a corrupt database is quarantined (renamed, not deleted) and rebuilt. Reducer semantics:
+  [ADR 0010](adr/0010-reducer-state-semantics.md). Worktree ids are keyed (HMAC) and segment
+  fingerprints use BLAKE2s per ADR 0002; **Divergence:** the code still uses an unkeyed
+  SHA-256 worktree id and a CRC32 fingerprint.
 - **Git collector**: read-only `git` calls (argv list, timeout, no fetch) for
   branch, HEAD, dirty count, ahead/behind from existing refs and stale detection.
   Its snapshots are projection state, not replayed events. Lets the TUI work with zero telemetry.
