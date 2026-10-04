@@ -8,7 +8,7 @@
 - Superseded by: none
 - Related ADRs: 0003 (event model, `source=self_reported`), 0009 (the kit writes the rule and skill that teach this format), 0011 (evidence tiers), 0010 (how artifact events enter the reducer)
 - Implementation status: **Divergent-from-code.** The code parses a strict YAML subset between `---` fences (`workflow/frontmatter.py`), validates `schema: cursorfleet.artifact/1` (`workflow/artifacts.py`), has no `artifact_id`, `revision` or `digest`, dedupes by path plus a SHA-256 of the frontmatter (`state/artifact_scan.py`), and the templates teach the YAML form. `cursorfleet emit` is not implemented. The self-reported labelling and the model's rejection of observed or self-reported mixups are implemented.
-- Review trigger: evidence that agents ignore the convention, a spike result on rule/skill loading (empirical plan rows 11 and 12), or any proposal to let an artifact count as evidence
+- Review trigger: evidence that agents ignore the convention, a spike result on rule/skill loading (the rule, skill and nested `AGENTS.md` loading test in the empirical test plan), or any proposal to let an artifact count as evidence
 - Release gate: TOML frontmatter parsed with `tomllib`, `artifact_id`, `revision` and digest implemented and tested; templates and docs describe the TOML format; artifact events verified ineligible as gate evidence in code (ADR 0011); `schema` id on the 0.1 versioning rule (ADR 0003)
 
 ## Context
