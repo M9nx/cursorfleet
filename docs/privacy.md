@@ -12,8 +12,12 @@ Per event (see [ADR 0003](adr/0003-event-model-and-sanitization.md) and `schemas
 - Provenance: `producer`, `producer_version`, `cursor_version`, `source`,
   `attribution`, `schema_version`.
 - Classification: `kind`, `risk`, `outcome`, `status`, `tool_name`, gate name and state.
-- Commands: argv0 (basename), subcommand, exit code, duration, a redacted and
-  truncated display string (at most 200 characters, optional), and a keyed hash.
+- Commands: argv0 (basename), subcommand, exit code, duration, a keyed hash, and an
+  optional redacted display string (at most 200 characters). The decision
+  ([ADR 0003](adr/0003-event-model-and-sanitization.md)) is that the display string is
+  **OFF by default**. **Divergence:** the code currently stores it by default
+  (`store_command_display = true`); until fixed, set it to `false` in
+  `.cursorfleet/config.toml`.
 - Paths: workspace-relative, symlink-resolved; anything outside the workspace
   roots is stored as `<external>`.
 - Git context: branch name, commit SHA, optional `issue_ref`.
@@ -32,7 +36,7 @@ Per event (see [ADR 0003](adr/0003-event-model-and-sanitization.md) and `schemas
 - Absolute paths and anything outside the workspace (replaced by `<external>`).
 
 Mechanism: the four content hooks are never registered
-([ADR 0004](adr/0004-no-chain-of-thought-and-hook-policy.md)); the remaining
+([ADR 0004](adr/0004-no-chain-of-thought-and-hook-policy.md), superseded by [ADR 0007](adr/0007-narrower-v01-hook-policy.md)); the remaining
 payloads pass an allowlist parser that drops everything else before a write.
 
 Agent-written Markdown under `.cursorfleet/work/` is the user's own content. Only
@@ -41,6 +45,8 @@ its path and frontmatter facts are indexed; the body is never copied into events
 Exceptions to be aware of: the hook process receives sensitive fields in memory
 before dropping them, and command display strings are redacted on a best-effort basis
 ([threat model](threat-model.md)).
+
+Telemetry is best-effort: events can be dropped, so absence of data proves nothing.
 
 ## Retention
 
