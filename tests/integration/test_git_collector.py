@@ -14,7 +14,7 @@ from cursorfleet.events.ids import worktree_id_for
 from cursorfleet.git import runner
 from cursorfleet.git.collector import collect, count_status_entries
 from cursorfleet.git.worktrees import parse_porcelain
-from m2_helpers import git, init_repo
+from m2_helpers import git, init_repo, same_path
 
 # git_helper commits are dated 2026-01-01T00:00:00Z
 COMMIT_TS = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
@@ -67,7 +67,7 @@ def test_linked_worktrees_are_listed_main_first(repo: Path, tmp_path: Path) -> N
     git(["worktree", "add", "-q", "-b", "other", str(other)], repo)
     snap = collect(str(repo), now=NOW)
     assert [w.is_main for w in snap.worktrees] == [True, False, False]
-    assert snap.worktrees[0].path == str(repo)
+    assert same_path(snap.worktrees[0].path, repo)
     wt = by_branch(snap.worktrees, "feature")
     assert wt.dirty_count == 1 and by_branch(snap.worktrees, "other").dirty_count == 0
     assert wt.worktree_id == worktree_id_for(str(feature.resolve()))

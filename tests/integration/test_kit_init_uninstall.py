@@ -14,7 +14,7 @@ from cursorfleet.config.io import loads_config, loads_roster
 from cursorfleet.workflow.frontmatter import parse_frontmatter
 from kit_helpers import make_repo, snapshot, write
 from m2_helpers import git as m2git
-from m2_helpers import init_repo
+from m2_helpers import init_repo, same_path
 
 runner = CliRunner()
 
@@ -418,10 +418,10 @@ def test_nested_repository_root_installs_only_there(tmp_path: Path) -> None:
     before_inner = snapshot(inner)
     code, out = init(sub, "--yes")
     assert code == 2
-    assert str(inner) in out
+    assert any(spelling in out for spelling in (str(inner), inner.as_posix()))
     assert snapshot(outer) == before_outer
     assert snapshot(inner) == before_inner
-    assert m2git(["rev-parse", "--show-toplevel"], inner).strip() == str(inner)
+    assert same_path(m2git(["rev-parse", "--show-toplevel"], inner).strip(), inner)
 
 
 def test_linked_worktree_root_is_valid_for_init(tmp_path: Path) -> None:

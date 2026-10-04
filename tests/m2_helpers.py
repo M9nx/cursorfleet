@@ -66,6 +66,13 @@ def git(args: list[str], cwd: Path | str, check: bool = True) -> str:
     return done.stdout
 
 
+def same_path(left: str | Path, right: str | Path) -> bool:
+    """True when two paths name the same location (slash and drive spelling ignored)."""
+    return os.path.normcase(os.path.normpath(os.fspath(left))) == os.path.normcase(
+        os.path.normpath(os.fspath(right))
+    )
+
+
 def init_repo(path: Path, *, commit: bool = True) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     git(["init", "-q"], path)

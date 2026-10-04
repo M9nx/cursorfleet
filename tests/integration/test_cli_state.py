@@ -52,12 +52,27 @@ def invoke(*args: str) -> Any:
     return runner.invoke(app, list(args))
 
 
+def _path_spellings(path: Path) -> tuple[str, ...]:
+    """Native, POSIX, and JSON-escaped forms so Windows golden snapshots stay stable."""
+    raw = str(path)
+    posix = path.as_posix()
+    found = {raw, posix, os.path.normpath(raw), raw.replace("\\", "/"), raw.replace("/", "\\")}
+    found.add(raw.replace("\\", "\\\\"))
+    found.add(posix.replace("\\", "\\\\"))
+    return tuple(spelling for spelling in found if spelling)
+
+
 def normalize(text: str, repo: Path, extra: Path | None = None) -> str:
     wt = worktree_id_for(str(repo))
     sha = git(["rev-parse", "HEAD"], repo).strip()
-    out = text.replace(str(repo), "<REPO>").replace(wt, "<WT>").replace(sha, "<SHA>")
+    out = text
+    for spelling in _path_spellings(repo):
+        out = out.replace(spelling, "<REPO>")
+    out = out.replace(wt, "<WT>").replace(sha, "<SHA>")
     if extra is not None:
-        out = out.replace(str(extra), "<WT2>").replace(worktree_id_for(str(extra)), "<WT2-ID>")
+        for spelling in _path_spellings(extra):
+            out = out.replace(spelling, "<WT2>")
+        out = out.replace(worktree_id_for(str(extra)), "<WT2-ID>")
     return out
 
 

@@ -262,7 +262,8 @@ def test_cursor_project_dir_inherits_when_cwd_unusable(
     payload["workspace_roots"] = [str(elsewhere)]
     code, out = run_hook(payload, environ={"CURSOR_PROJECT_DIR": str(nested)})
     assert_fail_open(code, out, "sessionStart")
-    assert spool_events(root)
+    # Do not call paths_of/Path.resolve here: those use os.getcwd on Windows.
+    assert list((root / ".git" / "cursorfleet" / "spool").rglob("*.jsonl"))
     assert not (nested / ".cursorfleet").exists()
     assert not (elsewhere / ".cursorfleet").exists()
 
