@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: every job only reads the repository. No job has a token that can write.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Third-party actions are pinned by major version. Pinning them to full commit SHAs (with
+# Dependabot to bump them) is a documented follow-up: docs/security-review-v0.1.md (SO-02).
+
+jobs:
+  lint:
+    name: lint, format, types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked --all-extras
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src
+
+  test:
+    name: test ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - run: uv sync --locked --all-extras
+      # Benchmark-marked tests are excluded by default (pyproject addopts).
+      - run: uv run pytest --cov=cursorfleet --cov-report=term-missing --cov-report=xml
+      - name: Hook benchmark smoke (records timings, no assertions on speed)
+        if: matrix.python-version == '3.12'
+        continue-on-error: true
+        run: uv run pytest -m benchmark -q
+      - uses: actions/upload-artifact@v4
+        if: matrix.python-version == '3.12'
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  package:
+    name: build and smoke-test the wheel on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Build sdist and wheel
+        run: uv build
+      - name: Verify the distributions (templates, scripts, license, long description)
+        run: uv run --no-project python scripts/check_dist.py dist
+      - name: Install the wheel into a clean venv outside the checkout
+        run: |
+          uv venv "$RUNNER_TEMP/smoke-venv"
+          uv pip install --python "$RUNNER_TEMP/smoke-venv" dist/*.whl
+      - name: Smoke test the installed scripts (synthetic payloads; Cursor is never started)
+        run: uv run --no-project python scripts/smoke_wheel.py "$RUNNER_TEMP/smoke-venv"
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
