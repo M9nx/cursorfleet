@@ -1,0 +1,266 @@
+{
+  "schema": "cursorfleet.status/1",
+  "generated_at": "2026-09-21T14:15:20Z",
+  "repo": {
+    "common_dir": "<REPO>/.git",
+    "runtime_dir": "<REPO>/.git/cursorfleet"
+  },
+  "telemetry": {
+    "state": "hooks",
+    "sessions": 2,
+    "events": 10,
+    "spool_files": 2,
+    "stale_after_s": 900,
+    "source": "projection",
+    "corruption": {
+      "bad_format": 0,
+      "bad_crc": 0,
+      "bad_json": 0,
+      "invalid_event": 0,
+      "unknown_version": 0,
+      "oversize": 0,
+      "misplaced": 0,
+      "torn_tail": 0,
+      "resynced": 0,
+      "total": 0
+    },
+    "notes": []
+  },
+  "limits": {
+    "token_budget": "unknown",
+    "cloud_agents": "not_visible",
+    "enforcement": "none"
+  },
+  "git": {
+    "available": true,
+    "error": null
+  },
+  "sessions": [
+    {
+      "session_id": "doc-example-conversation",
+      "lane": "awaiting_review",
+      "ended": false,
+      "end_outcome": null,
+      "first_ts": "2026-09-21T14:13:20.123000Z",
+      "last_ts": "2026-09-21T14:14:30.123000Z",
+      "started_ts": "2026-09-21T14:13:20.123000Z",
+      "ended_ts": null,
+      "elapsed_s": 70.0,
+      "tool_call_count": 1,
+      "compactions": 1,
+      "event_count": 9,
+      "by_source": {
+        "derived": 1,
+        "observed": 8
+      },
+      "cursor_version": "0.0.0-doc-example",
+      "branch": "feature/auth",
+      "commit": "<SHA>",
+      "worktree_ids": [
+        "<WT>"
+      ],
+      "unpaired_stops": 0,
+      "token_budget": "unknown",
+      "agents": [
+        {
+          "key": "generalPurpose#abc-123",
+          "role": "generalPurpose",
+          "instance_id": "abc-123",
+          "attribution": "exact",
+          "lane": "done",
+          "lane_source": "observed",
+          "lane_basis": "observed_activity",
+          "stale": false,
+          "last_lane": null,
+          "lifecycle": "stopped",
+          "lifecycle_only": false,
+          "first_ts": "2026-09-21T14:13:30.123000Z",
+          "last_ts": "2026-09-21T14:14:20.123000Z",
+          "elapsed_s": 50.0,
+          "tool_call_count": 0,
+          "tool_failures": 0,
+          "compactions": 0,
+          "last_context_usage_percent": null,
+          "files_changed": 0,
+          "reviewed": false,
+          "last_test": null,
+          "stop_report": {
+            "outcome": "ok",
+            "duration_ms": 45000,
+            "tool_call_count": 8,
+            "message_count": 12
+          },
+          "issue_refs": [],
+          "worktree_id": "<WT>",
+          "branch": "feature/auth",
+          "token_budget": "unknown"
+        },
+        {
+          "key": "main",
+          "role": null,
+          "instance_id": null,
+          "attribution": "unknown",
+          "lane": "awaiting_review",
+          "lane_source": "observed",
+          "lane_basis": "observed_activity",
+          "stale": false,
+          "last_lane": null,
+          "lifecycle": "none",
+          "lifecycle_only": false,
+          "first_ts": "2026-09-21T14:13:20.123000Z",
+          "last_ts": "2026-09-21T14:14:30.123000Z",
+          "elapsed_s": 70.0,
+          "tool_call_count": 1,
+          "tool_failures": 0,
+          "compactions": 1,
+          "last_context_usage_percent": 85.0,
+          "files_changed": 1,
+          "reviewed": true,
+          "last_test": {
+            "outcome": "ok",
+            "ts": "2026-09-21T14:13:50.124000Z"
+          },
+          "stop_report": null,
+          "issue_refs": [],
+          "worktree_id": "<WT>",
+          "branch": "main",
+          "token_budget": "unknown"
+        }
+      ],
+      "gates": []
+    },
+    {
+      "session_id": "old-session",
+      "lane": "stale_offline",
+      "ended": false,
+      "end_outcome": null,
+      "first_ts": "2026-09-20T18:13:20.123000Z",
+      "last_ts": "2026-09-20T18:13:20.123000Z",
+      "started_ts": null,
+      "ended_ts": null,
+      "elapsed_s": 0.0,
+      "tool_call_count": 1,
+      "compactions": 0,
+      "event_count": 1,
+      "by_source": {
+        "observed": 1
+      },
+      "cursor_version": "0.0.0-doc-example",
+      "branch": null,
+      "commit": null,
+      "worktree_ids": [
+        "<WT>"
+      ],
+      "unpaired_stops": 0,
+      "token_budget": "unknown",
+      "agents": [
+        {
+          "key": "main",
+          "role": null,
+          "instance_id": null,
+          "attribution": "unknown",
+          "lane": "stale_offline",
+          "lane_source": "observed",
+          "lane_basis": "observed_activity",
+          "stale": true,
+          "last_lane": "working",
+          "lifecycle": "none",
+          "lifecycle_only": false,
+          "first_ts": "2026-09-20T18:13:20.123000Z",
+          "last_ts": "2026-09-20T18:13:20.123000Z",
+          "elapsed_s": 0.0,
+          "tool_call_count": 1,
+          "tool_failures": 0,
+          "compactions": 0,
+          "last_context_usage_percent": null,
+          "files_changed": 0,
+          "reviewed": false,
+          "last_test": null,
+          "stop_report": null,
+          "issue_refs": [],
+          "worktree_id": "<WT>",
+          "branch": null,
+          "token_budget": "unknown"
+        }
+      ],
+      "gates": []
+    }
+  ],
+  "tasks": [],
+  "worktrees": [
+    {
+      "path": "<REPO>",
+      "worktree_id": "<WT>",
+      "is_main": true,
+      "exists": true,
+      "branch": "main",
+      "head": "<SHA>",
+      "detached": false,
+      "bare": false,
+      "locked": false,
+      "prunable": false,
+      "dirty_count": 0,
+      "upstream": false,
+      "ahead": null,
+      "behind": null,
+      "last_commit_ts": "<COMMIT-TS>",
+      "last_event_ts": "2026-09-21T14:14:30.123000Z",
+      "stale": false,
+      "stale_reasons": [],
+      "telemetry": "hooks",
+      "lane": "awaiting_review",
+      "owners": [
+        {
+          "session_id": "doc-example-conversation",
+          "agent_key": "generalPurpose#abc-123",
+          "role": "generalPurpose",
+          "lane": "done",
+          "attribution": "exact"
+        },
+        {
+          "session_id": "doc-example-conversation",
+          "agent_key": "main",
+          "role": null,
+          "lane": "awaiting_review",
+          "attribution": "unknown"
+        },
+        {
+          "session_id": "old-session",
+          "agent_key": "main",
+          "role": null,
+          "lane": "stale_offline",
+          "attribution": "unknown"
+        }
+      ],
+      "tasks": [],
+      "error": null
+    },
+    {
+      "path": "<WT2>",
+      "worktree_id": "<WT2-ID>",
+      "is_main": false,
+      "exists": true,
+      "branch": "idle-branch",
+      "head": "<SHA>",
+      "detached": false,
+      "bare": false,
+      "locked": false,
+      "prunable": false,
+      "dirty_count": 0,
+      "upstream": false,
+      "ahead": null,
+      "behind": null,
+      "last_commit_ts": "<COMMIT-TS>",
+      "last_event_ts": null,
+      "stale": true,
+      "stale_reasons": [
+        "inactive"
+      ],
+      "telemetry": "none",
+      "lane": "unknown",
+      "owners": [],
+      "tasks": [],
+      "error": null
+    }
+  ]
+}
