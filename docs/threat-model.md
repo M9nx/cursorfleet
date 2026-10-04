@@ -68,7 +68,7 @@ dropped field.
 
 - **Never register content hooks** (`afterAgentThought`, `afterAgentResponse`,
   `beforeSubmitPrompt`, `beforeReadFile`): the content never reaches our process
-  ([ADR 0004](adr/0004-no-chain-of-thought-and-hook-policy.md)). Installer test
+  ([ADR 0004](adr/0004-no-chain-of-thought-and-hook-policy.md), superseded by [ADR 0007](adr/0007-narrower-v01-hook-policy.md)). Installer test
   asserts they are never emitted.
 - **Allowlist at the parser boundary.** Only named fields survive; `user_email`,
   `transcript_path` and all content fields are dropped before any write. We never
@@ -99,11 +99,18 @@ dropped field.
 
 ## Residual risks
 
-- Hooks necessarily **receive** sensitive data in memory (`afterShellExecution`
-  output, `afterFileEdit` edits, `subagentStart` task, `modified_files`). A bug
+- Hooks necessarily **receive** sensitive data in memory (`subagentStart` task,
+  `modified_files`, tool inputs and outputs for `preToolUse`/`postToolUse`; and, in the
+  twelve-hook code today, `afterShellExecution` output and `afterFileEdit` edits, which
+  [ADR 0007](adr/0007-narrower-v01-hook-policy.md) removes). A bug
   or crash dump in our process could expose it; we cannot prevent receipt.
 - Redaction of command display strings is heuristic; a novel secret format can
-  be stored. Users can disable display storage (`privacy.store_command_display`).
+  be stored. The decided default is display storage OFF
+  ([ADR 0003](adr/0003-event-model-and-sanitization.md)); **Divergence:** the code defaults
+  it ON, so disable it with `privacy.store_command_display = false` until fixed.
+- Telemetry is best-effort; events can be lost, so the record can be incomplete.
+- Gate tiles are heuristic and non-authoritative; a forged or misclassified command can show
+  a PASS ([ADR 0011](adr/0011-evidence-trust-model.md)).
 - Paths, branch names and `issue_ref` can themselves be sensitive.
 - A same-user agent can forge, delete or tamper with the spool, so `observed`
   means "came from a hook payload", not "tamper-proof". There are no signatures
