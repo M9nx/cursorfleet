@@ -13,6 +13,8 @@ from cursorfleet.cli.main import app
 from cursorfleet.config.io import loads_config, loads_roster
 from cursorfleet.workflow.frontmatter import parse_frontmatter
 from kit_helpers import make_repo, snapshot, write
+from m2_helpers import git as m2git
+from m2_helpers import init_repo
 
 runner = CliRunner()
 
@@ -89,8 +91,14 @@ def test_target_flag_required(repo: Path) -> None:
 def test_not_a_git_repo_is_refused(tmp_path: Path) -> None:
     plain = tmp_path / "plain"
     plain.mkdir()
-    code, out = init(plain, "--yes")
-    assert code == 1 and "git" in out.lower()
+    for extra in (("--yes",), ("--dry-run",)):
+        code, out = init(plain, *extra)
+        assert code == 2
+        assert "git" in out.lower()
+        assert "Nothing was changed" in out
+        assert snapshot(plain) == {}
+    code, out = uninstall(plain, "--yes")
+    assert code == 2 and "Nothing was changed" in out
     assert snapshot(plain) == {}
 
 
@@ -359,3 +367,76 @@ def test_terminal_escapes_in_repo_files_are_neutralized(repo: Path) -> None:
     code, out = init(repo, "--dry-run")
     assert code == 0
     assert "\x1b" not in out and "\x07" not in out
+
+
+# -- repository-root preconditions (ADR 0009; required with runtime inheritance) --------
+
+
+def test_init_from_subdirectory_exits_2_without_writes(repo: Path) -> None:
+    sub = repo / "src"
+    sub.mkdir()
+    before = snapshot(repo)
+    code, out = init(sub, "--yes")
+    assert code == 2
+    assert "Detected repository root:" in out
+    assert str(repo) in out
+    assert "Nothing was changed" in out
+    assert "Planned changes" not in out
+    assert snapshot(repo) == before
+    code, out = init(sub, "--dry-run")
+    assert code == 2 and snapshot(repo) == before
+    code, out = uninstall(sub, "--yes")
+    assert code == 2 and snapshot(repo) == before
+
+
+def test_init_path_subdirectory_from_root_exits_2(repo: Path) -> None:
+    sub = repo / "pkg"
+    sub.mkdir()
+    before = snapshot(repo)
+    code, out = run("init", "--cursor", "--yes", "--path", str(sub))
+    assert code == 2 and "Nothing was changed" in out
+    assert snapshot(repo) == before
+
+
+def test_unknown_allow_non_git_is_usage_error(repo: Path) -> None:
+    before = snapshot(repo)
+    code, _out = init(repo, "--yes", "--allow-non-git")
+    assert code == 2
+    assert snapshot(repo) == before
+
+
+def test_nested_repository_root_installs_only_there(tmp_path: Path) -> None:
+    outer = init_repo(tmp_path / "outer")
+    inner = init_repo(outer / "vendor" / "lib")
+    code, _out = init(inner, "--yes")
+    assert code == 0
+    assert (inner / ".cursorfleet" / "config.toml").is_file()
+    assert not (outer / ".cursorfleet").exists()
+    sub = inner / "src"
+    sub.mkdir()
+    before_outer = snapshot(outer)
+    before_inner = snapshot(inner)
+    code, out = init(sub, "--yes")
+    assert code == 2
+    assert str(inner) in out
+    assert snapshot(outer) == before_outer
+    assert snapshot(inner) == before_inner
+    assert m2git(["rev-parse", "--show-toplevel"], inner).strip() == str(inner)
+
+
+def test_linked_worktree_root_is_valid_for_init(tmp_path: Path) -> None:
+    main = init_repo(tmp_path / "main")
+    linked = tmp_path / "wt-feature"
+    m2git(["worktree", "add", "-q", "-b", "feature", str(linked)], main)
+    linked = linked.resolve()
+    code, _out = init(linked, "--yes")
+    assert code == 0
+    assert (linked / ".cursorfleet" / "config.toml").is_file()
+    assert not (main / ".cursorfleet").exists()
+    assert not (main / ".git" / "cursorfleet").exists()
+    sub = linked / "src"
+    sub.mkdir()
+    before = snapshot(linked)
+    code, out = init(sub, "--yes")
+    assert code == 2 and str(linked) in out
+    assert snapshot(linked) == before
