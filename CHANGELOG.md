@@ -13,12 +13,21 @@ pre-alpha and **has not been verified against a live Cursor session** (the quest
 [ADR 0001](docs/adr/0001-cursor-capabilities.md) are open). v0.1 is *Observe* only: no
 enforcement, no forced approvals, no cloud-agent visibility.
 
+### Added
+
+- **Active run TUI** (default): participant groups/instances, runs list (`u`), sessions archive (`o`).
+- **`cursorfleet run`** start/list/attach/archive; run files under git common dir ([ADR 0013](docs/adr/0013-run-metadata-and-association.md)).
+- **`status --json` `runs[]`** when telemetry exists (`cursorfleet.status/0.2`).
+- Legacy spool **`test.completed`** fixture + migration integration test; sanitized corpus under `tests/fixtures/cursor/`.
+
 ### Process
 
-- **M0a freeze (2026-10-04).** New M2 and TUI implementation is frozen until the live Cursor
-  spike ([spike/README.md](spike/README.md)) has been run and the ADR 0001 questions are
-  answered. The existing M1, M2 and TUI code is *implemented, provisional, unvalidated
-  against live Cursor*. See [docs/status.md](docs/status.md).
+- **M2.5 charter (2026-10-05).** Task-centric local observer work is active; M0a capture kit
+  and product hooks are tracked separately ([docs/evidence/live-validation-index.md](docs/evidence/live-validation-index.md)).
+  Linux Cursor IDE 3.22.7 product-hook smoke confirmed telemetry; Q1/Q2 remain OPEN.
+  See [docs/status.md](docs/status.md).
+- **M0a freeze (2026-10-04, superseded for product direction).** Formal ADR 0001 matrix and
+  spike kit remain for Q1–Q6; see [spike/README.md](spike/README.md).
 
 ### Documentation
 
