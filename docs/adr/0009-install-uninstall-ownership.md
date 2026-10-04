@@ -80,7 +80,6 @@ repository's committed files as untrusted data (TB4), including the lockfile.
   after confirmation (`--yes` skips only the prompt; `--dry-run` writes nothing).
 - Nothing is written without a plan; the lockfile is written last so a crash never records
   files that were not written; writes are atomic.
-- The diff output is escaped for terminal control characters.
 
 ### Round-trip guarantee
 

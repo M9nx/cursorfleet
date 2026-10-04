@@ -58,7 +58,8 @@ CursorFleet separates three capabilities and ships only the first in v0.1.
 ### Fail-open versus `failClosed`
 
 - v0.1: `failClosed` is **never** written. The installer does not emit it, the config model
-  cannot express it, and `doctor` flags it if another source sets it on our entry.
+  cannot express it, and `doctor` lists the `failClosed` setting of every hook entry it
+  finds.
   A crash, timeout, missing binary or malformed payload lets the action proceed.
 - A permission-hook reply that Cursor rejects blocks the action; that is why the reply is
   `{"permission":"allow"}` rather than `{}` for `preToolUse` and `subagentStart`, and why
