@@ -877,21 +877,132 @@ all OPEN):
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0001 Q6, 0007.
 
-### 14. Rule, skill and nested `AGENTS.md` loading
+### 14. Instruction loading, tested with behavioural canaries
 
-- Procedure: not in the README. In the scratch repo run `cursorfleet init --cursor` output
-  or hand-copy files from `templates/cursor/`, then start a fresh agent chat and ask it
-  (with no other context) to state its coordinator instructions, the artifact format and
-  what the nested `.cursorfleet/work/AGENTS.md` says. Repeat in a subagent and in a
-  worktree. Check rule scoping (`globs`) by editing a matching file.
-- Artifacts: written notes of what was loaded and where.
-- Pass: the generated rule, skills and nested `AGENTS.md` are loaded where ADR 0006 and
-  ADR 0012 assume, in the main agent and (separately recorded) in subagents.
-- Fail: instructions do not reach subagents or worktrees: the artifact format and
-  coordinator flow cannot be relied on; revise the kit docs.
-- Can change: ADR 0006 (review trigger), ADR 0012, ADR 0009 (what the kit installs),
-  [kit](kit.md), [governance](governance.md).
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
+Question: do the files `cursorfleet init` writes (the `alwaysApply` core rule, the scoped
+handoff rule, the skills, the subagent files and the nested `AGENTS.md`; see
+[kit](kit.md)) actually reach the agent that needs them: the main agent, subagents, an agent
+in a worktree, and a headless run?
+
+**No self-reporting.** Asking an agent "what do your instructions say?" proves nothing: it
+can guess, echo the question, or hallucinate. Instead each instruction source contains an
+instruction whose compliance leaves a deterministic mark in a file, and a script (throwaway
+tooling outside the repository) inspects the files. The agent is never asked about its
+instructions.
+
+Docs facts used to design the controls (per docs, unverified here): rules must be `.mdc`
+with frontmatter, and a plain `.md` in `.cursor/rules` is ignored; `alwaysApply`, `globs`
+and `description` decide when a rule applies; nested `AGENTS.md` files are supported; skills
+live in `.cursor/skills/<name>/SKILL.md` and `disable-model-invocation` stops automatic use;
+a skill can be scoped with `paths`; subagent frontmatter has `name`, `description`, `model`,
+`readonly` and `is_background`.
+
+Canary design:
+
+- Every source gets its own **synthetic canary token**, generated fresh for each trial by the
+  harness (for example `CF-CANARY-<source>-<random hex>`) and written into the instruction
+  files before the trial. A token cannot be remembered from an earlier chat or guessed.
+- Each source carries one instruction of the form "when you create a file here, put this exact
+  token on the first line", plus a scope. The user prompt for the trial never mentions
+  tokens, rules or instructions; it only asks for ordinary small files.
+- An **instruction-following control** is part of every trial: the user prompt itself asks
+  for a different, prompt-level token (`CF-PROMPT-<hex>`) on every file. A trial in which the
+  prompt token is missing from a created file is discarded, because the agent did not follow
+  instructions at all.
+- A trial is **valid** only if the files were created (check the `afterFileEdit` or
+  `postToolUse` Write records in the capture, not the agent's claim). Otherwise discard
+  and redo, as in the ground rules.
+- Record the model, Cursor version, OS and surface for every trial; behaviour differs across
+  models.
+
+Sources, scopes and what each trial type checks (the oracle is a file search for the token):
+
+| ID | Source | Scope and trigger | Expected per docs | Oracle |
+| --- | --- | --- | --- | --- |
+| S1 | root `AGENTS.md` | all files | applied | token in every created file |
+| S2 | nested `AGENTS.md` in `sub/` | files created under `sub/` | applied under `sub/` only | token in `sub/` files, absent elsewhere |
+| S3 | `.mdc` rule, `alwaysApply: true` | all files | applied | token in every created file |
+| S4 | `.mdc` rule, `globs: sub/**/*.py` | creating a matching file | applied to matching files only | token in `sub/*.py`, absent in `other/*.md` |
+| S5 | `.mdc` rule with only a `description` | a task that matches the description | agent-requested, model decides | token present when the task matches |
+| S6 | skill with a `description`, auto-invocable | a task matching the description | may be used | token in the output file |
+| S7 | custom subagent `cf-canary-rw` | invoked by name | runs its own prompt | token in its output file |
+| S8 | rules in a worktree checkout | agent working in a worktree | same files, from that checkout | as S1 to S4 |
+
+Negative controls (each must show **zero** occurrences; a hit voids that source's result
+until explained):
+
+| ID | Control | Why it must not apply |
+| --- | --- | --- |
+| N1 | `.mdc` rule with `alwaysApply: false`, no `globs`, no `description` | nothing selects it |
+| N2 | plain `.md` file in `.cursor/rules/` | per docs, rules must be `.mdc` |
+| N3 | `globs` rule evaluated on a non-matching file (`other/*.md`) | outside its scope |
+| N4 | skill with `disable-model-invocation: true` and a matching task | not auto-invocable |
+| N5 | skill whose description does not match the task | unrelated |
+| N6 | nested `AGENTS.md` token in a file created outside `sub/` | out of scope |
+| N7 | `readonly: true` subagent told to write a file | read-only; see below |
+
+Trial types (each uses a fresh chat; a trial type may check several sources at once):
+
+- **Type A, files** (S1 to S5, N1 to N3, N6): "Create `notes/a.txt`, `sub/b.py` and
+  `other/c.md`, each with one sentence of text, as the prompt-token rule says." Oracle: token
+  matrix per file.
+- **Type B, skills** (S6, N4, N5): a prompt that matches only the S6 description (for
+  example a made-up "zorblat report" that S6 defines), a second made-up task for N4 and one
+  that matches nothing for N5. Oracle: each skill's token in its own output file.
+- **Type C, subagents** (S7, N7, and subagent inheritance): invoke `cf-canary-rw` by name,
+  then `cf-canary-ro` (`readonly: true`, same body). Oracle: the S7 token file exists;
+  the N7 file does **not** exist and the capture has no `afterFileEdit` for it. Also instruct
+  the parent not to create files itself and discard the trial if the capture shows a Write
+  outside the subagent's start and stop window (single subagent runs only, so the window is
+  unambiguous). Then check the subagent's files for the S1 to S4 tokens: that is the
+  inheritance result (does a subagent see root and nested `AGENTS.md` and rules?).
+- **Type C2, naming**: a subagent whose filename differs from its `name`; invoke it by each
+  and record which works and what `subagent_type` the capture shows (row 9).
+- **Type D, surfaces**: Type A repeated in a Cursor-managed worktree (S8), in a manual
+  worktree, and in headless `agent -p --force` in the scratch repo (rows 3, 5, 6).
+
+Repetitions and thresholds (k = trials with the token, n = valid trials; report k/n for every
+cell and the Wilson 95% interval):
+
+| Surface | Required n |
+| --- | --- |
+| IDE main agent | 10 |
+| IDE subagent, worktree, headless | 5 each |
+
+- RELIABLE: k/n at least 0.9 for the surface with the required n (for n=5, k=5).
+- UNRELIABLE: 0 < k/n < 0.9. The kit must not depend on this source; the ADR 0006 handoff
+  format stays a best-effort claim.
+- NOT LOADED: k = 0 with the required n, while the instruction-following control passed.
+- Negative control hit (any k above 0): the source result is voided until the leak is
+  explained (token echoed from a file the agent read, a wrong scope assumption, or docs
+  refuted).
+- Pass for the row: every source in the table has a recorded status on every surface it is
+  meant to reach, all negative controls show zero, and the status on subagents and worktrees
+  is stated separately from the main agent's.
+- Refute: a source the kit depends on is NOT LOADED or UNRELIABLE where ADR 0006 or ADR 0012
+  assumes it: the artifact format and coordinator flow cannot be relied on; revise the kit
+  docs and the generated files.
+
+Result grid (all OPEN; one status each from RELIABLE, UNRELIABLE, NOT LOADED):
+
+| Source | IDE main | IDE subagent | Worktree | Headless |
+| --- | --- | --- | --- | --- |
+| S1 root `AGENTS.md` | OPEN | OPEN | OPEN | OPEN |
+| S2 nested `AGENTS.md` | OPEN | OPEN | OPEN | OPEN |
+| S3 `alwaysApply` rule | OPEN | OPEN | OPEN | OPEN |
+| S4 `globs` rule | OPEN | OPEN | OPEN | OPEN |
+| S5 description-only rule | OPEN | OPEN | OPEN | OPEN |
+| S6 skill | OPEN | OPEN | OPEN | OPEN |
+| S7 custom subagent | OPEN | - | OPEN | OPEN |
+| N1 to N7 (must be 0) | OPEN | OPEN | OPEN | OPEN |
+
+- Artifacts: the per-trial token matrix (token values replaced by their source ids in
+  notes), the capture proving each file was created, the model and version per trial.
+- Safety: synthetic tokens and files only; scratch repository; no real instructions or
+  secrets in the scratch rule files.
+- Can change: ADR 0006 (review trigger and the strength of the claim), ADR 0012, ADR 0009
+  (what the kit installs), [kit](kit.md), [governance](governance.md).
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0006, 0009, 0012.
 
 ## After the run
