@@ -13,6 +13,24 @@ golden snapshot test (`tests/integration/test_cli_state.py`,
 - **Breaking changes** (removed or retyped keys, changed meaning) bump to `/2`.
 - Key order is fixed; timestamps are UTC ISO-8601 with a trailing `Z`.
 
+## Pending changes (decided, not implemented)
+
+Status: implemented, provisional, unvalidated against live Cursor. These ADR decisions
+change this document after the live spike ([follow-ups](follow-ups.md)); until then the
+text below describes the current code.
+
+- **Schema ids move to `0.1`** until the first public release
+  ([ADR 0003](adr/0003-event-model-and-sanitization.md)): `cursorfleet.status/0.1`, with
+  `/1` reserved for the first stable contract. Consumers should expect the golden snapshot
+  to change once.
+- **Attribution values** become `exact`, `inferred_temporal` and `unknown` (currently
+  `inferred`), and an aggregate shows its weakest member.
+- **`last_test` and `gates[]`** are heuristic and non-authoritative. They will be replaced by
+  `verification.observed` observations carrying a method and confidence; no heuristic value
+  will count as a gate ([ADR 0011](adr/0011-evidence-trust-model.md)).
+- **`reviewed`** is a heuristic flag today ([ADR 0010](adr/0010-reducer-state-semantics.md)).
+- Telemetry is best-effort, so any field can be missing or stale.
+
 ## Honesty rules
 
 - `unknown` is a value, not a gap. A worktree with no hook telemetry has
