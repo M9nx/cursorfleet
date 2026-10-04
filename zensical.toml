@@ -19,6 +19,9 @@ site_name = "CursorFleet"
 site_url = "https://m9nx.github.io/cursorfleet/"
 docs_dir = "public-docs"
 site_dir = "site"
+extra_css = [
+  "stylesheets/footer.css",
+]
 repo_url = "https://github.com/M9nx/cursorfleet"
 copyright = "MIT · CursorFleet by <a href=\"https://github.com/M9nx\" target=\"_blank\" rel=\"noopener\">M9nx</a> · unofficial, not affiliated with Anysphere"
 nav = [
