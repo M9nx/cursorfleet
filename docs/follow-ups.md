@@ -1,9 +1,10 @@
 # Follow-ups: where the docs and ADRs are ahead of the code
 
-Status: **none of this is done.** The 2026-10-04 documentation pass changed no code. Each
-task below closes a divergence between an accepted or provisional ADR and the current
-implementation. Do them **after** the live spike ([`empirical-test-plan.md`](empirical-test-plan.md)),
-in this order. The freeze rules are in [`status.md`](status.md).
+Status: **task 16 is implemented** (runtime inheritance and the init repository-root
+overlap it required). Tasks 1–15 and 17+ are not done. New M2 and TUI work stays
+frozen ([`status.md`](status.md)). Each remaining task closes a divergence between an
+accepted or provisional ADR and the current implementation. Do them **after** the live
+spike ([`empirical-test-plan.md`](empirical-test-plan.md)), in this order.
 
 How to read an entry:
 
@@ -203,6 +204,9 @@ How to read an entry:
 
 ## 15. Repository-root preconditions for `init` and `uninstall` (ADR 0009)
 
+- Implementation status: **partial.** The write-command root check (exit 2, no writes)
+  required by the task 16 owner contract is in `workspace_root`. Remaining: `doctor` /
+  `validate` printing the detected root, and any leftover task-15-only tests.
 - Waits for: nothing technical (row 17 records Cursor behaviour in a non-git folder; the
   write-command contract does not depend on it). Still wait for the freeze to lift.
 - Decided (owner, 2026-10-04, documentation only): `init` and `uninstall` run only at a
@@ -236,6 +240,9 @@ How to read an entry:
 
 ## 16. Runtime inheritance for nested non-Git directories (ADR 0002)
 
+- Implementation status: **implemented** (2026-10-04). Code contract holds in
+  `tests/integration/test_runtime_inheritance.py`. Live row 17b remains **OPEN**;
+  Cursor behaviour is not claimed verified. M2/TUI stay frozen.
 - Waits for: nothing technical (row 17b records Cursor behaviour in a nested non-git
   folder; the hook contract does not depend on it). Still wait for the freeze to lift.
 - Decided (owner, 2026-10-04, documentation only): a non-Git directory nested inside an
@@ -267,13 +274,14 @@ How to read an entry:
   - External symlink, ambiguous multi-root, uninitialized root: no event, fail open.
 - Docs after: remove the Divergence notes in ADR 0002 / 0009 for this amendment.
 - Done when: the ADR 0002 runtime-inheritance gate holds on the cases above.
+  **Done** for the in-repo cases (see Implementation status). Live spike still OPEN.
 
 ## Not follow-ups (decided, nothing to change)
 
 - ADR 0004 text stays as history; ADR 0007 supersedes it.
 - The git-common-dir runtime directory is kept (ADR 0002) unless row 5 or 6 refutes it.
 - No enforcement in v0.1 (ADR 0008).
-- No `--allow-non-git` flag in v0.1 (ADR 0009); implementing the refuse-and-exit-2
-  behaviour is task 15.
-- Nested non-Git **runtime** inheritance is decided (ADR 0002); implementing it is
-  task 16. It does not change `init`.
+- No `--allow-non-git` flag in v0.1 (ADR 0009); the refuse-and-exit-2 write-command
+  check is in place (task 16 overlap). Remaining doctor/validate printing is task 15.
+- Nested non-Git **runtime** inheritance is implemented (ADR 0002, task 16). `init`
+  from an ordinary subdirectory still exits 2.

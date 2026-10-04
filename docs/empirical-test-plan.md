@@ -9,6 +9,7 @@
 
 This is the contract for the live spike. It adds no code. New M2 and TUI work stays frozen
 until it is done ([status](status.md)). It is the author's plan, not an independent audit.
+Human next steps (do not run the spike from an agent): [`spike-prep.md`](spike-prep.md).
 
 ## Ground rules
 
@@ -1270,8 +1271,9 @@ piped to the installed `cursorfleet-hook` in each folder):
 
 For 17b the **hook** expected behaviour is decided (owner, 2026-10-04;
 [ADR 0002](adr/0002-storage-layout-and-runtime-directory.md) runtime-inheritance
-amendment). **Not implemented. Not empirically verified.** `init` is unchanged (part 3):
-`cursorfleet init` from 17b still exits 2 and writes nothing.
+amendment). **Implemented in code** (`test_runtime_inheritance.py`). **Not empirically
+verified.** The result record stays OPEN. `init` from 17b still exits 2 and writes
+nothing.
 
 Expected (runtime, from a hook that reaches the folder via user-level hooks or a copied
 `hooks.json`):
@@ -1300,7 +1302,8 @@ the inherited root; or `init` from 17b writes anything or exits other than 2.
 
 Part 3, `init` and `uninstall` repository-root preconditions (owner decision 2026-10-04;
 [ADR 0009](adr/0009-install-uninstall-ownership.md) amendment; [ADR 0002](adr/0002-storage-layout-and-runtime-directory.md)).
-**Documentation only; not implemented. Describe, do not run `init` in this pass.**
+**Implemented in code** (exit 2, no writes). Live Cursor verdict remains OPEN. Do not treat
+a synthetic CLI run as a Cursor verification.
 
 | Case | Decided contract |
 | --- | --- |
@@ -1312,9 +1315,8 @@ Part 3, `init` and `uninstall` repository-root preconditions (owner decision 202
 `--dry-run` and `--yes` are judged by the same preconditions: a dry run from a non-root is
 exit 2 with no diff. `--path` must itself be a repository root.
 
-**Divergence (today's code, do not treat as the contract):** `workspace_root` walks up to
-the enclosing repository, so `init`/`uninstall` from 17b/17c would write into the parent
-and from 17a exit **1** (`test_not_a_git_repo_is_refused`). Follow-ups task 15.
+The write-command root check is implemented (`workspace_root` exit 2). Follow-ups task 15
+remainder: `doctor`/`validate` still do not print the detected root. Live row 17 stays OPEN.
 
 - Pass: 17a part 2 matches every row of the table (exit 0, right reply, nothing written,
   clear `doctor` message); 17b matches every row of the expected table above; part 3 is

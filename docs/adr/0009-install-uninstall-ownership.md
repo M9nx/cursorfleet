@@ -7,7 +7,7 @@
 - Supersedes: none
 - Superseded by: none
 - Related ADRs: 0007 (the hook set the installer emits), 0008 (no `failClosed`), 0006 (artifact rules and skills it generates), 0002 (runtime data is not removed by uninstall; nested non-Git runtime inheritance), 0005 (name changes touch every owned path)
-- Implementation status: Implemented-provisional for the rules below (`installer.py`, `hooksjson.py`, `blocks.py`, `lock.py`, `fsutil.py`; tests under `tests/integration/test_kit_*` and `tests/security/test_kit_installer_policy.py`). Divergent-from-code with ADR 0007: the installer emits 12 hooks and has no migration that removes the three dropped entries on re-`init`. Not implemented / divergent-from-code with the repository-root amendment of 2026-10-04 (below): `init` and `uninstall` exit 1 outside Git, and silently act on the enclosing repository when run from a subdirectory. Runtime inheritance (ADR 0002) is a separate, also unimplemented, hook contract: `init` must still refuse ordinary subdirectories.
+- Implementation status: Implemented-provisional for the rules below (`installer.py`, `hooksjson.py`, `blocks.py`, `lock.py`, `fsutil.py`; tests under `tests/integration/test_kit_*` and `tests/security/test_kit_installer_policy.py`). Divergent-from-code with ADR 0007: the installer emits 12 hooks and has no migration that removes the three dropped entries on re-`init`. Repository-root write-command preconditions (exit 2, no writes) are implemented as required by the task 16 owner contract; `doctor`/`validate` still do not print the detected root (task 15 remainder). Runtime inheritance (ADR 0002) is implemented in the hook; `init` still refuses ordinary subdirectories.
 - Review trigger: Cursor changes how hooks.json is merged or reloaded; a user reports lost content after `uninstall`; the hook set changes (ADR 0007 follow-up)
 - Release gate: round-trip guarantee (below) passes on fixture repos on all three OSes in CI; a migration for removed hook entries exists; the diff-and-consent flow is the only write path; `init` and `uninstall` enforce the repository-root preconditions of the 2026-10-04 amendment (exit 2, no changes) with the tests listed in follow-ups task 15
 
@@ -115,7 +115,9 @@ tool reports each item and leaves it; it never guesses.
 
 ## Amendment 2026-10-04 (repository-root preconditions for `init` and `uninstall`)
 
-Architecture-owner decision. **Documentation only: nothing below is implemented.** It adds a
+Architecture-owner decision. The write-command root check is implemented in
+`workspace_root` (exit 2, no writes). `doctor`/`validate` still do not print the
+detected root they used (task 15 remainder). Live row 17 remains OPEN. It adds a
 precondition that runs before the consent-and-diff flow above and does not change any
 ownership rule. `init` and `uninstall` write into a repository the user owns, so they must
 never write into a repository the user did not name.
@@ -237,40 +239,25 @@ Nothing was changed. Run:  cd /home/me/proj && cursorfleet init --cursor
 
 ### Implementation status of this amendment
 
-**Not implemented; divergent-from-code** (checked in `cli/commands/init.py`,
-`cli/commands/uninstall.py`, `cli/commands/_common.py:workspace_root` and
-`adapters/cursor/workspace.py:resolve_workspace`):
+**Partly implemented** (`cli/commands/_common.py:workspace_root`, `init.py`, `uninstall.py`):
 
-- Outside Git: `workspace_root` catches `WorkspaceError` and calls `fail(...)` with the default
-  code, so `init` exits **1**, not 2. Nothing is written (the failure is before any plan), and
-  the message says v0.1 needs a git repository, but does not say "nothing was changed" and
-  does not suggest `git init`. Pinned by `test_not_a_git_repo_is_refused`
-  (`tests/integration/test_kit_init_uninstall.py`), which asserts exit 1.
-- Subdirectory: `resolve_workspace` runs `git rev-parse --show-toplevel` from the target and
-  returns the **enclosing** root, so `init` and `uninstall` from a subdirectory (or with
-  `--path <subdirectory>`) install into or remove from the parent repository. The root is shown
-  only as the "Workspace:" header of the plan, and with `--yes` there is no pause. This is the
-  behaviour rule 2 forbids.
-- `--path` help text says "Directory inside the git repo (default: current)".
-- Nested repositories, linked-worktree roots and submodule roots already resolve to their own
-  nearest root through git (rules 3 and 4 hold at the root; only the subdirectory case
-  diverges). No test covers them for `init`.
-- Symlinks resolve via `Path.resolve()` and git's realpath, so the resolution in the symlink
-  rule mostly holds; a link to a subdirectory diverges as above.
-- Bare repository or the `.git` directory: git fails ("this operation must be run in a work
-  tree"), which surfaces as exit 1 with git's message.
-- `doctor` and `validate` already behave as rule 6 (doctor exits 1 outside Git; validate falls
-  back to the given directory) but neither prints the detected root in its text output.
-- Hooks already record nothing outside Git (`tests/integration/test_hook_main.py`,
-  `test_not_a_git_repo_records_nothing`). Nested non-Git inheritance is a hook-only
-  contract (ADR 0002); `init` must not start walking up because of it.
+- Outside Git: exit **2**, nothing written, "Git is required" and "Nothing was changed".
+- Ordinary subdirectory / `--path <subdirectory>`: exit 2, detected root printed, no plan.
+- Nested repository root and linked-worktree root: accepted; a subdirectory of either is
+  exit 2 naming that inner/worktree root.
+- `--path` help text says "Repository root".
+- Unknown `--allow-non-git`: ordinary usage error, exit 2.
+- Bare repository / `.git` directory: exit 2, unreadable-root message.
+- Remaining (task 15): `doctor` and `validate` still do not print the detected root.
+- Hooks record nothing outside Git. Nested non-Git inheritance is a hook-only contract
+  (ADR 0002, implemented); `init` does not walk up.
 
-Tracked as task 15 in [`../follow-ups.md`](../follow-ups.md), with the required tests.
+Live row 17 remains OPEN. Remaining doctor/validate printing is task 15.
 
 ## Amendment 2026-10-04 (init versus runtime for nested directories)
 
-Owner decision. **Documentation only.** Distinguishes write commands from hook runtime so
-they are not collapsed into one walk-up rule.
+Owner decision. Distinguishes write commands from hook runtime so they are not
+collapsed into one walk-up rule. Implemented in code; live row 17b remains OPEN.
 
 - **Init / uninstall:** unchanged from the repository-root amendment above.
   `cursorfleet init` invoked from an ordinary subdirectory still exits **2** and performs
@@ -284,6 +271,6 @@ they are not collapsed into one walk-up rule.
 - Walking up for `init` is forbidden. Walking up for runtime attribution is required when
   the marker is present and the detected root is that enclosing initialized repository.
 
-**Implementation status of this amendment.** Init still diverges as documented above
-(follow-ups task 15). Runtime inheritance diverges as documented in ADR 0002 (follow-ups
-task 16). Neither is implemented by this documentation pass.
+**Implementation status of this amendment.** Init refuses ordinary subdirectories (exit 2,
+no writes). Runtime inheritance is implemented in ADR 0002 (follow-ups task 16). Live
+row 17b remains OPEN. `doctor`/`validate` still do not print the detected root (task 15).

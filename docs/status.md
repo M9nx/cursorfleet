@@ -57,11 +57,11 @@ The architecture-owner decisions of 2026-10-04 (ADRs 0001 to 0012) differ from t
 code in several places: the hook list, schema version, heuristic test events, command
 display default, hashing, locking, artifact format, gate derivation, attribution
 aggregation (the reducer keeps the strongest value; the rule is weakest-wins),
-`init`/`uninstall` repository-root preconditions (decided: exit 2 at a non-root; today the
-commands exit 1 outside Git and silently use the enclosing root), and runtime inheritance
-for a nested non-Git directory (decided: inherit an already initialized enclosing
-repository; today the hook writes to the nearest Git root without a marker check). They
-are listed in [`follow-ups.md`](follow-ups.md) and are **not** fixed yet.
+`init`/`uninstall` repository-root preconditions (exit 2 at a non-root is implemented;
+`doctor`/`validate` still do not print the detected root), and remaining ADR follow-ups
+other than task 16. Runtime inheritance for a nested non-Git directory is implemented
+in code; live row 17b remains OPEN. They are listed in [`follow-ups.md`](follow-ups.md).
+New M2 and TUI implementation stays frozen.
 
 ## Gates before v0.1.0
 

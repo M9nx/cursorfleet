@@ -7,7 +7,7 @@
 - Supersedes: none
 - Superseded by: none
 - Related ADRs: 0001 (Q4, Q5), 0003 (event ids, worktree attribution), 0009 (uninstall leaves runtime data; init refuses ordinary subdirectories), 0010 (replay from spool), 0012 (worktree ownership)
-- Implementation status: Divergent-from-code. Implemented: git-common-dir layout, CRC-per-line spool, quarantine of a corrupt database, an indexer lock; the file-walk finds the nearest `.git` and treats an inner `.git`/gitfile/submodule as a new boundary. Divergent: segment fingerprint is CRC32 not BLAKE2s; `worktree_id` is a bare SHA-256 prefix not an HMAC; no lock for retention/purge; the lock cannot tell contention from an unsupported filesystem; `init`/`uninstall` do not yet enforce the repository-root preconditions (they exit 1 outside Git and silently use the enclosing root from a subdirectory); runtime inheritance is not implemented as specified (no installation-marker check; start selection also uses `workspace_roots`; missing marker or uninitialized root still records and may create a runtime directory). Details in the amendments below and in ADR 0009.
+- Implementation status: Partly implemented. Implemented: git-common-dir layout, CRC-per-line spool, quarantine of a corrupt database, an indexer lock; the file-walk finds the nearest `.git` and treats an inner `.git`/gitfile/submodule as a new boundary; **runtime inheritance** (marker required before any runtime directory or event file; tool cwd else `CURSOR_PROJECT_DIR`; fail-open no-event cases; paths relative to the inherited root). The write-command repository-root check (exit 2, no writes) is implemented as required by the task 16 owner contract; `doctor`/`validate` still do not print the detected root (task 15 remainder). Divergent: segment fingerprint is CRC32 not BLAKE2s; `worktree_id` is a bare SHA-256 prefix not an HMAC; no lock for retention/purge; the lock cannot tell contention from an unsupported filesystem. Details in the amendments below and in ADR 0009. Live row 17b remains OPEN.
 - Review trigger: Q4 or Q5 answered on any OS, or a reproduced torn or interleaved spool line, or a live row 17b result that refutes inheritance
 - Release gate: Q4 and Q5 answered on every OS claimed; BLAKE2s fingerprints, HMAC worktree ids and the maintenance lock implemented, or the claims in this ADR weakened to match the code; runtime inheritance (marker required, fail-open no-event cases, no nested state) implemented or the claims weakened
 
@@ -57,10 +57,10 @@ all worktrees:
   An ordinary subdirectory is refused the same way (print the detected root; never
   silently modify the parent). A genuine nested repository and a linked-worktree
   root are valid roots for install. Full write-command rules are in
-  [ADR 0009](0009-install-uninstall-ownership.md). **Divergence:** today's
-  `init`/`uninstall` exit 1 outside Git and walk up to the enclosing repository
-  from a subdirectory; today's hook records against the nearest Git root without
-  requiring a CursorFleet marker.
+  [ADR 0009](0009-install-uninstall-ownership.md). The hook records only when the
+  detected root already has `.cursorfleet/config.toml`. `init`/`uninstall` require
+  a repository root (exit 2, no writes). Live Cursor behaviour for nested folders
+  (row 17b) remains OPEN.
 - **Committed config** lives in `.cursorfleet/` (`config.toml`, `roster.toml`,
   `work/<task>/`) and is per checkout. No runtime state under `.cursorfleet/`.
 - **Spool.** One directory per session; one file per writer, where writer is
@@ -257,15 +257,16 @@ write commands:
 - `doctor` and `validate` stay read-only and may resolve from a subdirectory; `doctor`
   outside Git exits 1 (a check failed).
 
-**Divergence:** see ADR 0009 "Implementation status of this amendment" and follow-ups
-task 15. A directory with no enclosing Git working tree still records nothing
+Write-command preconditions: see ADR 0009. A directory with no enclosing Git working
+tree still records nothing
 (`tests/integration/test_hook_main.py::test_not_a_git_repo_records_nothing`). Nested
-non-Git directories and the marker / fail-open cases are the next amendment.
+non-Git inheritance is the next amendment (implemented in code; live row 17b OPEN).
 
 ## Amendment 2026-10-04 (runtime inheritance for nested non-Git directories)
 
-Owner decision. **Documentation only: the resolution below is not implemented.** It does
-not change write-command preconditions (those remain repository-root only; see
+Owner decision. Implemented in code (follow-ups task 16). Live Cursor behaviour
+(row 17b) remains OPEN and is not claimed verified. It does not change write-command
+preconditions (those remain repository-root only; see
 [ADR 0009](0009-install-uninstall-ownership.md)). It decides what a hook does when it
 runs from a directory that is not itself a Git repository root.
 
@@ -302,25 +303,23 @@ inherits that enclosing repository for **runtime** event attribution.
 exits 2 and performs no writes ([ADR 0009](0009-install-uninstall-ownership.md)). Runtime
 inheritance does not authorize a nested install.
 
-**Implementation status of this amendment.** **Not implemented; divergent-from-code**
-(checked in `adapters/cursor/hook_main.py:_candidate_starts` / `record`,
-`state/runtime.py:find_git_location`, `adapters/cursor/hook_sanitize.py:PathResolver`):
+**Implementation status of this amendment.** **Implemented in code** (follow-ups task 16;
+`adapters/cursor/hook_main.py:_resolve_runtime_location` / `record`,
+`state/runtime.py:has_install_marker` / `resolve_inherited_location`). Live row 17b
+remains OPEN.
 
-- Start selection: `_candidate_starts` tries `os.getcwd()`, then
-  `payload.workspace_roots[0]`, then `CURSOR_PROJECT_DIR`. The contract is tool cwd when
-  available, otherwise `CURSOR_PROJECT_DIR` only.
-- Nearest Git root: `find_git_location` walks up to the first `.git` and already treats an
-  inner `.git`/gitfile/submodule as a new boundary (matches the boundary; pinned by
-  `tests/integration/test_runtime_resolution.py`).
-- No marker check: `record()` writes to `<git-common-dir>/cursorfleet/` of the first Git
-  location found even when `.cursorfleet/` is absent at that root.
-- Runtime creation: `load_hmac_key` / `ensure_runtime_root` can create the runtime
-  directory and `hmac.key` on first write.
-- Paths: `PathResolver` is given payload `workspace_roots` plus `location.top_level`, not
-  solely the inherited root.
-- Fail-open no-event cases (external symlink, ambiguous multi-root, uninitialized root,
-  missing marker) are not implemented as no-event; the hook records if any start finds a
-  Git root.
+- Start selection: tool cwd (`payload.cwd` when that path lexists, else process cwd),
+  otherwise `CURSOR_PROJECT_DIR`. `workspace_roots` is not a start; two or more distinct
+  realpath roots are ambiguous and fail open.
+- Nearest Git root: `find_git_location` walks up to the first `.git` and treats an inner
+  `.git`/gitfile/submodule as a new boundary. Search does not continue outward.
+- Marker: v0.1 marker is `<repo-root>/.cursorfleet/config.toml`, a regular file after
+  realpath. Symlink/junction-to-elsewhere is refused. The marker is validated before any
+  runtime directory or event file is created.
+- Paths: `PathResolver` is given only the inherited root (`location.top_level`).
+- Fail-open no-event: missing marker, uninitialized inner repository, external symlink,
+  ambiguous multi-root, uninitialized root, and no enclosing Git. Exit 0 with the correct
+  fail-open reply.
 
-Tracked as task 16 in [`../follow-ups.md`](../follow-ups.md). Empirical cases are in
-[empirical-test-plan](../empirical-test-plan.md) row 17, case 17b.
+Empirical cases remain in [empirical-test-plan](../empirical-test-plan.md) row 17, case 17b.
+Tests: `tests/integration/test_runtime_inheritance.py`.
