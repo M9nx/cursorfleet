@@ -36,8 +36,9 @@ from cursorfleet.state.runtime import (
     GitLocation,
     RuntimePaths,
     ensure_runtime_root,
-    find_git_location,
     has_install_marker,
+    is_ambiguous_workspace_roots,
+    is_external_symlink_anchor,
     resolve_inherited_location,
     runtime_paths,
     safe_realpath,
@@ -53,7 +54,6 @@ if TYPE_CHECKING:
 
 MAX_STDIN_BYTES = 8 * 1024 * 1024
 _NO_COMMAND_HOOKS = frozenset({"sessionStart", "sessionEnd", "stop", "afterFileEdit", "preCompact"})
-_MAX_ROOTS = 16
 _MAX_CONFIG_BYTES = 256 * 1024
 _SAFE_HINT_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 _ALLOW = '{"permission":"allow"}'
@@ -259,53 +259,6 @@ def _anchor(payload: dict[str, object], environ: Mapping[str, str]) -> str | Non
     return project if project else None
 
 
-def _ambiguous_workspace_roots(payload: dict[str, object]) -> bool:
-    raw = payload.get("workspace_roots")
-    if not isinstance(raw, list):
-        return False
-    seen: set[str] = set()
-    for item in raw[:_MAX_ROOTS]:
-        if not isinstance(item, str) or not item:
-            continue
-        try:
-            real = os.path.normcase(safe_realpath(item))
-        except (OSError, ValueError):
-            return True
-        seen.add(real)
-        if len(seen) > 1:
-            return True
-    return False
-
-
-def _is_external_symlink_anchor(raw: str) -> bool:
-    """True when a symlink component of ``raw`` escapes the Git root that contains the link."""
-    try:
-        current = raw if os.path.isabs(raw) else os.path.join(os.getcwd(), raw)
-        current = os.path.abspath(current)
-        for _ in range(_MAX_ROOTS * 4):
-            if os.path.islink(current):
-                parent = os.path.dirname(current)
-                parent_loc = find_git_location(parent)
-                if parent_loc is not None:
-                    real = safe_realpath(current)
-                    top = parent_loc.top_level
-                    prefix = top if top.endswith(os.sep) else top + os.sep
-                    real_n, top_n, prefix_n = (
-                        os.path.normcase(real),
-                        os.path.normcase(top),
-                        os.path.normcase(prefix),
-                    )
-                    if real_n != top_n and not real_n.startswith(prefix_n):
-                        return True
-            parent = os.path.dirname(current)
-            if parent == current:
-                break
-            current = parent
-    except OSError:
-        return True
-    return False
-
-
 def _resolve_runtime_location(
     payload: dict[str, object], environ: Mapping[str, str]
 ) -> GitLocation | None:
@@ -314,10 +267,10 @@ def _resolve_runtime_location(
     Validates the install marker before the caller may create a runtime directory.
     Never continues past an inner ``.git`` / gitfile / submodule boundary.
     """
-    if _ambiguous_workspace_roots(payload):
+    if is_ambiguous_workspace_roots(payload.get("workspace_roots")):
         return None
     anchor = _anchor(payload, environ)
-    if anchor is None or _is_external_symlink_anchor(anchor):
+    if anchor is None or is_external_symlink_anchor(anchor):
         return None
     try:
         real = safe_realpath(anchor)

@@ -10,12 +10,16 @@ import typer
 
 from cursorfleet.adapters.cursor.diagnostics import DoctorReport, run_doctor
 from cursorfleet.adapters.cursor.fsutil import safe_text
+from cursorfleet.cli.commands._resolution import render_resolution_text
 
 _LABEL = {"ok": "ok  ", "warn": "WARN", "fail": "FAIL", "info": "info"}
 
 
 def _render(report: DoctorReport) -> str:
     lines: list[str] = []
+    if report.resolution is not None:
+        lines.append(render_resolution_text(report.resolution))
+        lines.append("")
     for check in report.checks:
         lines.append(f"[{_LABEL[check.status]}] {check.id}: {safe_text(check.message)}")
         if check.remediation and check.status in {"warn", "fail"}:

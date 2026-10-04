@@ -23,13 +23,9 @@ from cursorfleet.adapters.cursor.fsutil import UnsafePathError, safe_text
 from cursorfleet.adapters.cursor.hook_policy import FORBIDDEN_HOOKS
 from cursorfleet.adapters.cursor.installer import check_drift, load_inputs, read_lock
 from cursorfleet.adapters.cursor.kit import HOOKS_PATH, LOCK_PATH
-from cursorfleet.adapters.cursor.workspace import (
-    Workspace,
-    WorkspaceError,
-    resolve_workspace,
-)
+from cursorfleet.adapters.cursor.workspace import Workspace
 from cursorfleet.safeexe import find_executable
-from cursorfleet.state.runtime import untrusted_reason
+from cursorfleet.state.runtime import Resolution, inspect_repository, untrusted_reason
 
 Status = Literal["ok", "warn", "fail", "info"]
 HOOK_BINARY = "cursorfleet-hook"
@@ -86,6 +82,7 @@ class DoctorReport:
     hooks: list[HooksSource]
     cursor_version: str | None
     runtime_dir: str | None
+    resolution: Resolution | None = None
 
     @property
     def ok(self) -> bool:
@@ -104,6 +101,7 @@ class DoctorReport:
             "summary": self.counts(),
             "cursor_version": self.cursor_version,
             "runtime_dir": self.runtime_dir,
+            "resolution": None if self.resolution is None else self.resolution.as_dict(),
             "checks": [c.as_dict() for c in self.checks],
             "effective_hooks": [h.as_dict() for h in self.hooks],
         }
@@ -363,17 +361,22 @@ def run_doctor(  # noqa: PLR0912, PLR0913, PLR0915
             )
         )
 
-    # Git and runtime dir
+    # Git and runtime dir (Task 16 file-walk; never writes)
+    resolution = inspect_repository(str(path))
     ws: Workspace | None
-    try:
-        ws = resolve_workspace(path)
+    if resolution.status == "ok" and resolution.top_level and resolution.common_dir:
+        ws = Workspace(root=Path(resolution.top_level), common_dir=Path(resolution.common_dir))
         checks.append(
             Check(
                 "git.repo",
                 "ok",
-                "git repository found",
+                safe_text(resolution.reason),
                 None,
-                {"root": safe_text(str(ws.root)), "common_dir": safe_text(str(ws.common_dir))},
+                {
+                    "root": safe_text(str(ws.root)),
+                    "common_dir": safe_text(str(ws.common_dir)),
+                    "boundary": resolution.boundary,
+                },
             )
         )
         checks.append(
@@ -386,15 +389,16 @@ def run_doctor(  # noqa: PLR0912, PLR0913, PLR0915
             )
         )
         checks.append(_check_runtime_permissions(ws.runtime_dir))
-    except WorkspaceError as exc:
+    else:
         ws = None
         checks.append(
             Check(
                 "git.repo",
                 "fail",
-                safe_text(str(exc)),
+                safe_text(resolution.reason),
                 "Run inside a git repository (v0.1 requires git; hooks record nothing "
                 "outside one), or pass --path.",
+                {"boundary": resolution.boundary},
             )
         )
     root = ws.root if ws else path
@@ -539,4 +543,5 @@ def run_doctor(  # noqa: PLR0912, PLR0913, PLR0915
         hooks=sources,
         cursor_version=version,
         runtime_dir=safe_text(str(ws.runtime_dir)) if ws else None,
+        resolution=resolution,
     )

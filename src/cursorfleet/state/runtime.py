@@ -228,6 +228,343 @@ def resolve_inherited_location(start: str) -> GitLocation | None:
     return location
 
 
+BOUNDARY_REPOSITORY_ROOT = "repository-root"
+BOUNDARY_ORDINARY_DESCENDANT = "ordinary-descendant"
+BOUNDARY_LINKED_WORKTREE = "linked-worktree"
+BOUNDARY_NESTED_REPOSITORY = "nested-repository"
+BOUNDARY_SUBMODULE = "submodule"
+BOUNDARY_NON_GIT = "non-git"
+BOUNDARY_EXTERNAL_SYMLINK = "external-symlink"
+BOUNDARY_AMBIGUOUS_MULTI_ROOT = "ambiguous-multi-root"
+_MAX_ROOTS = 16
+
+
+def posix_abs_path(path: str | None) -> str | None:
+    """Absolute path with POSIX separators for JSON and matching text output."""
+    if path is None:
+        return None
+    return os.path.normpath(path).replace("\\", "/")
+
+
+def _same_path(left: str, right: str) -> bool:
+    return os.path.normcase(os.path.normpath(left)) == os.path.normcase(os.path.normpath(right))
+
+
+def is_ambiguous_workspace_roots(raw: object) -> bool:
+    """True when ``workspace_roots`` names two or more distinct realpath roots."""
+    if not isinstance(raw, list):
+        return False
+    seen: set[str] = set()
+    for item in raw[:_MAX_ROOTS]:
+        if not isinstance(item, str) or not item:
+            continue
+        try:
+            real = os.path.normcase(safe_realpath(item))
+        except (OSError, ValueError):
+            return True
+        seen.add(real)
+        if len(seen) > 1:
+            return True
+    return False
+
+
+def is_external_symlink_anchor(raw: str) -> bool:
+    """True when a symlink component of ``raw`` escapes the Git root that contains the link."""
+    try:
+        current = raw if os.path.isabs(raw) else os.path.join(os.getcwd(), raw)
+        current = os.path.abspath(current)
+        for _ in range(_MAX_ROOTS * 4):
+            if os.path.islink(current):
+                parent = os.path.dirname(current)
+                parent_loc = find_git_location(parent)
+                if parent_loc is not None:
+                    real = safe_realpath(current)
+                    top = parent_loc.top_level
+                    prefix = top if top.endswith(os.sep) else top + os.sep
+                    real_n, top_n, prefix_n = (
+                        os.path.normcase(real),
+                        os.path.normcase(top),
+                        os.path.normcase(prefix),
+                    )
+                    if real_n != top_n and not real_n.startswith(prefix_n):
+                        return True
+            parent = os.path.dirname(current)
+            if parent == current:
+                break
+            current = parent
+    except OSError:
+        return True
+    return False
+
+
+def _child_git_roots(start: str) -> list[str]:
+    """Immediate child directories that have a ``.git`` entry (multi-root parent folder)."""
+    found: list[str] = []
+    try:
+        with os.scandir(start) as entries:
+            for entry in entries:
+                if not entry.is_dir(follow_symlinks=False):
+                    continue
+                if os.path.lexists(os.path.join(entry.path, ".git")):
+                    found.append(entry.path)
+                    if len(found) > 1:
+                        return found
+    except OSError:
+        return []
+    return found
+
+
+def _gitfile_boundary(location: GitLocation) -> str:
+    entry = os.path.join(location.top_level, ".git")
+    try:
+        is_file = os.path.isfile(entry) and not os.path.isdir(entry)
+    except OSError:
+        is_file = False
+    if not is_file:
+        return BOUNDARY_REPOSITORY_ROOT
+    parts = location.git_dir.replace("\\", "/").split("/")
+    if "worktrees" in parts:
+        return BOUNDARY_LINKED_WORKTREE
+    if "modules" in parts:
+        return BOUNDARY_SUBMODULE
+    if not _same_path(location.git_dir, location.common_dir):
+        return BOUNDARY_LINKED_WORKTREE
+    return BOUNDARY_SUBMODULE
+
+
+def _enclosing_git(top_level: str) -> GitLocation | None:
+    parent = os.path.dirname(top_level)
+    if parent == top_level:
+        return None
+    outer = find_git_location(parent)
+    if outer is None or _same_path(outer.top_level, top_level):
+        return None
+    return outer
+
+
+class Resolution:
+    """Read-only repository resolution for ``doctor`` and ``validate`` (ADR 0009).
+
+    A plain class: this module stays stdlib-only for the hook import path.
+    """
+
+    __slots__ = (
+        "boundary",
+        "common_dir",
+        "input_path",
+        "marker_path",
+        "marker_present",
+        "marker_valid",
+        "reason",
+        "resolved_path",
+        "status",
+        "top_level",
+    )
+
+    def __init__(  # noqa: PLR0913, PLR0917
+        self,
+        input_path: str,
+        resolved_path: str,
+        top_level: str | None,
+        common_dir: str | None,
+        marker_path: str | None,
+        marker_present: bool,
+        marker_valid: bool,
+        boundary: str,
+        status: str,
+        reason: str,
+    ) -> None:
+        self.input_path = input_path
+        self.resolved_path = resolved_path
+        self.top_level = top_level
+        self.common_dir = common_dir
+        self.marker_path = marker_path
+        self.marker_present = marker_present
+        self.marker_valid = marker_valid
+        self.boundary = boundary
+        self.status = status
+        self.reason = reason
+
+    def as_dict(self) -> dict[str, object]:
+        """JSON-ready facts. Text output must render this same mapping."""
+        return {
+            "input_path": posix_abs_path(self.input_path),
+            "resolved_path": posix_abs_path(self.resolved_path),
+            "repository_root": posix_abs_path(self.top_level),
+            "common_dir": posix_abs_path(self.common_dir),
+            "marker_path": posix_abs_path(self.marker_path),
+            "marker_present": self.marker_present,
+            "marker_valid": self.marker_valid,
+            "boundary": self.boundary,
+            "status": self.status,
+            "reason": self.reason,
+        }
+
+
+def _marker_fields(top_level: str | None) -> tuple[str | None, bool, bool]:
+    if not top_level:
+        return None, False, False
+    marker = os.path.join(top_level, INSTALL_MARKER_DIR, INSTALL_MARKER_NAME)
+    try:
+        present = os.path.lexists(marker)
+    except OSError:
+        present = False
+    return marker, present, has_install_marker(top_level)
+
+
+def _fail(  # noqa: PLR0913, PLR0917
+    input_path: str,
+    resolved_path: str,
+    boundary: str,
+    reason: str,
+    top_level: str | None = None,
+    common_dir: str | None = None,
+) -> Resolution:
+    marker_path, present, valid = _marker_fields(top_level)
+    return Resolution(
+        input_path,
+        resolved_path,
+        top_level,
+        common_dir,
+        marker_path,
+        present,
+        valid,
+        boundary,
+        "fail",
+        reason,
+    )
+
+
+def _ok(
+    input_path: str,
+    resolved_path: str,
+    location: GitLocation,
+    boundary: str,
+    reason: str,
+) -> Resolution:
+    marker_path, present, valid = _marker_fields(location.top_level)
+    return Resolution(
+        input_path,
+        resolved_path,
+        location.top_level,
+        location.common_dir,
+        marker_path,
+        present,
+        valid,
+        boundary,
+        "ok",
+        reason,
+    )
+
+
+def inspect_repository(  # noqa: PLR0911
+    start: str, workspace_roots: object = None
+) -> Resolution:
+    """Classify ``start`` using the Task 16 file-walk. Creates nothing. Never raises."""
+    input_path = start
+    try:
+        abs_input = start if os.path.isabs(start) else os.path.abspath(start)
+    except OSError:
+        abs_input = start
+    try:
+        resolved = safe_realpath(abs_input)
+    except (OSError, ValueError):
+        resolved = abs_input
+    if is_ambiguous_workspace_roots(workspace_roots):
+        return _fail(
+            input_path,
+            resolved,
+            BOUNDARY_AMBIGUOUS_MULTI_ROOT,
+            "ambiguous multi-root workspace",
+        )
+    if is_external_symlink_anchor(abs_input):
+        return _fail(
+            input_path,
+            resolved,
+            BOUNDARY_EXTERNAL_SYMLINK,
+            "path is an external symlink that leaves the containing repository",
+        )
+    location = find_git_location(resolved if os.path.isabs(resolved) else abs_input)
+    if location is None:
+        if len(_child_git_roots(resolved)) > 1:
+            return _fail(
+                input_path,
+                resolved,
+                BOUNDARY_AMBIGUOUS_MULTI_ROOT,
+                "ambiguous multi-root workspace",
+            )
+        return _fail(
+            input_path,
+            resolved,
+            BOUNDARY_NON_GIT,
+            "not inside a Git working tree",
+        )
+    kind = _gitfile_boundary(location)
+    nested = _enclosing_git(location.top_level) is not None
+    at_root = _same_path(resolved, location.top_level)
+    marker_valid = has_install_marker(location.top_level)
+    if kind == BOUNDARY_LINKED_WORKTREE:
+        if at_root:
+            return _ok(
+                input_path,
+                resolved,
+                location,
+                BOUNDARY_LINKED_WORKTREE,
+                "linked worktree root; runtime stays at the git common directory",
+            )
+        return _ok(
+            input_path,
+            resolved,
+            location,
+            BOUNDARY_ORDINARY_DESCENDANT,
+            "ordinary descendant of a linked worktree",
+        )
+    if kind == BOUNDARY_SUBMODULE:
+        return _ok(
+            input_path,
+            resolved,
+            location,
+            BOUNDARY_SUBMODULE,
+            "submodule or gitfile boundary; outer repository is not used",
+        )
+    if nested:
+        reason = (
+            "uninitialized inner repository; will not fall back to an outer repository"
+            if not marker_valid
+            else "nested repository; inner root is the boundary"
+        )
+        return _ok(
+            input_path,
+            resolved,
+            location,
+            BOUNDARY_NESTED_REPOSITORY if at_root else BOUNDARY_ORDINARY_DESCENDANT,
+            reason,
+        )
+    if at_root:
+        return _ok(
+            input_path,
+            resolved,
+            location,
+            BOUNDARY_REPOSITORY_ROOT,
+            (
+                "detected repository root"
+                if marker_valid
+                else "detected repository root; CursorFleet marker is absent"
+            ),
+        )
+    return _ok(
+        input_path,
+        resolved,
+        location,
+        BOUNDARY_ORDINARY_DESCENDANT,
+        (
+            "ordinary descendant of an initialized enclosing repository"
+            if marker_valid
+            else "ordinary descendant of the detected repository; CursorFleet marker is absent"
+        ),
+    )
+
+
 def untrusted_reason(root: str) -> str | None:  # noqa: PLR0911
     """Why ``root`` (the runtime directory) must not be written to, or ``None`` if it is fine.
 
