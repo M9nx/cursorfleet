@@ -33,7 +33,9 @@ enforcement, no forced approvals, no cloud-agent visibility.
   hooks, event schema version `0.1`, `verification.observed` instead of `test.completed`,
   command display off by default, BLAKE2s segment fingerprints, HMAC worktree ids, a
   maintenance lock, TOML artifact frontmatter, no gate derived from heuristic events, and
-  `init`/`uninstall` repository-root preconditions (exit 2; no `--allow-non-git`).
+  `init`/`uninstall` repository-root preconditions (exit 2; no `--allow-non-git`), and
+  runtime inheritance of an initialized enclosing repository for nested non-Git directories
+  (ADR 0002; `init` still refuses ordinary subdirectories).
 - ADR 0001 stays provisional and now carries an empirical test matrix; the local Cursor IDE
   (desktop) is the only supported v0.1 surface, and the CLI, Agents Window and worktrees are
   not claimed. See [docs/empirical-test-plan.md](docs/empirical-test-plan.md).
@@ -42,6 +44,9 @@ enforcement, no forced approvals, no cloud-agent visibility.
   it still contains the Cursor mark.
 - Docs-site plan only ([docs/docs-site-plan.md](docs/docs-site-plan.md)); no site, workflow or
   dependency was added.
+- ADR 0002 / 0009: a nested non-Git directory inherits an already initialized enclosing
+  repository for runtime event attribution; `init` from an ordinary subdirectory still
+  exits 2 (documentation only).
 
 ### Added
 

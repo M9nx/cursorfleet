@@ -218,7 +218,7 @@ How to read an entry:
   - `--path` help: "repository root", not "directory inside the git repo". Reject unknown
     `--allow-non-git` as an ordinary usage error (exit 2).
   - `doctor` / `validate`: keep resolving from a subdirectory; print the detected root they
-    used. Do not change hook behaviour.
+    used. Do not implement runtime inheritance here (that is task 16).
 - Tests (required; no sleeps):
   - Non-git folder: `init --cursor --yes` and `--dry-run`, and `uninstall`, exit 2; snapshot
     empty; stderr says Git is required and nothing was changed. Replace
@@ -234,6 +234,40 @@ How to read an entry:
 - Docs after: remove the Divergence notes in `kit.md`, `quickstart.md`, ADR 0002/0009.
 - Done when: the ADR 0009 amendment gate holds (exit 2, no changes) on the cases above.
 
+## 16. Runtime inheritance for nested non-Git directories (ADR 0002)
+
+- Waits for: nothing technical (row 17b records Cursor behaviour in a nested non-git
+  folder; the hook contract does not depend on it). Still wait for the freeze to lift.
+- Decided (owner, 2026-10-04, documentation only): a non-Git directory nested inside an
+  already initialized Git repository inherits that enclosing repository for **runtime**
+  event attribution. Resolution: tool cwd when available, otherwise `CURSOR_PROJECT_DIR`;
+  realpath the anchor; nearest Git root; require the CursorFleet installation/config
+  marker at that root; use that root's git-common-dir and identity; paths relative to that
+  root; never create nested config or runtime. Inner `.git`/submodule is a new boundary;
+  do not fall back from an uninitialized inner repository to the outer; missing marker,
+  external symlink, ambiguous multi-root and uninitialized roots produce no event and fail
+  open. `init` from an ordinary subdirectory still exits 2 (task 15). Full rules in ADR
+  0002 amendment 2026-10-04 (runtime inheritance).
+- Do:
+  - `hook_main.py:_candidate_starts` / `record`: start from tool cwd if present, else
+    `CURSOR_PROJECT_DIR`; realpath; `find_git_location`; refuse (record nothing, fail open)
+    unless the detected root has the `.cursorfleet/` marker; do not consult
+    `workspace_roots` as a start; do not fall back to an outer repository from an
+    uninitialized inner root.
+  - `PathResolver`: normalize stored paths relative to the inherited root only.
+  - Do not create `.cursorfleet/` or `<git-common-dir>/cursorfleet/` under the nested
+    directory. Do not create a runtime directory when the marker is missing.
+  - Do not change `init` / `uninstall` (task 15).
+- Tests (required; no sleeps):
+  - Ordinary nested non-git dir inside an initialized root: events go to the enclosing
+    root's runtime; paths relative to that root; no nested `.cursorfleet/` or runtime.
+  - Inner `.git` or submodule: does not inherit the outer repository.
+  - Uninitialized inner repository: no fallback to the outer; no event, fail open.
+  - Missing `.cursorfleet/` at the detected root: no event, fail open.
+  - External symlink, ambiguous multi-root, uninitialized root: no event, fail open.
+- Docs after: remove the Divergence notes in ADR 0002 / 0009 for this amendment.
+- Done when: the ADR 0002 runtime-inheritance gate holds on the cases above.
+
 ## Not follow-ups (decided, nothing to change)
 
 - ADR 0004 text stays as history; ADR 0007 supersedes it.
@@ -241,3 +275,5 @@ How to read an entry:
 - No enforcement in v0.1 (ADR 0008).
 - No `--allow-non-git` flag in v0.1 (ADR 0009); implementing the refuse-and-exit-2
   behaviour is task 15.
+- Nested non-Git **runtime** inheritance is decided (ADR 0002); implementing it is
+  task 16. It does not change `init`.

@@ -56,10 +56,12 @@ and not yet measured.
 The architecture-owner decisions of 2026-10-04 (ADRs 0001 to 0012) differ from the current
 code in several places: the hook list, schema version, heuristic test events, command
 display default, hashing, locking, artifact format, gate derivation, attribution
-aggregation (the reducer keeps the strongest value; the rule is weakest-wins), and
+aggregation (the reducer keeps the strongest value; the rule is weakest-wins),
 `init`/`uninstall` repository-root preconditions (decided: exit 2 at a non-root; today the
-commands exit 1 outside Git and silently use the enclosing root). They are listed in
-[`follow-ups.md`](follow-ups.md) and are **not** fixed yet.
+commands exit 1 outside Git and silently use the enclosing root), and runtime inheritance
+for a nested non-Git directory (decided: inherit an already initialized enclosing
+repository; today the hook writes to the nearest Git root without a marker check). They
+are listed in [`follow-ups.md`](follow-ups.md) and are **not** fixed yet.
 
 ## Gates before v0.1.0
 

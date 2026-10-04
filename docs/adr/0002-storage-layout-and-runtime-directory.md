@@ -6,10 +6,10 @@
 - Evidence level: verified-from-docs for the git facts; assumption for Cursor worktree behavior
 - Supersedes: none
 - Superseded by: none
-- Related ADRs: 0001 (Q4, Q5), 0003 (event ids, worktree attribution), 0009 (uninstall leaves runtime data), 0010 (replay from spool), 0012 (worktree ownership)
-- Implementation status: Divergent-from-code. Implemented: git-common-dir layout, CRC-per-line spool, quarantine of a corrupt database, an indexer lock. Divergent: segment fingerprint is CRC32 not BLAKE2s; `worktree_id` is a bare SHA-256 prefix not an HMAC; no lock for retention/purge; the lock cannot tell contention from an unsupported filesystem; `init`/`uninstall` do not yet enforce the repository-root preconditions (they exit 1 outside Git and silently use the enclosing root from a subdirectory). Details in "Amendment 2026-10-04" below and in ADR 0009.
-- Review trigger: Q4 or Q5 answered on any OS, or a reproduced torn or interleaved spool line
-- Release gate: Q4 and Q5 answered on every OS claimed; BLAKE2s fingerprints, HMAC worktree ids and the maintenance lock implemented, or the claims in this ADR weakened to match the code
+- Related ADRs: 0001 (Q4, Q5), 0003 (event ids, worktree attribution), 0009 (uninstall leaves runtime data; init refuses ordinary subdirectories), 0010 (replay from spool), 0012 (worktree ownership)
+- Implementation status: Divergent-from-code. Implemented: git-common-dir layout, CRC-per-line spool, quarantine of a corrupt database, an indexer lock; the file-walk finds the nearest `.git` and treats an inner `.git`/gitfile/submodule as a new boundary. Divergent: segment fingerprint is CRC32 not BLAKE2s; `worktree_id` is a bare SHA-256 prefix not an HMAC; no lock for retention/purge; the lock cannot tell contention from an unsupported filesystem; `init`/`uninstall` do not yet enforce the repository-root preconditions (they exit 1 outside Git and silently use the enclosing root from a subdirectory); runtime inheritance is not implemented as specified (no installation-marker check; start selection also uses `workspace_roots`; missing marker or uninitialized root still records and may create a runtime directory). Details in the amendments below and in ADR 0009.
+- Review trigger: Q4 or Q5 answered on any OS, or a reproduced torn or interleaved spool line, or a live row 17b result that refutes inheritance
+- Release gate: Q4 and Q5 answered on every OS claimed; BLAKE2s fingerprints, HMAC worktree ids and the maintenance lock implemented, or the claims in this ADR weakened to match the code; runtime inheritance (marker required, fail-open no-event cases, no nested state) implemented or the claims weakened
 
 ## Context
 
@@ -48,14 +48,19 @@ all worktrees:
   (`.git` directory, or gitfile `gitdir:` then `commondir`) to avoid spawning
   git; a contract test compares it with `git`. Other callers use git with an
   argv list and a timeout.
-- **Non-git workspaces:** unsupported in v0.1; hooks record nothing and exit
-  open, `doctor` explains. Write commands (`init`, `uninstall`) require a Git
-  **repository root**: exit 2, nothing changed, no `--allow-non-git`. An ordinary
-  subdirectory is refused the same way (print the detected root; never silently
-  modify the parent). A genuine nested repository and a linked-worktree root are
-  valid roots. Full rules are in [ADR 0009](0009-install-uninstall-ownership.md)
-  (amendment 2026-10-04). **Divergence:** today's `init`/`uninstall` exit 1
-  outside Git and walk up to the enclosing repository from a subdirectory.
+- **Non-git workspaces and nested directories.** A directory with no enclosing Git
+  working tree is unsupported in v0.1: hooks record nothing and exit open, `doctor`
+  explains. A **non-Git directory nested inside an already initialized Git
+  repository** inherits that enclosing repository for **runtime** event attribution
+  (amendment 2026-10-04, runtime inheritance). Write commands (`init`, `uninstall`)
+  require a Git **repository root**: exit 2, nothing changed, no `--allow-non-git`.
+  An ordinary subdirectory is refused the same way (print the detected root; never
+  silently modify the parent). A genuine nested repository and a linked-worktree
+  root are valid roots for install. Full write-command rules are in
+  [ADR 0009](0009-install-uninstall-ownership.md). **Divergence:** today's
+  `init`/`uninstall` exit 1 outside Git and walk up to the enclosing repository
+  from a subdirectory; today's hook records against the nearest Git root without
+  requiring a CursorFleet marker.
 - **Committed config** lives in `.cursorfleet/` (`config.toml`, `roster.toml`,
   `work/<task>/`) and is per checkout. No runtime state under `.cursorfleet/`.
 - **Spool.** One directory per session; one file per writer, where writer is
@@ -253,5 +258,69 @@ write commands:
   outside Git exits 1 (a check failed).
 
 **Divergence:** see ADR 0009 "Implementation status of this amendment" and follow-ups
-task 15. Hooks already match the non-git rule
-(`tests/integration/test_hook_main.py::test_not_a_git_repo_records_nothing`).
+task 15. A directory with no enclosing Git working tree still records nothing
+(`tests/integration/test_hook_main.py::test_not_a_git_repo_records_nothing`). Nested
+non-Git directories and the marker / fail-open cases are the next amendment.
+
+## Amendment 2026-10-04 (runtime inheritance for nested non-Git directories)
+
+Owner decision. **Documentation only: the resolution below is not implemented.** It does
+not change write-command preconditions (those remain repository-root only; see
+[ADR 0009](0009-install-uninstall-ownership.md)). It decides what a hook does when it
+runs from a directory that is not itself a Git repository root.
+
+**Decision.** A non-Git directory nested inside an already initialized Git repository
+inherits that enclosing repository for **runtime** event attribution.
+
+**Resolution (normative).**
+
+1. Use the tool cwd when available, otherwise `CURSOR_PROJECT_DIR`.
+2. Realpath-resolve that anchor.
+3. Find the nearest Git root (the innermost `.git` directory or gitfile walking up from
+   the resolved anchor).
+4. Require the detected root to contain the CursorFleet installation/config marker
+   (committed `.cursorfleet/` at that root).
+5. Use that root's `git-common-dir` and repository identity.
+6. Normalize stored paths relative to that root.
+7. Never create nested config (`.cursorfleet/`) or runtime state
+   (`<git-common-dir>/cursorfleet/`) under the nested directory, and never create a new
+   installation. Inheritance is allowed only for an installation that already exists at
+   the resolved root.
+
+**Boundaries.**
+
+- An inner `.git` directory or gitfile, including a submodule, is a new repository
+  boundary. The inner root is the detected root; the outer repository is never consulted.
+- Do not fall back from an uninitialized inner repository (a Git root whose `.cursorfleet/`
+  marker is absent) to the outer repository.
+- A missing CursorFleet marker at the detected root produces no event and fails open
+  (exit 0, correct reply).
+- External symlinks, ambiguous multi-root workspaces, and uninitialized roots produce no
+  event and fail open.
+
+**Init is unchanged.** `cursorfleet init` invoked from an ordinary subdirectory still
+exits 2 and performs no writes ([ADR 0009](0009-install-uninstall-ownership.md)). Runtime
+inheritance does not authorize a nested install.
+
+**Implementation status of this amendment.** **Not implemented; divergent-from-code**
+(checked in `adapters/cursor/hook_main.py:_candidate_starts` / `record`,
+`state/runtime.py:find_git_location`, `adapters/cursor/hook_sanitize.py:PathResolver`):
+
+- Start selection: `_candidate_starts` tries `os.getcwd()`, then
+  `payload.workspace_roots[0]`, then `CURSOR_PROJECT_DIR`. The contract is tool cwd when
+  available, otherwise `CURSOR_PROJECT_DIR` only.
+- Nearest Git root: `find_git_location` walks up to the first `.git` and already treats an
+  inner `.git`/gitfile/submodule as a new boundary (matches the boundary; pinned by
+  `tests/integration/test_runtime_resolution.py`).
+- No marker check: `record()` writes to `<git-common-dir>/cursorfleet/` of the first Git
+  location found even when `.cursorfleet/` is absent at that root.
+- Runtime creation: `load_hmac_key` / `ensure_runtime_root` can create the runtime
+  directory and `hmac.key` on first write.
+- Paths: `PathResolver` is given payload `workspace_roots` plus `location.top_level`, not
+  solely the inherited root.
+- Fail-open no-event cases (external symlink, ambiguous multi-root, uninitialized root,
+  missing marker) are not implemented as no-event; the hook records if any start finds a
+  Git root.
+
+Tracked as task 16 in [`../follow-ups.md`](../follow-ups.md). Empirical cases are in
+[empirical-test-plan](../empirical-test-plan.md) row 17, case 17b.

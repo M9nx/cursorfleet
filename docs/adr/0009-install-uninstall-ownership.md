@@ -6,8 +6,8 @@
 - Evidence level: assumption for how Cursor treats merged hook entries and committed files; the rules themselves are verified by the integration tests
 - Supersedes: none
 - Superseded by: none
-- Related ADRs: 0007 (the hook set the installer emits), 0008 (no `failClosed`), 0006 (artifact rules and skills it generates), 0002 (runtime data is not removed by uninstall), 0005 (name changes touch every owned path)
-- Implementation status: Implemented-provisional for the rules below (`installer.py`, `hooksjson.py`, `blocks.py`, `lock.py`, `fsutil.py`; tests under `tests/integration/test_kit_*` and `tests/security/test_kit_installer_policy.py`). Divergent-from-code with ADR 0007: the installer emits 12 hooks and has no migration that removes the three dropped entries on re-`init`. Not implemented / divergent-from-code with the repository-root amendment of 2026-10-04 (below): `init` and `uninstall` exit 1 outside Git, and silently act on the enclosing repository when run from a subdirectory.
+- Related ADRs: 0007 (the hook set the installer emits), 0008 (no `failClosed`), 0006 (artifact rules and skills it generates), 0002 (runtime data is not removed by uninstall; nested non-Git runtime inheritance), 0005 (name changes touch every owned path)
+- Implementation status: Implemented-provisional for the rules below (`installer.py`, `hooksjson.py`, `blocks.py`, `lock.py`, `fsutil.py`; tests under `tests/integration/test_kit_*` and `tests/security/test_kit_installer_policy.py`). Divergent-from-code with ADR 0007: the installer emits 12 hooks and has no migration that removes the three dropped entries on re-`init`. Not implemented / divergent-from-code with the repository-root amendment of 2026-10-04 (below): `init` and `uninstall` exit 1 outside Git, and silently act on the enclosing repository when run from a subdirectory. Runtime inheritance (ADR 0002) is a separate, also unimplemented, hook contract: `init` must still refuse ordinary subdirectories.
 - Review trigger: Cursor changes how hooks.json is merged or reloaded; a user reports lost content after `uninstall`; the hook set changes (ADR 0007 follow-up)
 - Release gate: round-trip guarantee (below) passes on fixture repos on all three OSes in CI; a migration for removed hook entries exists; the diff-and-consent flow is the only write path; `init` and `uninstall` enforce the repository-root preconditions of the 2026-10-04 amendment (exit 2, no changes) with the tests listed in follow-ups task 15
 
@@ -157,13 +157,17 @@ never write into a repository the user did not name.
    check failed, as documented in the quickstart), and `validate` keeps validating the given
    directory as-is. Exit 2 is reserved for usage and precondition errors of commands that
    would write.
-7. **Hooks are unaffected.** Hooks still record nothing in a non-Git workspace and still
-   exit 0 with the correct reply ([ADR 0002](0002-storage-layout-and-runtime-directory.md)).
-   Rule 2 stops `init` from installing a kit into a plain folder inside another repository;
-   what a hook does if it reaches such a folder some other way (user-level hooks, a copied
-   `hooks.json`) is not decided here: the hook's `.git` walk would attribute it to the
-   enclosing repository. That remains the open owner decision of
-   [empirical-test-plan](../empirical-test-plan.md) row 17, case 17b.
+7. **Hooks are a separate contract from `init`.** Rule 2 still stops `init` from installing
+   a kit into a plain folder inside another repository: `cursorfleet init` invoked from an
+   ordinary subdirectory exits **2** and performs no writes. There is no nested install.
+   Runtime event attribution for a hook that reaches such a folder another way (user-level
+   hooks, a copied `hooks.json`) is decided in
+   [ADR 0002](0002-storage-layout-and-runtime-directory.md): a non-Git directory nested
+   inside an already initialized Git repository inherits that enclosing repository.
+   Inheritance never creates a nested `.cursorfleet/` or a nested runtime directory, and it
+   never authorizes `init` at that folder. An inner `.git`/gitfile or submodule is a new
+   boundary and must not fall back to the outer repository. Missing marker, external
+   symlink, ambiguous multi-root and uninitialized roots produce no event and fail open.
 
 ### Order of checks
 
@@ -258,6 +262,28 @@ Nothing was changed. Run:  cd /home/me/proj && cursorfleet init --cursor
 - `doctor` and `validate` already behave as rule 6 (doctor exits 1 outside Git; validate falls
   back to the given directory) but neither prints the detected root in its text output.
 - Hooks already record nothing outside Git (`tests/integration/test_hook_main.py`,
-  `test_not_a_git_repo_records_nothing`).
+  `test_not_a_git_repo_records_nothing`). Nested non-Git inheritance is a hook-only
+  contract (ADR 0002); `init` must not start walking up because of it.
 
 Tracked as task 15 in [`../follow-ups.md`](../follow-ups.md), with the required tests.
+
+## Amendment 2026-10-04 (init versus runtime for nested directories)
+
+Owner decision. **Documentation only.** Distinguishes write commands from hook runtime so
+they are not collapsed into one walk-up rule.
+
+- **Init / uninstall:** unchanged from the repository-root amendment above.
+  `cursorfleet init` invoked from an ordinary subdirectory still exits **2** and performs
+  no writes. There is no nested install. An inner `.git` or submodule is its own root
+  (rule 3); an uninitialized inner repository is that inner root, not a fallback to the
+  outer repository.
+- **Runtime:** a hook running in a non-Git directory nested inside an already initialized
+  enclosing repository inherits that repository for event attribution
+  ([ADR 0002](0002-storage-layout-and-runtime-directory.md)). Runtime inheritance is
+  allowed only for an installation that already exists at the resolved root.
+- Walking up for `init` is forbidden. Walking up for runtime attribution is required when
+  the marker is present and the detected root is that enclosing initialized repository.
+
+**Implementation status of this amendment.** Init still diverges as documented above
+(follow-ups task 15). Runtime inheritance diverges as documented in ADR 0002 (follow-ups
+task 16). Neither is implemented by this documentation pass.

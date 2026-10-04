@@ -25,8 +25,8 @@ release gate in one line. The full gate text is in each ADR.
   - Local Cursor IDE (desktop) is the only supported v0.1 surface until the empirical test matrix passes.
 - [0002: Storage layout and runtime directory](0002-storage-layout-and-runtime-directory.md)
   - Status: provisional (git-common-dir design kept). Supersedes: none.
-  - Implementation: Divergent-from-code (CRC32 fingerprints, unkeyed worktree ids, no maintenance lock; `init`/`uninstall` repository-root preconditions not enforced).
-  - Gate: Q4 and Q5 answered on each OS claimed; BLAKE2s, HMAC ids and the lock implemented.
+  - Implementation: Divergent-from-code (CRC32 fingerprints, unkeyed worktree ids, no maintenance lock; `init`/`uninstall` repository-root preconditions not enforced; runtime inheritance decided but not implemented: no marker check, start selection also uses `workspace_roots`).
+  - Gate: Q4 and Q5 answered on each OS claimed; BLAKE2s, HMAC ids and the lock implemented; runtime inheritance (marker, fail-open no-event, no nested state) implemented or claims weakened.
 - [0003: Event model and sanitization allowlist](0003-event-model-and-sanitization.md)
   - Status: provisional (amended 2026-10-04). Supersedes: none.
   - Implementation: Divergent-from-code (schema `1.0`, `test.completed`, command display on, attribution aggregation keeps the strongest value instead of the weakest).
@@ -53,7 +53,7 @@ release gate in one line. The full gate text is in each ADR.
   - Gate: nothing can emit a blocking reply; docs say observe only.
 - [0009: Install and uninstall ownership](0009-install-uninstall-ownership.md)
   - Status: accepted. Supersedes: none.
-  - Implementation: Implemented-provisional; no migration for removed hooks; repository-root preconditions (exit 2) not implemented (subdirectory walks up; non-git exits 1).
+  - Implementation: Implemented-provisional; no migration for removed hooks; repository-root preconditions (exit 2) not implemented (subdirectory walks up; non-git exits 1). Init still refuses ordinary subdirectories (exit 2, decided); runtime inheritance is ADR 0002, not a nested install.
   - Gate: round trip passes on all three OSes in CI; migration exists; `init`/`uninstall` enforce repository-root preconditions (exit 2, no changes).
 - [0010: Reducer state semantics](0010-reducer-state-semantics.md)
   - Status: provisional. Supersedes: none.
@@ -85,7 +85,8 @@ Spike and facts:
 
 Code brought in line with the decisions:
 
-- ADR 0002: BLAKE2s segment fingerprints, HMAC worktree ids, maintenance lock.
+- ADR 0002: BLAKE2s segment fingerprints, HMAC worktree ids, maintenance lock;
+  runtime inheritance (marker required, fail-open no-event cases, no nested state).
 - ADR 0003: schema `0.1`; `verification.observed`; command display default off; attribution
   never shows inferred as exact.
 - ADR 0006: TOML artifacts with identity, revision and digest.
