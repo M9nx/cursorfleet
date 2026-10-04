@@ -96,6 +96,21 @@ def _corruption_to_json(counts: Corruption) -> str:
     return json.dumps(counts.to_dict(), sort_keys=True)
 
 
+def _release_sqlite(conn: sqlite3.Connection) -> None:
+    """Checkpoint WAL and close so Windows can rename the projection files.
+
+    A live WAL/SHM handle keeps ``state.sqlite`` locked after ``close()`` on
+    Windows; ``os.replace`` then fails, recovery reopens the planted database,
+    and the next sync raises again.
+    """
+    with suppress(sqlite3.Error):
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    with suppress(sqlite3.Error):
+        conn.execute("PRAGMA journal_mode=DELETE")
+    with suppress(sqlite3.Error):
+        conn.close()
+
+
 class UntrustedRuntime(IndexerBusy):
     """The runtime directory is not private to this user (symlink, other owner, group-writable)."""
 
@@ -148,7 +163,7 @@ class Projection:
             conn.execute("SELECT COUNT(*) FROM sessions").fetchone()
             return conn
         except BaseException:
-            conn.close()
+            _release_sqlite(conn)
             raise
 
     def connect(self) -> sqlite3.Connection:
@@ -197,10 +212,12 @@ class Indexer:
                 stats = SyncStats(db_recovered=self._projection.recovered or rebuild)
                 try:
                     self._sync(conn, stats)
-                except ValueError:
+                except (ValueError, ValidationError):
                     # A stored row that no longer validates (corrupt or planted database):
                     # the projection is only a cache, so quarantine it and rebuild once.
-                    conn.close()
+                    # Release WAL first: Windows cannot rename a projection that still
+                    # has an open WAL/SHM handle.
+                    _release_sqlite(conn)
                     self._projection.quarantine()
                     conn = self._projection.connect()
                     stats = SyncStats(db_recovered=True)

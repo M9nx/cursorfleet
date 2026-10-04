@@ -145,6 +145,18 @@ def test_rebuild_recreates_identical_state(paths: RuntimePaths) -> None:
     assert canonical_json(indexer.load_sessions()) == before
 
 
+def test_planted_session_row_is_quarantined_and_rebuilt(paths: RuntimePaths) -> None:
+    put(paths, ev(1, 1, "session.started"))
+    Indexer(paths).sync()
+    with sqlite3.connect(paths.db) as conn:
+        conn.execute('UPDATE sessions SET state = \'{"not": "a session"}\'')
+    put(paths, ev(2, 2, tool_name="Write"))
+    stats = Indexer(paths).sync()
+    assert stats.db_recovered
+    assert os.listdir(paths.quarantine)
+    assert Indexer(paths).load_sessions()["s1"].events == 2
+
+
 def test_corrupt_database_is_quarantined_and_rebuilt(paths: RuntimePaths) -> None:
     put(paths, ev(1, 1, "session.started"))
     indexer = Indexer(paths)

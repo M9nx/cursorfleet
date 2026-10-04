@@ -9,6 +9,7 @@ known owner or lane.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from typing import Any
 
@@ -27,6 +28,17 @@ from cursorfleet.state.models import (
 from cursorfleet.state.spool_read import Corruption
 
 STATUS_SCHEMA = "cursorfleet.status/1"
+
+
+def json_abs_path(path: str | None) -> str | None:
+    """Absolute path with POSIX separators for the status JSON contract.
+
+    Windows ``os.path`` and ``git rev-parse`` emit backslashes; the document is
+    compared and consumed across OSes, so stored absolute paths use ``/``.
+    """
+    if path is None:
+        return None
+    return os.path.normpath(path).replace("\\", "/")
 
 
 class _Doc(BaseModel):
@@ -147,7 +159,7 @@ def _worktree_doc(snap: WorktreeSnapshot, views: list[SessionView]) -> WorktreeD
                 tasks.update(agent.issue_refs)
     latest = max(linked, key=lambda v: (v.last_ts, v.session_id), default=None)
     return WorktreeDoc(
-        path=snap.path,
+        path=json_abs_path(snap.path) or snap.path,
         worktree_id=snap.worktree_id,
         is_main=snap.is_main,
         exists=snap.exists,
@@ -201,7 +213,7 @@ def build_status(  # noqa: PLR0913
     return StatusDoc(
         schema_=STATUS_SCHEMA,
         generated_at=utc(now),
-        repo=RepoInfo(common_dir=common_dir, runtime_dir=runtime_dir),
+        repo=RepoInfo(common_dir=json_abs_path(common_dir), runtime_dir=json_abs_path(runtime_dir)),
         telemetry=TelemetryInfo(
             state="hooks" if fleet.sessions else "none",
             sessions=len(fleet.sessions),

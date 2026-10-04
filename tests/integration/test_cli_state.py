@@ -15,6 +15,7 @@ from typer.testing import CliRunner
 from cursorfleet.cli.main import app
 from cursorfleet.events.ids import worktree_id_for
 from cursorfleet.state.models import BUDGET_UNKNOWN
+from cursorfleet.state.status_doc import json_abs_path
 from m2_helpers import FIXED_NS, doc_payload, git, paths_of, run_hook, spool_files
 
 runner = CliRunner()
@@ -77,6 +78,12 @@ def normalize(text: str, repo: Path, extra: Path | None = None) -> str:
 
 
 # ------------------------------------------------------------------ status
+
+
+def test_json_abs_path_uses_posix_separators() -> None:
+    assert json_abs_path(None) is None
+    assert json_abs_path(r"C:\repo\.git\cursorfleet") == "C:/repo/.git/cursorfleet"
+    assert "\\" not in (json_abs_path(os.path.join("repo", ".git")) or "")
 
 
 def test_status_json_matches_the_golden_snapshot(repo: Path, tmp_path: Path) -> None:
