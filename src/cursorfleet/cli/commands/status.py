@@ -9,6 +9,7 @@ from typing import Annotated
 
 import typer
 
+from cursorfleet.adapters.cursor.kit_probe import probe_hooks_kit
 from cursorfleet.git.collector import DEFAULT_STALE_AFTER_HOURS, GitSnapshot, collect
 from cursorfleet.git.runner import NotAGitRepo
 from cursorfleet.state.context import RepoContext, parse_now, resolve_repo
@@ -49,6 +50,7 @@ def build(ctx: RepoContext, *, now: datetime, stale_after_s: int, with_git: bool
             stale_after_hours=DEFAULT_STALE_AFTER_HOURS,
             activity=worktree_activity(sessions),
         )
+    repo_root = ctx.top_level or ctx.common_dir
     return build_status(
         now=now,
         fleet=fleet,
@@ -58,6 +60,7 @@ def build(ctx: RepoContext, *, now: datetime, stale_after_s: int, with_git: bool
         corruption=corruption,
         spool_files=files,
         source=source,
+        hooks_kit=probe_hooks_kit(repo_root).state,
     )
 
 
@@ -71,7 +74,9 @@ def _render_text(doc: StatusDoc) -> str:
     lines.append("")
     lines.append("SESSIONS")
     if not doc.sessions:
-        lines.append("  (none: no hook telemetry)")
+        awaiting = any("hooks installed" in n for n in doc.telemetry.notes)
+        hint = "await Cursor session" if awaiting else "no hook telemetry"
+        lines.append(f"  (none: {hint})")
     for s in doc.sessions:
         lines.append(
             f"  {_safe(s.session_id)}  lane={s.lane}  tools={s.tool_call_count}  "

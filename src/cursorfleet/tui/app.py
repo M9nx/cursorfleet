@@ -23,6 +23,7 @@ from textual.widgets import Input, OptionList, Static
 from textual.widgets.option_list import Option
 
 from cursorfleet import __version__
+from cursorfleet.adapters.cursor.kit_probe import HooksKitState
 from cursorfleet.events.models import Event
 from cursorfleet.state.event_store import DEFAULT_PAGE, MAX_PAGE, EventFilter
 from cursorfleet.tui import views
@@ -41,6 +42,17 @@ KEYS_WIDE = (
     "o overview | l timeline | w worktrees | g gates | e evidence | v violations | r refresh"
 )
 KEYS_NARROW = "? help  q quit  / filter  o l w g e v  p pin  r refresh"
+
+
+def _hooks_titlebar(data: FleetData, *, short: bool) -> str:
+    if data.telemetry == "hooks":
+        label = plural(len(data.sessions), "session")
+        return f"hooks {label}" if short else f"hooks: {label}"
+    if data.hooks_kit == HooksKitState.INSTALLED:
+        return "hooks ok (await Cursor)" if short else "hooks: installed, awaiting Cursor session"
+    if data.hooks_kit == HooksKitState.PARTIAL:
+        return "hooks partial" if short else "hooks: kit incomplete"
+    return "no telemetry" if short else "hooks: no telemetry"
 
 
 class Source(Protocol):
@@ -278,7 +290,7 @@ class CursorFleetApp(App[None]):
         narrow = self._width < 100
         blocked = data.blocked_count()
         if narrow:
-            hooks = f"hooks {len(data.sessions)}" if data.telemetry == "hooks" else "no telemetry"
+            hooks = _hooks_titlebar(data, short=True)
             git = (
                 "git off"
                 if not data.git_enabled
@@ -289,11 +301,7 @@ class CursorFleetApp(App[None]):
                 parts.append(f"BLOCKED {blocked}")
             parts.extend([hooks, git])
         else:
-            hooks = (
-                f"hooks: {plural(len(data.sessions), 'session')}"
-                if data.telemetry == "hooks"
-                else "hooks: no telemetry"
-            )
+            hooks = _hooks_titlebar(data, short=False)
             git = (
                 "git: off"
                 if not data.git_enabled
@@ -351,11 +359,7 @@ class CursorFleetApp(App[None]):
             if bundle is not None and bundle.session is not None and bundle.view is not None:
                 tools = self.source.recent_tools(bundle.session.session_id, bundle.acc.key)
         if self.view == "overview" and self.data.is_empty and key is None:
-            text = Text(views.GUIDANCE_NO_TELEMETRY, style="")
-            text.append(
-                "\n\nWithout telemetry the state is UNKNOWN; CursorFleet never infers inactivity.",
-                style="dim",
-            )
+            text = Text("\n\n".join(views.overview_guidance_lines(self.data)), style="")
         else:
             text = views.detail_for(self.view, self.data, self.ui, key, tools)
         widget = self.query_one("#detail", VerticalScroll)

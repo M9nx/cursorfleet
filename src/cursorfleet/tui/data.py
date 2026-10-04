@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from cursorfleet.adapters.cursor.kit_probe import HooksKitState, probe_hooks_kit
 from cursorfleet.config.io import loads_config
 from cursorfleet.events.kinds import EventKind
 from cursorfleet.events.models import Event
@@ -116,6 +117,7 @@ class FleetData:
     corruption: Corruption = field(default_factory=Corruption)
     spool_files: int = 0
     telemetry: str = "none"  # "hooks" | "none"
+    hooks_kit: HooksKitState = HooksKitState.MISSING
     problems: list[str] = field(default_factory=list)
     recent: EventPage = field(default_factory=EventPage)
     timeline: EventPage = field(default_factory=EventPage)
@@ -238,6 +240,7 @@ class DataSource:
         data.repo_root = ctx.top_level or ctx.common_dir
         data.runtime_dir = ctx.paths.root
         data.db_path = ctx.paths.db
+        data.hooks_kit = probe_hooks_kit(data.repo_root).state
         self._refresh_projection(data)
         data.sessions = self._sessions
         data.corruption = self._corruption
@@ -444,13 +447,17 @@ def _worktree_cards(data: FleetData) -> None:
             continue
         name = Path(wt.path).name or wt.path
         branch = wt.branch or ("detached" if wt.detached else "?")
+        if data.hooks_kit == HooksKitState.INSTALLED:
+            tail = "no telemetry yet (open Cursor here)"
+        else:
+            tail = "no hook telemetry"
         data.cards.append(
             Card(
                 key=f"wt:{wt.path}",
                 kind="worktree",
                 lane=Lane.UNKNOWN.value,
                 title=name,
-                detail=f"branch {branch}, no hook telemetry",
+                detail=f"branch {branch}, {tail}",
                 basis="none",
                 last_ts=wt.last_commit_ts,
                 worktree_path=wt.path,

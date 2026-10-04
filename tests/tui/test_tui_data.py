@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -9,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from cursorfleet.adapters.cursor.hooksjson import HOOK_COMMAND
 from cursorfleet.state.event_store import EventFilter
 from cursorfleet.tui import views
 from cursorfleet.tui.data import DataSource, FleetData
@@ -66,6 +68,24 @@ def test_no_telemetry_is_unknown_never_idle(tmp_path: Path) -> None:
     text = all_text(data)
     assert not IDLE_CLAIM.search(text)
     assert "cursorfleet init --cursor" in text and "cursorfleet doctor" in text
+
+
+def test_installed_kit_without_sessions_shows_await_cursor(tmp_path: Path) -> None:
+    repo = new_repo(tmp_path)
+    (repo / ".cursorfleet/install.lock.json").write_text('{"lock_version":"1"}\n', encoding="utf-8")
+    (repo / ".cursor").mkdir(exist_ok=True)
+    hooks = {
+        "version": 1,
+        "hooks": {"sessionStart": [{"command": HOOK_COMMAND, "timeout": 5}]},
+    }
+    (repo / ".cursor/hooks.json").write_text(json.dumps(hooks), encoding="utf-8")
+    data = load(repo)
+    assert data.telemetry == "none"
+    text = all_text(data)
+    assert "Open this folder in **Cursor**" in text
+    assert "cursorfleet init --cursor" not in text
+    wt = next(c for c in data.cards if c.kind == "worktree")
+    assert "open Cursor here" in wt.detail
 
 
 def test_sorted_by_blockers_then_recency_not_activity(tmp_path: Path) -> None:

@@ -15,6 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from cursorfleet.adapters.cursor.kit_probe import HooksKitState
 from cursorfleet.git.collector import GitSnapshot, WorktreeSnapshot
 from cursorfleet.state.models import (
     BUDGET_UNKNOWN,
@@ -195,12 +196,20 @@ def build_status(  # noqa: PLR0913
     corruption: Corruption,
     spool_files: int,
     source: str,
+    hooks_kit: HooksKitState | None = None,
 ) -> StatusDoc:
     """Assemble the document. Pure given its inputs (``now`` is injected)."""
     events = sum(s.event_count for s in fleet.sessions)
     notes: list[str] = []
     if not fleet.sessions:
-        notes.append("no hook telemetry indexed: git-only view; agent lanes are unknown")
+        kit = hooks_kit if hooks_kit is not None else HooksKitState.MISSING
+        if kit == HooksKitState.INSTALLED:
+            notes.append(
+                "hooks installed; open this repo in Cursor and start a session to record "
+                "telemetry (git-only view until the first hook run)"
+            )
+        else:
+            notes.append("no hook telemetry indexed: git-only view; agent lanes are unknown")
     if corruption.total:
         notes.append(
             f"{corruption.total} corrupt or skipped spool line(s); see telemetry.corruption"

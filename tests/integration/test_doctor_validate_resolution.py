@@ -26,6 +26,11 @@ def invoke(*args: str) -> tuple[int, str]:
     return result.exit_code, result.output
 
 
+def _transient_git_lock(rel: str) -> bool:
+    """Git may create short-lived lock files under ``.git/`` during maintenance."""
+    return rel.startswith(".git/") and rel.endswith(".lock")
+
+
 def tree_state(root: Path) -> dict[str, str]:
     """Byte-level listing used to prove doctor/validate create nothing."""
     found: dict[str, str] = {}
@@ -34,6 +39,8 @@ def tree_state(root: Path) -> dict[str, str]:
         for name in (*dirnames, *filenames):
             path = base / name
             rel = path.relative_to(root).as_posix()
+            if _transient_git_lock(rel):
+                continue
             if path.is_symlink():
                 found[rel] = "link:" + os.readlink(path)
             elif path.is_file():

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 from rich.text import Text
 
+from cursorfleet.adapters.cursor.kit_probe import HooksKitState
 from cursorfleet.events.models import Event
 from cursorfleet.state.artifact_scan import ArtifactRecord
 from cursorfleet.state.event_store import EventPage
@@ -47,11 +48,41 @@ MAX_LIST = 40
 
 INIT_HINT = "cursorfleet init --cursor"
 DOCTOR_HINT = "cursorfleet doctor"
-GUIDANCE_NO_TELEMETRY = (
+GUIDANCE_NO_KIT = (
     f"No hook telemetry yet. Run `{INIT_HINT}` to install the observe-only hooks, then use "
     f"Cursor in this repo. `{DOCTOR_HINT}` diagnoses the setup."
 )
+GUIDANCE_AWAITING_CURSOR = (
+    "Hooks are installed (`cursorfleet doctor` should be ok). Open this folder in **Cursor**, "
+    "start a chat or agent session, then press `r` here — the first hook run creates telemetry."
+)
+GUIDANCE_KIT_PARTIAL = (
+    f"The CursorFleet kit looks incomplete (lock file or `.cursor/hooks.json` mismatch). "
+    f"Run `{INIT_HINT}` or `{DOCTOR_HINT}`."
+)
+HONEST_UNKNOWN = "Without telemetry the state is UNKNOWN; CursorFleet never infers inactivity."
 VIOLATIONS_PLACEHOLDER = "policy engine arrives in v0.2"
+
+
+def _timeline_empty_message(data: FleetData) -> str:
+    lines = overview_guidance_lines(data)
+    return lines[0] if lines else GUIDANCE_NO_KIT
+
+
+def overview_guidance_lines(data: FleetData) -> list[str]:
+    """Primary setup hint when lanes are unknown (no hook sessions indexed yet)."""
+    if data.repo_root is None:
+        return [
+            "Not inside a git repository. Run from a repo or pass --path.",
+            f"Setup: `{INIT_HINT}`, check with `{DOCTOR_HINT}`.",
+        ]
+    if data.telemetry != "none":
+        return []
+    if data.hooks_kit == HooksKitState.INSTALLED:
+        return [GUIDANCE_AWAITING_CURSOR, HONEST_UNKNOWN]
+    if data.hooks_kit == HooksKitState.PARTIAL:
+        return [GUIDANCE_KIT_PARTIAL, HONEST_UNKNOWN]
+    return [GUIDANCE_NO_KIT, HONEST_UNKNOWN]
 
 
 @dataclass(frozen=True)
@@ -167,19 +198,8 @@ def overview_rows(data: FleetData, ui: UiState) -> list[Row]:
 
 
 def _guidance_rows(data: FleetData) -> list[Row]:
-    rows: list[Row] = []
-    if data.repo_root is None:
-        rows.append(_note("g:repo", "Not inside a git repository. Run from a repo or pass --path."))
-        rows.append(_note("g:repo2", f"Setup: `{INIT_HINT}`, check with `{DOCTOR_HINT}`."))
-    elif data.telemetry == "none":
-        rows.append(_note("g:none", GUIDANCE_NO_TELEMETRY))
-        rows.append(
-            _note(
-                "g:honest",
-                "Without telemetry the state is UNKNOWN; CursorFleet never infers inactivity.",
-            )
-        )
-    return rows
+    lines = overview_guidance_lines(data)
+    return [_note(f"g:{index}", line) for index, line in enumerate(lines)]
 
 
 def _declared_lines(records: Sequence[ArtifactRecord]) -> dict[str, list[ArtifactRecord]]:
@@ -436,12 +456,11 @@ def timeline_rows(data: FleetData, ui: UiState, page: EventPage | None = None) -
             )
         )
     if not page.events:
-        rows.append(
-            _note(
-                "tl:empty",
-                "No events match." if page.total == 0 and ui.filter_text else GUIDANCE_NO_TELEMETRY,
-            )
-        )
+        if page.total == 0 and ui.filter_text:
+            empty_msg = "No events match."
+        else:
+            empty_msg = _timeline_empty_message(data)
+        rows.append(_note("tl:empty", empty_msg))
     for event in page.events:
         rows.append(Row(f"ev:{event.session_id}:{event.event_id}", event_label(event, ui)))
     return rows
@@ -882,7 +901,8 @@ def _wt_card_detail(data: FleetData, ui: UiState, key: str) -> Text:
         if key == f"wt:{wt.path}":
             text = worktree_detail(data, ui, f"wt:{index}:{wt.path}")
             text.append("\nNo hook telemetry: lane is UNKNOWN, never idle.\n", style="bold")
-            text.append(f"Run `{INIT_HINT}` and `{DOCTOR_HINT}` to get telemetry.\n", style="dim")
+            for line in overview_guidance_lines(data):
+                text.append(line + "\n", style="dim")
             return text
     return Text("Select an item.", style="dim")
 
