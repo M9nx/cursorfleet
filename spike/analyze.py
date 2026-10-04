@@ -419,6 +419,83 @@ def _is_task(r):
     return _dict(r.get("ids")).get("tool_name") == "Task"
 
 
+def _bool_flag(container, key):
+    """True/False if a real bool is stored; None if missing or non-bool."""
+    if not isinstance(container, dict) or key not in container:
+        return None
+    v = container[key]
+    return v if v is True or v is False else None
+
+
+def flag_counts(values):
+    """Group booleans as true / false / missing. Non-bool is missing."""
+    out = {"true": 0, "false": 0, "missing": 0}
+    for v in values:
+        if v is True:
+            out["true"] += 1
+        elif v is False:
+            out["false"] += 1
+        else:
+            out["missing"] += 1
+    return out
+
+
+def _task_run_in_background(r):
+    return _bool_flag(_dict(r.get("vals")), "run_in_background")
+
+
+def _start_parallel_flag(r):
+    return _bool_flag(_dict(r.get("vals")), "is_parallel_worker")
+
+
+def _tool_name(r):
+    name = _dict(r.get("ids")).get("tool_name")
+    return name if isinstance(name, str) and name and name != "<invalid>" else "(missing)"
+
+
+def tool_outcomes_by_event_and_tool(recs):
+    """Counts of tool-hook records grouped by hook event, then tool name."""
+    by_ev = defaultdict(Counter)
+    for r in recs:
+        ev = r.get("hook_event_name")
+        if ev not in TOOL_EVENTS:
+            continue
+        by_ev[ev][_tool_name(r)] += 1
+    return {ev: dict(c) for ev, c in sorted(by_ev.items(), key=lambda x: str(x[0]))}
+
+
+def background_lifecycle(recs):
+    """Sanitized Task / parallel flags, tool outcomes, and start/stop completeness.
+
+    Missing means the boolean was not recorded (or was not a bool), not that it
+    was false. Does not classify Q1.
+    """
+    recs = [r for r in recs if isinstance(r, dict)]
+    starts = [r for r in recs if r.get("hook_event_name") == "subagentStart"]
+    stops = [r for r in recs if r.get("hook_event_name") == "subagentStop"]
+    tools = [r for r in recs if r.get("hook_event_name") in TOOL_EVENTS]
+    tasks = [r for r in tools if _is_task(r)]
+    windows, _ = pair_start_stop(starts, stops)
+    matched = sum(1 for w in windows if w["matched_stop"])
+    unmatched = sum(1 for w in windows if not w["matched_stop"])
+    return {
+        "task_run_in_background": flag_counts(_task_run_in_background(r) for r in tasks),
+        "subagentStart_is_parallel_worker": flag_counts(_start_parallel_flag(r) for r in starts),
+        "tool_outcomes_by_event_and_tool": tool_outcomes_by_event_and_tool(recs),
+        "lifecycle_completeness": {
+            "starts": len(starts),
+            "matched_stops": matched,
+            "unmatched_starts": unmatched,
+        },
+        "note": (
+            "Sanitized flags only (true/false/missing). Task run_in_background is "
+            "read from vals (the hook stores the nested tool_input boolean when "
+            "present). Missing means the boolean was not recorded, not false. "
+            "Not a Q1 verdict."
+        ),
+    }
+
+
 def identity_analysis(recs):
     recs = [r for r in recs if isinstance(r, dict)]
     starts = [r for r in recs if r.get("hook_event_name") == "subagentStart"]
@@ -706,6 +783,7 @@ def analyze(path):
         "latency_ms": latency(real),
         "worktrees": worktrees(real),
         "interleaving": interleaving(real),
+        "background_lifecycle": background_lifecycle(real),
     }
     return out
 
@@ -776,6 +854,27 @@ def render(a):
     for b in BUCKETS:
         w("  %s: %s" % (b, ai[b] or "(none)"))
     w("  VERDICT: %s" % ai["verdict"])
+    w("")
+    w("--- background flags and lifecycle completeness ---")
+    bl = a["background_lifecycle"]
+    bg = bl["task_run_in_background"]
+    pw = bl["subagentStart_is_parallel_worker"]
+    lc = bl["lifecycle_completeness"]
+    w("  task_run_in_background: true=%d false=%d missing=%d"
+      % (bg["true"], bg["false"], bg["missing"]))
+    w("  subagentStart_is_parallel_worker: true=%d false=%d missing=%d"
+      % (pw["true"], pw["false"], pw["missing"]))
+    w("  tool_outcomes_by_event_and_tool:")
+    outcomes = bl["tool_outcomes_by_event_and_tool"]
+    if outcomes:
+        for ev, tools in outcomes.items():
+            w("    %s: %s" % (ev, " ".join("%s=%d" % (n, c) for n, c in sorted(tools.items()))))
+    else:
+        w("    (none)")
+    w("  lifecycle_completeness: starts=%d matched_stops=%d unmatched_starts=%d"
+      % (lc["starts"], lc["matched_stops"], lc["unmatched_starts"]))
+    if bl.get("note"):
+        w("  note: %s" % bl["note"])
     w("")
     w("--- Q2 subagent_type values ---")
     st = a["subagent_types"]

@@ -119,6 +119,7 @@ BOOL_FIELDS = (
     "is_first_compaction",
     "is_interrupt",
     "sandbox",
+    "run_in_background",
 )
 NUM_FIELDS = (
     "duration",
@@ -371,6 +372,14 @@ def build_record(payload, hint, raw_len, truncated, parse_ok, stdin_ms, cap_dir,
         for f in BOOL_FIELDS:
             if f in payload and isinstance(payload[f], bool):
                 vals[f] = payload[f]
+        # Nested Task boolean only; never store any other tool_input value.
+        ti = payload.get("tool_input")
+        if (
+            isinstance(ti, dict)
+            and isinstance(ti.get("run_in_background"), bool)
+            and "run_in_background" not in vals
+        ):
+            vals["run_in_background"] = ti["run_in_background"]
         for f in NUM_FIELDS:
             v = payload.get(f)
             if isinstance(v, (int, float)) and not isinstance(v, bool):
@@ -482,6 +491,8 @@ def _synthetic_payloads():
            tool_input={"command": "curl -H 'Authorization: %s' https://x" % s[0],
                        "working_directory": s[6], s[0]: "weird-key-with-secret-name"},
            agent_message=s[8], task=s[7], prompt=s[7]),
+        mk("preToolUse", tool_name="Task", tool_use_id="tu-task-bg",
+           tool_input={"run_in_background": True, "description": "synthetic-task"}),
         mk("postToolUse", tool_name="Shell", tool_use_id="tu-1", cwd="/tmp/" + s[2],
            tool_input={"command": s[3]}, tool_output=json.dumps({"stdout": s[1]}), duration=12),
         mk("postToolUseFailure", tool_name="Shell", tool_use_id="tu-2", error_message=s[0],
@@ -599,6 +610,11 @@ def selftest():
         check(ptu["workspace_roots"][1]["base"] == "<redacted-name>", "email-like basename redacted")
         check(ptu["ids"]["parent_tool_call_id"] == "tc_synthetic_selftest",
               "valid parent_tool_call_id retained")
+        task_bg = [r for r in recs if (r.get("ids") or {}).get("tool_name") == "Task"]
+        check(len(task_bg) == 1, "Task payload captured")
+        check(task_bg[0]["vals"].get("run_in_background") is True,
+              "nested run_in_background bool recorded")
+        check("description" not in task_bg[0].get("vals", {}), "Task description not stored")
         stop0 = by_event["subagentStop"]
         check(stop0["ids"]["child_conversation_id"] == "ses_synthetic_child",
               "valid child_conversation_id retained")
