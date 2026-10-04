@@ -20,6 +20,15 @@ are doing what, from passive hooks and read-only git, without sending anything a
   documentation; the open questions (agent identity inside subagent tool hooks, custom
   subagent names, CLI and Agents Window behaviour, hook latency outside Linux) are tracked in
   [ADR 0001](docs/adr/0001-cursor-capabilities.md) and marked **PROVISIONAL** throughout.
+- **Development is frozen at the M0a spike.** The existing observer and TUI code is
+  implemented, provisional and unvalidated against live Cursor; no new M2/TUI work until the
+  live spike is run ([status](docs/status.md),
+  [empirical test plan](docs/empirical-test-plan.md)).
+- **Supported surface: the local Cursor IDE (desktop) only**, once the spike confirms it.
+  The Cursor CLI, the Agents Window, Cursor-managed and manual worktrees, parallel
+  subagents and cloud agents are not claimed.
+- The name "CursorFleet" is a working name; the final name is a release gate
+  ([ADR 0005](docs/adr/0005-naming-and-trademark.md)).
 - Linux is the tested platform; macOS and Windows are CI-tested only
   ([platform support](docs/platform-support.md)).
 - Cursor is the only officially supported IDE; internals are adapter-ready but no other
@@ -59,7 +68,8 @@ Full walkthrough: [docs/quickstart.md](docs/quickstart.md). No Cursor handy? Run
 Dashboard keys: `o` overview, `l` timeline, `w` worktrees, `g` gates, `e` evidence, `v`
 violations (v0.2 placeholder), `/` filter, `p` pin, `t` tiles (160+ columns), `r` re-read,
 `?` help, `q` quit. The TUI only observes: silence shows as STALE / OFFLINE, never idle, and
-gates are display-only. Details: [docs/tui.md](docs/tui.md).
+gate tiles are heuristic and non-authoritative, not proof that anything passed. Details:
+[docs/tui.md](docs/tui.md).
 
 ## Documentation
 
@@ -69,7 +79,9 @@ gates are display-only. Details: [docs/tui.md](docs/tui.md).
 [architecture](docs/architecture.md) · [privacy](docs/privacy.md) ·
 [threat model](docs/threat-model.md) · [security review](docs/security-review-v0.1.md) ·
 [platform support](docs/platform-support.md) · [hook latency](docs/hook-latency.md) ·
-[release checklist](docs/release-checklist.md) · [ADRs](docs/adr/README.md) ·
+[release checklist](docs/release-checklist.md) · [project status](docs/status.md) ·
+[empirical test plan](docs/empirical-test-plan.md) · [follow-ups](docs/follow-ups.md) ·
+[docs-site plan](docs/docs-site-plan.md) · [ADRs](docs/adr/README.md) ·
 [changelog](CHANGELOG.md)
 
 ## Development
