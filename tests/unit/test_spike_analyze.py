@@ -57,13 +57,17 @@ def start(
     kind: str = "cf-writer",
     t: float = 1000,
     extra_ids: dict[str, Any] | None = None,
+    vals: dict[str, Any] | None = None,
 ) -> Rec:
     ids = {"subagent_id": sub_id, "subagent_type": kind, "parent_conversation_id": PARENT}
     ids.update(extra_ids or {})
     keys = {"subagent_id": "str", "subagent_type": "str", "parent_conversation_id": "str"}
     for k in extra_ids or {}:
         keys[k] = "str"
-    return rec("subagentStart", t, ids, keys)
+    out = rec("subagentStart", t, ids, keys)
+    if vals is not None:
+        out["vals"] = vals
+    return out
 
 
 def stop(kind: str = "cf-writer", t: float = 2000, extra_ids: dict[str, Any] | None = None) -> Rec:
@@ -81,6 +85,7 @@ def tool(
     extra_keys: dict[str, str] | None = None,
     extra_ids: dict[str, Any] | None = None,
     event: str = "preToolUse",
+    vals: dict[str, Any] | None = None,
 ) -> Rec:
     keys = {
         "conversation_id": "str",
@@ -91,7 +96,10 @@ def tool(
     keys.update(extra_keys or {})
     ids = {"conversation_id": conversation_id, "generation_id": "gen-1", "tool_use_id": "tu-1"}
     ids.update(extra_ids or {})
-    return rec(event, t, ids, keys)
+    out = rec(event, t, ids, keys)
+    if vals is not None:
+        out["vals"] = vals
+    return out
 
 
 def window(*tools: Rec) -> list[Rec]:
@@ -447,9 +455,13 @@ CHILD_B = "ses_synthetic_child_b"
 
 
 def linked_start(
-    sub_id: str = SUB, kind: str = "cf-writer", t: float = 1000, tool_call_id: str = TC
+    sub_id: str = SUB,
+    kind: str = "cf-writer",
+    t: float = 1000,
+    tool_call_id: str = TC,
+    vals: dict[str, Any] | None = None,
 ) -> Rec:
-    return start(sub_id=sub_id, kind=kind, t=t, extra_ids={"tool_call_id": tool_call_id})
+    return start(sub_id=sub_id, kind=kind, t=t, extra_ids={"tool_call_id": tool_call_id}, vals=vals)
 
 
 def linked_stop(
@@ -480,6 +492,20 @@ def inner_tool(
         conversation_id=conversation_id,
         extra_keys=extra_keys,
         extra_ids=extra_ids,
+    )
+
+
+def task_tool(
+    t: float = 900,
+    tool_use_id: str = TC,
+    run_in_background: bool | None = None,
+) -> Rec:
+    vals = None if run_in_background is None else {"run_in_background": run_in_background}
+    return tool(
+        t=t,
+        extra_ids={"tool_name": "Task", "tool_use_id": tool_use_id},
+        extra_keys={"tool_name": "str"},
+        vals=vals,
     )
 
 
@@ -899,3 +925,190 @@ def test_capture_hook_rejects_invalid_oversized_and_non_string_new_ids() -> None
 def test_capture_hook_selftest_covers_new_ids() -> None:
     ch = _load_capture_hook()
     assert ch.selftest() == 0
+
+
+# -------------------------------- background flags and row-8 readiness
+
+
+def _bg(az: ModuleType, records: list[Rec]) -> dict[str, Any]:
+    return az.background_lifecycle(records)  # type: ignore[no-any-return]
+
+
+def test_task_run_in_background_true_false_missing(az: ModuleType) -> None:
+    recs = [
+        task_tool(t=800, tool_use_id="tc_synthetic_true", run_in_background=True),
+        task_tool(t=810, tool_use_id="tc_synthetic_false", run_in_background=False),
+        task_tool(t=820, tool_use_id="tc_synthetic_missing", run_in_background=None),
+        linked_start(tool_call_id="tc_synthetic_true"),
+        linked_stop(subagent_id=SUB),
+    ]
+    bg = _bg(az, recs)["task_run_in_background"]
+    assert bg == {"true": 1, "false": 1, "missing": 1}
+
+
+def test_is_parallel_worker_true_false_missing(az: ModuleType) -> None:
+    recs = [
+        start(
+            sub_id="sub-true",
+            t=1000,
+            extra_ids={"tool_call_id": "tc_a"},
+            vals={"is_parallel_worker": True},
+        ),
+        start(
+            sub_id="sub-false",
+            t=1100,
+            extra_ids={"tool_call_id": "tc_b"},
+            vals={"is_parallel_worker": False},
+        ),
+        start(sub_id="sub-miss", t=1200, extra_ids={"tool_call_id": "tc_c"}),
+        stop(kind="cf-writer", t=2000, extra_ids={"subagent_id": "sub-true"}),
+        stop(kind="cf-writer", t=2100, extra_ids={"subagent_id": "sub-false"}),
+        stop(kind="cf-writer", t=2200, extra_ids={"subagent_id": "sub-miss"}),
+    ]
+    pw = _bg(az, recs)["subagentStart_is_parallel_worker"]
+    assert pw == {"true": 1, "false": 1, "missing": 1}
+
+
+def test_tool_outcomes_grouped_by_event_and_tool(az: ModuleType) -> None:
+    recs = [
+        task_tool(run_in_background=False),
+        tool(
+            t=910,
+            extra_ids={"tool_name": "Read", "tool_use_id": "tu-read"},
+            extra_keys={"tool_name": "str"},
+        ),
+        tool(
+            t=920,
+            event="postToolUseFailure",
+            extra_ids={"tool_name": "Read", "tool_use_id": "tu-read"},
+            extra_keys={"tool_name": "str"},
+        ),
+        linked_start(),
+        linked_stop(),
+    ]
+    outcomes = _bg(az, recs)["tool_outcomes_by_event_and_tool"]
+    assert outcomes["preToolUse"]["Task"] == 1
+    assert outcomes["preToolUse"]["Read"] == 1
+    assert outcomes["postToolUseFailure"]["Read"] == 1
+
+
+def test_missing_subagent_stop_counts_as_unmatched_start(az: ModuleType) -> None:
+    recs = [start(), tool()]
+    lc = _bg(az, recs)["lifecycle_completeness"]
+    assert lc == {"starts": 1, "matched_stops": 0, "unmatched_starts": 1}
+    assert _bg(az, recs)["row8_readiness_code"] == "BLOCKED/OPEN"
+    assert _bg(az, recs)["row8_readiness"] == az.ROW8_BLOCKED_OPEN
+
+
+def test_row8_blocked_when_flags_missing_and_no_overlap(az: ModuleType) -> None:
+    recs = window(tool())
+    bg = _bg(az, recs)
+    assert bg["task_run_in_background"]["missing"] == 0  # no Task tools
+    assert bg["subagentStart_is_parallel_worker"] == {"true": 0, "false": 0, "missing": 1}
+    assert bg["lifecycle_completeness"]["matched_stops"] == 1
+    assert bg["row8_readiness_code"] == "BLOCKED/OPEN"
+    assert bg["row8_readiness"] == az.ROW8_BLOCKED_OPEN
+    assert "FAIL" not in bg["row8_readiness"]
+
+
+def test_row8_blocked_when_parallel_start_has_no_stop(az: ModuleType) -> None:
+    recs = [start(vals={"is_parallel_worker": True}), tool()]
+    bg = _bg(az, recs)
+    assert bg["row8_readiness_code"] == "BLOCKED/OPEN"
+    assert bg["row8_readiness"] == az.ROW8_BLOCKED_OPEN
+    assert bg["row8_unmatched_parallel_instances"] == 1
+    assert bg["lifecycle_completeness"]["unmatched_starts"] == 1
+
+
+def test_row8_ready_when_overlapping_windows_have_matched_stops(az: ModuleType) -> None:
+    recs = [
+        linked_start(sub_id=SUB, t=1000, tool_call_id=TC),
+        linked_start(sub_id=SUB_B, kind="cf-reviewer", t=1100, tool_call_id=TC_B),
+        linked_stop(kind="cf-writer", t=2000, subagent_id=SUB, child_conversation_id=CHILD),
+        linked_stop(kind="cf-reviewer", t=2100, subagent_id=SUB_B, child_conversation_id=CHILD_B),
+    ]
+    bg = _bg(az, recs)
+    assert bg["row8_readiness_code"] == "READY"
+    assert bg["row8_readiness"] == az.ROW8_READY
+    assert bg["lifecycle_completeness"] == {"starts": 2, "matched_stops": 2, "unmatched_starts": 0}
+
+
+def test_row8_ready_when_is_parallel_worker_true_with_matched_stop(az: ModuleType) -> None:
+    recs = [
+        linked_start(vals={"is_parallel_worker": True}),
+        linked_stop(subagent_id=SUB),
+    ]
+    bg = _bg(az, recs)
+    assert bg["subagentStart_is_parallel_worker"]["true"] == 1
+    assert bg["row8_readiness_code"] == "READY"
+    assert bg["row8_readiness"] == az.ROW8_READY
+
+
+def test_row8_ready_when_task_run_in_background_true_with_matched_stop(
+    az: ModuleType,
+) -> None:
+    recs = [
+        task_tool(run_in_background=True),
+        linked_start(),
+        linked_stop(subagent_id=SUB),
+    ]
+    bg = _bg(az, recs)
+    assert bg["task_run_in_background"] == {"true": 1, "false": 0, "missing": 0}
+    assert bg["row8_readiness_code"] == "READY"
+    assert bg["row8_readiness"] == az.ROW8_READY
+
+
+def test_row8_blocked_when_background_task_has_no_linked_start(az: ModuleType) -> None:
+    recs = [task_tool(run_in_background=True), start(), stop()]
+    bg = _bg(az, recs)
+    assert bg["row8_unlinked_background_tasks"] == 1
+    assert bg["row8_readiness_code"] == "BLOCKED/OPEN"
+    assert bg["row8_readiness"] == az.ROW8_BLOCKED_OPEN
+
+
+def test_row8_never_fail_and_does_not_infer_q1(az: ModuleType) -> None:
+    sequential = az.identity_analysis(window(tool()))
+    blocked = _bg(az, window(tool()))
+    assert sequential["verdict_code"] == "REFUTED"
+    assert blocked["row8_readiness_code"] == "BLOCKED/OPEN"
+    assert blocked["row8_readiness"] == az.ROW8_BLOCKED_OPEN
+    assert "FAIL" not in blocked["row8_readiness"]
+    assert (
+        "Q1" not in blocked["row8_readiness"]
+        or "do not infer a Q1 verdict" in blocked["row8_readiness"]
+    )
+
+    parallel = [
+        linked_start(sub_id=SUB, t=1000, tool_call_id=TC),
+        linked_start(sub_id=SUB_B, kind="cf-reviewer", t=1100, tool_call_id=TC_B),
+        inner_tool(t=1500),
+        linked_stop(kind="cf-writer", t=2000, subagent_id=SUB, child_conversation_id=CHILD),
+        linked_stop(kind="cf-reviewer", t=2100, subagent_id=SUB_B, child_conversation_id=CHILD_B),
+    ]
+    q1 = az.identity_analysis(parallel)
+    ready = _bg(az, parallel)
+    assert ready["row8_readiness_code"] == "READY"
+    assert ready["row8_readiness"] == az.ROW8_READY
+    assert q1["verdict_code"] == "OPEN"
+    assert "hint only" in q1["verdict"]
+
+
+def test_render_prints_ready_and_blocked_open_strings(az: ModuleType, tmp_path: Path) -> None:
+    blocked_text = az.render(az.analyze(str(write_capture(tmp_path, window(tool())))))
+    assert "ROW 8 READINESS: " + az.ROW8_BLOCKED_OPEN in blocked_text
+    assert "do not infer a Q1 verdict" in blocked_text
+    assert "FAIL" not in blocked_text.split("ROW 8 READINESS:")[1].splitlines()[0]
+
+    ready_recs = [
+        linked_start(sub_id=SUB, t=1000, tool_call_id=TC),
+        linked_start(sub_id=SUB_B, kind="cf-reviewer", t=1100, tool_call_id=TC_B),
+        linked_stop(kind="cf-writer", t=2000, subagent_id=SUB, child_conversation_id=CHILD),
+        linked_stop(kind="cf-reviewer", t=2100, subagent_id=SUB_B, child_conversation_id=CHILD_B),
+    ]
+    ready_path = tmp_path / "ready" / "captures.jsonl"
+    ready_path.parent.mkdir()
+    ready_path.write_text("".join(json.dumps(r) + "\n" for r in ready_recs), encoding="utf-8")
+    ready_text = az.render(az.analyze(str(ready_path)))
+    assert "ROW 8 READINESS: " + az.ROW8_READY in ready_text
+    assert "task_run_in_background:" in ready_text
+    assert "lifecycle_completeness:" in ready_text
