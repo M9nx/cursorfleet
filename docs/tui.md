@@ -6,6 +6,11 @@ enforces, approves or blocks anything, never fetches, never touches the network,
 holds or shows prompts, thinking text, responses, file contents or command output (see
 [privacy](privacy.md)).
 
+> **Status: implemented, provisional, unvalidated against live Cursor.** New TUI work is
+> frozen until the live spike runs ([status](status.md)). Where this page and the code
+> differ from an accepted ADR, the difference is marked **Divergence** and tracked in
+> [follow-ups](follow-ups.md). Telemetry is best-effort, so any view can be incomplete.
+
 ```bash
 cursorfleet tui [--path DIR] [--refresh SECONDS] [--no-git] [--no-watch]
 ```
@@ -27,8 +32,8 @@ The command needs an interactive terminal and exits with status 2 otherwise; in 
 | `o` | Overview (default) | Agents grouped into lanes: QUEUED, LOADING CONTEXT, PLANNING, WORKING, VERIFYING, AWAITING REVIEW, PATCHING, BLOCKED, DONE, STALE / OFFLINE, and UNKNOWN / NO TELEMETRY. Lanes sort by blockers, then recency. Enter opens the agent detail. |
 | `l` | Timeline | Events, newest first, with `source/attribution`, agent, summary and risk. Filterable (below). Large histories are paged: 200 rows at first, `m` loads more. |
 | `w` | Worktrees | Branch, HEAD, dirty files, ahead/behind, stale or prunable, owning agent, last activity. `r` only re-reads. |
-| `g` | Gates | Ten independent signals per worktree (below). |
-| `e` | Evidence | Observed test/lint/type runs, and, separately, what agents DECLARED in work artifacts. |
+| `g` | Gates | Ten heuristic, non-authoritative signals per worktree (below). |
+| `e` | Evidence | Heuristic test/lint/type observations, and, separately, what agents DECLARED in work artifacts. |
 | `v` | Violations | Placeholder: "policy engine arrives in v0.2". |
 | `?` | Help | Keys, layouts, honesty rules, setup hints. |
 
@@ -43,22 +48,38 @@ if Cursor sent one. Token and cost are always "unknown (not exposed by Cursor ho
   worktree with no hook telemetry is in UNKNOWN / NO TELEMETRY with setup guidance.
 - **Observed versus self-reported.** Timeline tags: `obs` (from a Cursor hook), `drv`
   (derived by CursorFleet, e.g. a test run), `SELF` (declared by an agent in a work
-  artifact). Self-reported items are labelled and never count as gate evidence.
+  artifact). Self-reported and heuristic items are labelled and never count as gate
+  evidence ([ADR 0011](adr/0011-evidence-trust-model.md)).
+- **Attribution is a label, not a fact.** Per [ADR 0003](adr/0003-event-model-and-sanitization.md)
+  it is `exact`, `inferred_temporal` or `unknown`, and an aggregate shows its weakest
+  member. **Divergence:** the code still uses the older labels (`exact`, `inferred`,
+  `unknown`) and does not yet apply weakest-wins everywhere.
 - **Basis tags.** Each card says how its lane was decided: `observed`, `lifecycle-only`,
   `SELF-REPORTED`, `derived` or `no telemetry`.
 
 ## Gates
 
-Unit tests, integration tests, type check, lint, security checks, independent review,
-re-review, documentation, CI status, merge readiness. Each is its own signal with a state
-of PASS, FAIL, UNKNOWN or STALE, bound to a commit SHA. When HEAD moves past that commit the
-signal becomes STALE and keeps showing the old result. There is no aggregate score, and the
-screen is labelled "display-only: v0.1 does not enforce gates".
+**Heuristic and non-authoritative. Not proof that anything passed.** The gate screen is a
+display of guesses; v0.1 does not enforce or certify any gate, and `stop` cannot block
+completion ([ADR 0008](adr/0008-enforcement-boundaries.md)). The screen is labelled
+"heuristic, non-authoritative".
 
-Evidence is only what Cursor hooks observed (a verify-looking shell command with its exit
-code) or an explicit `gate.changed` event. An `&&`-chain that exits 0 supports every gate it
-contains; a failing or `;`/`||` chain gives UNKNOWN. Review, documentation, CI and merge
-readiness have no observable source in v0.1 and stay UNKNOWN until something records them.
+The ten signals: unit tests, integration tests, type check, lint, security checks,
+independent review, re-review, documentation, CI status, merge readiness. Each is its own
+signal, never aggregated. Intended states are UNKNOWN, STALE and "observed (heuristic)".
+A real PASS or FAIL needs evidence from a deterministic runner bound to a commit SHA, which
+arrives in v0.3 ([ADR 0011](adr/0011-evidence-trust-model.md)). Heuristic events never
+satisfy a gate (rule R1 in [ADR 0003](adr/0003-event-model-and-sanitization.md)).
+
+**Divergence (violation of R1).** The current code derives PASS and FAIL tiles from
+`test.completed` events, which come from a command classifier over sanitized shell command
+text and its exit code (`tui/gates.py`: `classify_command`, `evidence_from_events`). An
+`&&`-chain that exits 0 counts for every gate it contains; a failing or `;`/`||` chain gives
+UNKNOWN. When HEAD moves past the recorded commit the signal becomes STALE and keeps the old
+result. Until fixed, read PASS and FAIL here as "a command that looked like this exited 0 or
+non-zero", nothing more. The target is `verification.observed` events shown as observations
+with their method and confidence, never as gates. Review, documentation, CI and merge
+readiness have no observable source in v0.1 and stay UNKNOWN.
 
 ## Timeline filter (`/`)
 
@@ -116,8 +137,13 @@ are counted in the banner. A failing refresh keeps the last good data on screen 
 
 ## Work artifacts in the dashboard (state layer)
 
-Agents may leave `.cursorfleet/work/<task>/<NN>-<kind>-<role>.md` files (schema
-`cursorfleet.artifact/1`, [ADR 0006](adr/0006-agent-declared-events.md)). On every refresh a
+Agents may leave `.cursorfleet/work/<task>/<NN>-<kind>-<role>.md` files
+([ADR 0006](adr/0006-agent-declared-events.md)). The decided format is TOML frontmatter
+between `+++` fences, schema `cursorfleet.artifact/0.1`, with `artifact_id`, `revision` and
+a BLAKE2s `digest`. **Divergence:** the code and the generated templates still read a YAML
+subset with schema `cursorfleet.artifact/1` and no identity, revision or digest; see
+[kit.md](kit.md). In both formats every artifact event is self-reported and ineligible as
+gate evidence. On every refresh a
 read-only scanner (`state/artifact_scan.py`) turns valid ones into `self_reported` events
 (`plan.created`, `handoff.created`, `blocker.raised`, `context.loaded`) in a synthetic
 session `work:<task>`, and reports invalid ones as problems with a fixed description. The
@@ -147,4 +173,7 @@ older database is reindexed once from the spool. `status --json` is unchanged.
   some agents appear under UNKNOWN / NO TELEMETRY.
 - That agents follow the artifact conventions at all, and that `author_role` is not forged
   (it can be; ADR 0006).
-- Gate command classification, which is a heuristic over sanitized commands.
+- Gate command classification, which is a heuristic over sanitized commands and is
+  non-authoritative (see Gates).
+- Command text display. The decision is default OFF ([ADR 0003](adr/0003-event-model-and-sanitization.md));
+  **Divergence:** the code stores a sanitized command string by default.
