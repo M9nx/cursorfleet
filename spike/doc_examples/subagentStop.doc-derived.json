@@ -1,0 +1,41 @@
+{
+  "_doc_derived_not_captured": true,
+  "conversation_id": "doc-example-conversation",
+  "generation_id": "doc-example-generation",
+  "model": "claude-opus-4-7-thinking-max",
+  "model_id": "claude-opus-4-7",
+  "model_params": [
+    {
+      "id": "thinking",
+      "value": "true"
+    },
+    {
+      "id": "context",
+      "value": "1m"
+    },
+    {
+      "id": "effort",
+      "value": "max"
+    }
+  ],
+  "hook_event_name": "subagentStop",
+  "cursor_version": "0.0.0-doc-example",
+  "workspace_roots": [
+    "/project"
+  ],
+  "user_email": null,
+  "transcript_path": null,
+  "subagent_type": "generalPurpose",
+  "status": "completed",
+  "task": "Explore the authentication flow",
+  "description": "Exploring auth flow",
+  "summary": "<subagent output summary>",
+  "duration_ms": 45000,
+  "message_count": 12,
+  "tool_call_count": 8,
+  "loop_count": 0,
+  "modified_files": [
+    "src/auth.ts"
+  ],
+  "agent_transcript_path": "/path/to/subagent/transcript.txt"
+}
