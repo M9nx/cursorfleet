@@ -320,6 +320,10 @@ def run_pool(args: list[tuple[str, str, str, int, int, int]]) -> list[int]:
         return pool.map(append_worker, args)
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows O_APPEND writes are not atomic across processes (POSIX local filesystems are)",
+)
 def test_concurrent_writers_same_file_do_not_interleave(paths: RuntimePaths) -> None:
     jobs = [(paths.root, "s1", "main", i * 1000, 120, 4 * 1024 * 1024) for i in range(6)]
     assert run_pool(jobs) == [120] * 6
@@ -328,6 +332,10 @@ def test_concurrent_writers_same_file_do_not_interleave(paths: RuntimePaths) -> 
     assert corruption.total == 0 and len({e.event_id for e in events}) == 720 == len(events)
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows O_APPEND writes are not atomic across processes (POSIX local filesystems are)",
+)
 def test_concurrent_writers_with_rotation_lose_nothing(paths: RuntimePaths) -> None:
     jobs = [(paths.root, "s1", "main", i * 1000, 100, 6000) for i in range(5)]
     assert run_pool(jobs) == [100] * 5

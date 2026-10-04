@@ -8,6 +8,7 @@ and the TUI run, and every git subcommand the collector uses is local-only.
 from __future__ import annotations
 
 import ast
+import os
 import socket
 from pathlib import Path
 from typing import Any, NoReturn
@@ -124,6 +125,10 @@ def test_every_cli_command_and_the_hook_run_without_network(
     assert no_network == []
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows ProactorEventLoop connects a localhost self-pipe; not application network I/O",
+)
 async def test_the_tui_runs_without_network(tmp_path: Path, no_network: list[str]) -> None:
     repo = new_repo(tmp_path)
     build_fleet(repo)
