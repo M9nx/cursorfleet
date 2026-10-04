@@ -14,6 +14,21 @@ anything stronger than the table.
 GitHub yet at the time of writing. Treat a green matrix, once it exists, as the evidence, and
 a red cell as a known gap rather than a surprise.
 
+## Cursor surfaces
+
+Operating system and Cursor surface are different questions. The table above is about the
+OS. For Cursor itself ([ADR 0001](adr/0001-cursor-capabilities.md)):
+
+- **Local Cursor IDE (desktop): the only supported v0.1 surface**, and only after the live
+  spike confirms it. Today it is untested against a live Cursor.
+- **Not claimed, not supported:** Cursor CLI (`agent`, interactive and `-p`), the Agents
+  Window, Cursor-managed worktrees, manual worktrees opened in Cursor, parallel subagents,
+  cloud agents and cloud subagents. Hooks may or may not fire there; nothing here says they do.
+- A surface moves into the supported list only when its row in the empirical test matrix
+  passes ([`empirical-test-plan.md`](empirical-test-plan.md)).
+- Git worktrees as a **git** feature are read by the collector, but that does not mean the
+  hooks work inside Cursor-managed worktrees.
+
 Python 3.11 to 3.14 are in the matrix. The `watch` extra (`watchfiles`) is optional; without it
 the TUI polls.
 
@@ -21,7 +36,7 @@ the TUI polls.
 
 | Area | Approach | Status |
 | --- | --- | --- |
-| File locking | `fcntl.flock` on POSIX, `msvcrt.locking` on Windows (`state/lock.py`); imported lazily, never on the hook path. | Written for both; Windows unverified |
+| File locking | `fcntl.flock` on POSIX, `msvcrt.locking` on Windows (`state/lock.py`); imported lazily, never on the hook path. Covers the indexer only; the maintenance lock for purge and the contention-versus-unsupported check in [ADR 0002](adr/0002-storage-layout-and-runtime-directory.md) are not implemented. | Partly written; Windows unverified |
 | Permissions | `0700`/`0600` via `os.chmod`/`os.fchmod` guarded by `os.name == "posix"`. Windows gets the default ACL of the user profile, nothing more. | Documented gap (see below) |
 | Atomic appends | One spool file per writer, opened `O_APPEND`; lines are at most 8 KiB with a CRC, so a torn or interleaved write is detected and skipped on read. | Tested on Linux; Windows append semantics unverified (ADR 0002 Q5) |
 | Symlinks and junctions | `O_NOFOLLOW` where it exists; `is_link_like` also treats Windows reparse points (junctions) as links. Creating symlinks on Windows needs a privilege, so the symlink tests are skipped there with an explicit reason. | Junction check simulated on Linux only |
@@ -51,7 +66,8 @@ the TUI polls.
   expected to work; legacy `conhost` rendering, unusual locales and non-UTF-8 code pages are not
   tested. Redirected output on Windows consoles may need `PYTHONUTF8=1` if you see encoding errors.
 - **Cursor itself.** Where Cursor keeps `hooks.json` per OS, how it spawns hooks, and whether
-  the CLI and Agents Window fire hooks are the open questions in ADR 0001 (Q1 to Q6). Enterprise
+  the CLI and Agents Window fire hooks are the open questions in ADR 0001 (Q1 to Q6); no
+  support is claimed for them. Enterprise
   paths in `doctor` come from documentation only.
 
 ## Test policy for platform differences
