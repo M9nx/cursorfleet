@@ -95,7 +95,7 @@ A lane is a display classification with a stated basis; it is never evidence (AD
   3. otherwise the stop is **unpaired**: it is counted (`unpaired_stops`) and shown under a
      synthetic entry; it is never forced onto an agent.
 - A candidate additional link, `Task` `tool_use_id` equal to `subagentStart.tool_call_id`, is
-  recorded (`spawn_link`) but not used for pairing until Q-secondary confirms it.
+  recorded (`spawn_link`) but not used for pairing until the spike answers the secondary question on `Task` linkage.
 
 ### What is observed, inferred and self-reported
 
