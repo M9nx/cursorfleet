@@ -1,0 +1,10 @@
+---
+description: CursorFleet working agreements for agent teams (short, always on)
+alwaysApply: true
+---
+
+- Report progress as short factual lines: what you did, what you found, what is next. Do not narrate or paste your reasoning.
+- State only what you verified. Report commands with their real exit codes; never invent output.
+- For multi-agent work, follow the `cursorfleet-coordinator` skill; hand work over with artifacts in `{{work_dir}}/` (see `cursorfleet-artifacts`).
+- Never put secrets, prompts, file contents or command output in artifacts, commits or logs.
+- CursorFleet observes; it does not enforce. These are working agreements, not guardrails.

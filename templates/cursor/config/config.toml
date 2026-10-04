@@ -1,0 +1,47 @@
+# CursorFleet configuration (committed; data only, never executed).
+# Every key below shows its default. Delete or edit as needed.
+# v0.1 observes only: nothing here enforces or blocks anything.
+schema_version = "1.0"
+
+[retention]
+max_age_days = 14
+max_session_mb = 50
+
+[privacy]
+# Knobs can only reduce what is stored.
+store_command_display = true
+command_display_max_chars = 200
+hash_commands = true
+
+[hooks]
+# Subset of the 12 passive hooks that `cursorfleet init --cursor` registers.
+# Content-bearing hooks cannot be listed here (ADR 0004).
+enabled = [
+  "sessionStart",
+  "sessionEnd",
+  "preToolUse",
+  "postToolUse",
+  "postToolUseFailure",
+  "subagentStart",
+  "subagentStop",
+  "beforeShellExecution",
+  "afterShellExecution",
+  "afterFileEdit",
+  "preCompact",
+  "stop",
+]
+
+[git]
+refresh_interval_s = 5
+stale_after_hours = 72
+ahead_behind = true
+
+[tui]
+refresh_interval_ms = 500
+
+[cursor]
+# Cursor versions you have verified; `cursorfleet doctor` warns on others.
+validated_versions = []
+
+[work]
+dir = ".cursorfleet/work"
