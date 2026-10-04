@@ -34,26 +34,30 @@
   {% set og_title = config.site_name %}
 {% endif %}
 {% set og_url = page.canonical_url if page.canonical_url else (config.site_url if config.site_url else "") %}
+{# Cache-bust OG image when branding changes so WhatsApp/Facebook re-fetch the card. #}
+{% set og_image_url = og_image ~ "?v=3" %}
 <meta property="og:site_name" content="{{ config.site_name }}">
 <meta property="og:locale" content="en_US">
 <meta property="og:type" content="website">
 <meta property="og:title" content="{{ og_title }}">
 <meta property="og:url" content="{{ og_url }}">
+<meta property="og:image" content="{{ og_image_url }}">
+<meta property="og:image:secure_url" content="{{ og_image_url }}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="CursorFleet — passive hooks and local TUI for Cursor agent teams">
+<link rel="image_src" href="{{ og_image_url }}">
 {% if desc %}
 <meta property="og:description" content="{{ desc }}">
 {% endif %}
-<meta property="og:image" content="{{ og_image }}">
-<meta property="og:image:secure_url" content="{{ og_image }}">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="{{ config.site_name }} — local observe-only harness for Cursor agent teams">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{ og_title }}">
 {% if desc %}
 <meta name="twitter:description" content="{{ desc }}">
 {% endif %}
-<meta name="twitter:image" content="{{ og_image }}">
-<meta name="twitter:image:alt" content="{{ config.site_name }} — local observe-only harness for Cursor agent teams">
+<meta name="twitter:image" content="{{ og_image_url }}">
+<meta name="twitter:image:alt" content="CursorFleet — passive hooks and local TUI for Cursor agent teams">
 <meta name="theme-color" content="#0a0a0a">
 {% endblock %}
 

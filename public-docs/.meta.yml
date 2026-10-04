@@ -1,6 +1,5 @@
 title: CursorFleet
 description: >-
-  Observe local Cursor agent teams from your machine — passive hooks, read-only
-  git, and a TUI dashboard. Pre-alpha, unofficial, not affiliated with Cursor
-  or Anysphere.
+  Passive Cursor hooks + local TUI to observe agent teams. Observe-only,
+  pre-alpha, unofficial.
 image: assets/og-card.png

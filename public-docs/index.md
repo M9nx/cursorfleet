@@ -1,3 +1,11 @@
+---
+title: CursorFleet
+description: >-
+  Passive Cursor hooks + local TUI to observe agent teams. Observe-only,
+  pre-alpha, unofficial.
+image: assets/og-card.png
+---
+
 # CursorFleet
 
 A local TUI and workflow harness for Cursor agent teams: see which local
