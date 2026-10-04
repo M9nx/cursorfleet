@@ -287,32 +287,33 @@ def associate_tool(r, windows):
 
     Order: parent_tool_call_id, then child_conversation_id, then temporal.
     A unique hit at an earlier level wins. Ambiguous (2+) hits at a level are
-    skipped. Temporal matching is never treated as exact.
+    skipped and recorded. Temporal matching is never treated as exact.
+    Returns (window_or_None, method_or_None, list_of_ambiguous_reasons).
     """
     ids = _dict(r.get("ids"))
     t = _when(r)
-    ambiguous = None
+    ambiguous = []
     ptc = _sid(ids.get("parent_tool_call_id"))
     if ptc is not None:
         hits = [w for w in windows if _sid(w.get("tool_call_id")) == ptc]
         if len(hits) == 1:
-            return hits[0], ASSOC_PARENT_TOOL, None
+            return hits[0], ASSOC_PARENT_TOOL, ambiguous
         if len(hits) > 1:
-            ambiguous = "ambiguous_parent_tool_call_id"
+            ambiguous.append("ambiguous_parent_tool_call_id")
     cid = _sid(ids.get("conversation_id"))
     if cid is not None:
         hits = [w for w in windows if w.get("child_conversation_id") == cid]
         if len(hits) == 1:
-            return hits[0], ASSOC_CHILD_CONV, None
-        if len(hits) > 1 and ambiguous is None:
-            ambiguous = "ambiguous_child_conversation_id"
+            return hits[0], ASSOC_CHILD_CONV, ambiguous
+        if len(hits) > 1:
+            ambiguous.append("ambiguous_child_conversation_id")
     if t is not None:
         hits = [w for w in windows
                 if w["t0"] is not None and w["t1"] is not None and w["t0"] <= t <= w["t1"]]
         if len(hits) == 1:
-            return hits[0], ASSOC_TEMPORAL, None
-        if len(hits) > 1 and ambiguous is None:
-            ambiguous = "ambiguous_temporal"
+            return hits[0], ASSOC_TEMPORAL, ambiguous
+        if len(hits) > 1:
+            ambiguous.append("ambiguous_temporal")
     return None, None, ambiguous
 
 
@@ -395,8 +396,8 @@ def identity_analysis(recs):
     flags = []
     for r in tools:
         win, method, amb = associate_tool(r, windows)
-        if amb:
-            ambiguous_links[amb] += 1
+        for reason in amb:
+            ambiguous_links[reason] += 1
         flags.append((r, win, method))
         if method:
             assoc_counts[method] += 1

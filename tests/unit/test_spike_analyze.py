@@ -52,17 +52,29 @@ def rec(
     }
 
 
-def start(sub_id: str = SUB, kind: str = "cf-writer", t: float = 1000) -> Rec:
-    return rec(
-        "subagentStart",
-        t,
-        {"subagent_id": sub_id, "subagent_type": kind, "parent_conversation_id": PARENT},
-        {"subagent_id": "str", "subagent_type": "str", "parent_conversation_id": "str"},
-    )
+def start(
+    sub_id: str = SUB,
+    kind: str = "cf-writer",
+    t: float = 1000,
+    extra_ids: dict[str, Any] | None = None,
+) -> Rec:
+    ids = {"subagent_id": sub_id, "subagent_type": kind, "parent_conversation_id": PARENT}
+    ids.update(extra_ids or {})
+    keys = {"subagent_id": "str", "subagent_type": "str", "parent_conversation_id": "str"}
+    for k in extra_ids or {}:
+        keys[k] = "str"
+    return rec("subagentStart", t, ids, keys)
 
 
-def stop(kind: str = "cf-writer", t: float = 2000) -> Rec:
-    return rec("subagentStop", t, {"subagent_type": kind}, {"subagent_type": "str"})
+def stop(
+    kind: str = "cf-writer", t: float = 2000, extra_ids: dict[str, Any] | None = None
+) -> Rec:
+    ids: dict[str, Any] = {"subagent_type": kind}
+    ids.update(extra_ids or {})
+    keys = {"subagent_type": "str"}
+    for k in extra_ids or {}:
+        keys[k] = "str"
+    return rec("subagentStop", t, ids, keys)
 
 
 def tool(
@@ -397,3 +409,283 @@ def test_load_tolerates_odd_timestamps(az: ModuleType, tmp_path: Path) -> None:
     _, recs, bad = az.load(str(path))
     assert len(recs) == 3
     assert bad == 1
+
+
+# -------------------------------- parent_tool_call_id is a link candidate
+
+
+TC = "tc_synthetic_1"
+CHILD = "ses_synthetic_child"
+SUB_B = "sub-synthetic-b"
+TC_B = "tc_synthetic_2"
+CHILD_B = "ses_synthetic_child_b"
+
+
+def linked_start(
+    sub_id: str = SUB, kind: str = "cf-writer", t: float = 1000, tool_call_id: str = TC
+) -> Rec:
+    return start(sub_id=sub_id, kind=kind, t=t, extra_ids={"tool_call_id": tool_call_id})
+
+
+def linked_stop(
+    kind: str = "cf-writer",
+    t: float = 2000,
+    subagent_id: str | None = None,
+    child_conversation_id: str | None = None,
+) -> Rec:
+    extra: dict[str, Any] = {}
+    if subagent_id is not None:
+        extra["subagent_id"] = subagent_id
+    if child_conversation_id is not None:
+        extra["child_conversation_id"] = child_conversation_id
+    return stop(kind=kind, t=t, extra_ids=extra or None)
+
+
+def inner_tool(
+    t: float = 1500,
+    conversation_id: str = CHILD,
+    parent_tool_call_id: str | None = TC,
+) -> Rec:
+    extra_keys = {"parent_tool_call_id": "str"} if parent_tool_call_id is not None else {}
+    extra_ids: dict[str, Any] = {}
+    if parent_tool_call_id is not None:
+        extra_ids["parent_tool_call_id"] = parent_tool_call_id
+    return tool(
+        t=t,
+        conversation_id=conversation_id,
+        extra_keys=extra_keys,
+        extra_ids=extra_ids,
+    )
+
+
+def test_parent_tool_call_id_is_unclassified_not_parent_only_or_exact(az: ModuleType) -> None:
+    recs = [linked_start(), inner_tool(), linked_stop(subagent_id=TC, child_conversation_id=CHILD)]
+    res = az.identity_analysis(recs)
+    assert "parent_tool_call_id" in res["unclassified_identity_candidates"]
+    assert "parent_tool_call_id" not in res["parent_only_identity"]
+    assert "parent_tool_call_id" not in res["direct_current_identity"]
+    assert res["verdict_code"] == "OPEN"
+    assert (
+        az.classify_key("parent_tool_call_id", "preToolUse")
+        == "unclassified_identity_candidates"
+    )
+    assert az.classify_key("parent_conversation_id", "preToolUse") == "parent_only_identity"
+
+
+def test_parent_conversation_id_still_parent_only_when_tool_call_candidate_absent(
+    az: ModuleType,
+) -> None:
+    assert az.classify_key("parent_subagent_id", "preToolUse") == "parent_only_identity"
+
+
+# -------------------------------- relationship equalities
+
+
+def test_task_tool_use_id_equals_subagent_start_tool_call_id(az: ModuleType) -> None:
+    task = tool(
+        t=900,
+        extra_ids={"tool_name": "Task", "tool_use_id": TC},
+        extra_keys={"tool_name": "str"},
+    )
+    recs = [task, linked_start(), linked_stop()]
+    res = az.identity_analysis(recs)
+    assert res["task_tool_use_ids_matching_subagentStart_tool_call_id"] == 1
+    assert res["task_tool_use_id_eq_subagentStart_tool_call_id"] == 1
+    assert res["task_tool_events"] == 1
+
+
+def test_inner_parent_tool_call_id_equals_subagent_start_tool_call_id(az: ModuleType) -> None:
+    recs = [linked_start(), inner_tool(), linked_stop(child_conversation_id=CHILD)]
+    res = az.identity_analysis(recs)
+    assert res["inner_tool_parent_tool_call_id_eq_subagentStart_tool_call_id"] == 1
+    assert res["inner_tool_association"]["parent_tool_call_id"] == 1
+    assert res["tool_events_inside_subagent_windows"] == 1
+
+
+def test_stop_subagent_id_equals_start_subagent_id_and_tool_call_id(az: ModuleType) -> None:
+    match_sid = az.identity_analysis(
+        [linked_start(), linked_stop(subagent_id=SUB, child_conversation_id=CHILD)]
+    )
+    assert match_sid["subagentStop_subagent_id_eq_subagentStart_subagent_id"] == 1
+    assert match_sid["subagentStop_subagent_id_eq_subagentStart_tool_call_id"] == 0
+    assert match_sid["windows_paired_by_subagent_id"] == 1
+
+    match_call = az.identity_analysis(
+        [linked_start(), linked_stop(subagent_id=TC, child_conversation_id=CHILD)]
+    )
+    assert match_call["subagentStop_subagent_id_eq_subagentStart_subagent_id"] == 0
+    assert match_call["subagentStop_subagent_id_eq_subagentStart_tool_call_id"] == 1
+    assert match_call["windows_paired_by_subagent_id"] == 1
+
+
+def test_inner_conversation_id_equals_stop_child_conversation_id(az: ModuleType) -> None:
+    recs = [
+        linked_start(),
+        inner_tool(parent_tool_call_id=None),
+        linked_stop(child_conversation_id=CHILD),
+    ]
+    res = az.identity_analysis(recs)
+    assert res["inner_tool_conversation_id_eq_subagentStop_child_conversation_id"] == 1
+    assert res["inner_tool_association"]["child_conversation_id"] == 1
+    assert res["tool_events_inside_subagent_windows"] == 1
+    assert "conversation_id==parent_conversation_id" not in res["parent_only_identity"]
+    assert res["tool_conversation_id_relation"] == {
+        "conversation_id==subagentStop.child_conversation_id": 1
+    }
+
+
+# -------------------------------- missing fields and pairing fallback
+
+
+def test_missing_optional_stop_fields_fall_back_to_type_order(az: ModuleType) -> None:
+    recs = [start(), tool(), stop()]
+    res = az.identity_analysis(recs)
+    assert res["windows_paired_by_type_order"] == 1
+    assert res["windows_paired_by_subagent_id"] == 0
+    assert res["subagentStop_subagent_id_eq_subagentStart_subagent_id"] == 0
+    assert res["subagentStop_subagent_id_eq_subagentStart_tool_call_id"] == 0
+    assert res["inner_tool_parent_tool_call_id_eq_subagentStart_tool_call_id"] == 0
+    assert res["inner_tool_conversation_id_eq_subagentStop_child_conversation_id"] == 0
+    assert res["tool_events_inside_subagent_windows"] == 1
+    assert res["inner_tool_association"]["temporal"] == 1
+    assert res["temporal_association_is_not_exact"] is True
+
+
+def test_stop_with_nonmatching_subagent_id_is_not_stolen_by_type_order(az: ModuleType) -> None:
+    recs = [
+        linked_start(sub_id=SUB, tool_call_id=TC),
+        linked_stop(subagent_id="sub_synthetic_other"),
+    ]
+    res = az.identity_analysis(recs)
+    assert res["windows_paired_by_subagent_id"] == 0
+    assert res["windows_paired_by_type_order"] == 0
+    assert res["windows_without_matching_stop"] == 1
+
+
+def test_pairing_prefers_matching_subagent_id_over_type_order(az: ModuleType) -> None:
+    # Same type, crossed times: id pairing still attaches the matching stop.
+    recs = [
+        linked_start(sub_id=SUB, t=1000, tool_call_id=TC),
+        linked_start(sub_id=SUB_B, kind="cf-writer", t=1100, tool_call_id=TC_B),
+        linked_stop(t=1800, subagent_id=SUB_B, child_conversation_id=CHILD_B),
+        linked_stop(t=1900, subagent_id=SUB, child_conversation_id=CHILD),
+    ]
+    windows, collisions = az.pair_start_stop(
+        [r for r in recs if r["hook_event_name"] == "subagentStart"],
+        [r for r in recs if r["hook_event_name"] == "subagentStop"],
+    )
+    assert collisions == 0
+    assert windows[0]["stop_subagent_id"] == SUB
+    assert windows[0]["child_conversation_id"] == CHILD
+    assert windows[0]["pair_method"] == "subagent_id"
+    assert windows[1]["stop_subagent_id"] == SUB_B
+    assert windows[1]["pair_method"] == "subagent_id"
+
+
+# -------------------------------- collisions and ambiguous links
+
+
+def test_duplicate_start_tool_call_id_is_ambiguous_not_unique_link(az: ModuleType) -> None:
+    recs = [
+        linked_start(sub_id=SUB, t=1000, tool_call_id=TC),
+        linked_start(sub_id=SUB_B, kind="cf-reviewer", t=1100, tool_call_id=TC),
+        inner_tool(t=1500),
+        linked_stop(kind="cf-writer", t=2000, subagent_id=SUB, child_conversation_id=CHILD),
+        linked_stop(
+            kind="cf-reviewer", t=2100, subagent_id=SUB_B, child_conversation_id=CHILD_B
+        ),
+    ]
+    res = az.identity_analysis(recs)
+    assert res["ambiguous_links"].get("ambiguous_parent_tool_call_id") == 1
+    # child conversation is unique, so association falls through and still links
+    assert res["inner_tool_association"].get("child_conversation_id") == 1
+    assert "parent_tool_call_id" in res["unclassified_identity_candidates"]
+    assert res["verdict_code"] == "OPEN"
+
+
+def test_shared_child_conversation_id_is_ambiguous(az: ModuleType) -> None:
+    recs = [
+        linked_start(sub_id=SUB, t=1000, tool_call_id=TC),
+        linked_start(sub_id=SUB_B, kind="cf-reviewer", t=1100, tool_call_id=TC_B),
+        inner_tool(t=1500, parent_tool_call_id=None),
+        linked_stop(kind="cf-writer", t=2000, child_conversation_id=CHILD),
+        linked_stop(kind="cf-reviewer", t=2100, child_conversation_id=CHILD),
+    ]
+    res = az.identity_analysis(recs)
+    assert res["ambiguous_links"].get("ambiguous_child_conversation_id") == 1
+    # overlapping sequential windows: 1500 is inside both 1000-2000 and 1100-2100
+    assert res["ambiguous_links"].get("ambiguous_temporal") == 1
+    assert res["tool_events_inside_subagent_windows"] == 0
+    assert res["inner_tool_association"].get("unassociated") == 1
+
+
+def test_overlapping_windows_without_ids_do_not_silently_count_as_exact(az: ModuleType) -> None:
+    recs = [
+        start(sub_id=SUB, kind="cf-writer", t=1000),
+        start(sub_id=SUB_B, kind="cf-reviewer", t=1100),
+        tool(t=1500, conversation_id=PARENT),
+        stop(kind="cf-writer", t=2000),
+        stop(kind="cf-reviewer", t=2100),
+    ]
+    res = az.identity_analysis(recs)
+    assert res["tool_events_inside_subagent_windows"] == 0
+    assert res["ambiguous_links"].get("ambiguous_temporal") == 1
+    assert res["direct_current_identity"] == {}
+    assert res["temporal_association_is_not_exact"] is True
+    assert res["verdict_code"] == "OPEN"
+
+
+def test_association_prefers_parent_tool_call_id_over_child_and_temporal(
+    az: ModuleType,
+) -> None:
+    # Child conversation and time would point at window B; parent_tool_call_id points at A.
+    recs = [
+        linked_start(sub_id=SUB, t=1000, tool_call_id=TC),
+        linked_start(sub_id=SUB_B, kind="cf-reviewer", t=3000, tool_call_id=TC_B),
+        inner_tool(t=3500, conversation_id=CHILD_B, parent_tool_call_id=TC),
+        linked_stop(kind="cf-writer", t=2000, subagent_id=TC, child_conversation_id=CHILD),
+        linked_stop(
+            kind="cf-reviewer", t=4000, subagent_id=TC_B, child_conversation_id=CHILD_B
+        ),
+    ]
+    res = az.identity_analysis(recs)
+    assert res["inner_tool_association"] == {"parent_tool_call_id": 1}
+    assert res["tool_events_inside_subagent_windows"] == 1
+    assert res["temporal_association_is_not_exact"] is True
+    assert res["verdict_code"] == "OPEN"
+
+
+def test_child_conversation_beats_temporal_when_parent_tool_call_id_missing(
+    az: ModuleType,
+) -> None:
+    recs = [
+        linked_start(sub_id=SUB, t=1000, tool_call_id=TC),
+        linked_start(sub_id=SUB_B, kind="cf-reviewer", t=3000, tool_call_id=TC_B),
+        inner_tool(t=3500, conversation_id=CHILD, parent_tool_call_id=None),
+        linked_stop(kind="cf-writer", t=2000, child_conversation_id=CHILD),
+        linked_stop(kind="cf-reviewer", t=4000, child_conversation_id=CHILD_B),
+    ]
+    res = az.identity_analysis(recs)
+    assert res["inner_tool_association"] == {"child_conversation_id": 1}
+    assert res["tool_events_inside_subagent_windows"] == 1
+
+
+def test_inner_child_conversation_is_not_parent_only(az: ModuleType) -> None:
+    recs = [linked_start(), inner_tool(), linked_stop(child_conversation_id=CHILD)]
+    res = az.identity_analysis(recs)
+    assert res["parent_only_identity"] == {}
+    assert res["unclassified_identity_candidates"] == {"parent_tool_call_id": 1}
+    assert res["verdict_code"] == "OPEN"
+    assert "hint only" in res["verdict"]
+
+
+def test_pairing_id_collision_is_counted(az: ModuleType) -> None:
+    recs = [
+        linked_start(sub_id=SUB, t=1000, tool_call_id=TC),
+        linked_stop(t=1800, subagent_id=TC),
+        linked_stop(t=1900, subagent_id=TC),
+    ]
+    res = az.identity_analysis(recs)
+    assert res["pairing_id_collisions"] == 1
+    assert res["windows_paired_by_subagent_id"] == 1
+    assert res["windows_without_matching_stop"] == 0
