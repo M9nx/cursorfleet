@@ -755,19 +755,126 @@ N=1, repeated 3 times if it diverges from the docs expectation.
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0008.
 
-### 13. Hook latency inside Cursor (Q6) on Linux, macOS, Windows
+### 13. Hook latency (Q6): hook-internal (A) and end-to-end (B)
 
-- Procedure: README 0 and 5 (`python3 spike/bench_latency.py -n 40` on each OS), plus the
-  capture's own `latency_ms` and `stdin_read_ms` from live runs.
-- Artifacts: `spike/results/latency-<os>.json`; Q6 section.
-- Pass: p95 in-Cursor delay with the stdlib hook is under 60 ms warm on each OS claimed;
-  note whether Cursor waits for `postToolUse`.
-- Fail: the OS is not claimed or the hot path is slimmed; budgets in
-  [hook-latency](hook-latency.md) change.
-- Also record: `timeout` behaviour (is the hook killed, what does Cursor log), and on Windows
-  whether `python .cursor/hooks/capture_hook.py <event>` works from Cursor's shell.
-- Can change: ADR 0001, platform-support, hook-latency, ADR 0007 (hook count if latency is bad).
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
+Two different quantities that the earlier plan mixed. Only the Linux cold-start of our own
+capture hook has ever been measured, outside Cursor (ADR 0001 section C; the product hook
+measurement in [hook-latency](hook-latency.md) is also Linux and also outside Cursor).
+
+**Wording conflict to resolve (OWNER DECISION).** [`hook-latency.md`](hook-latency.md) states
+the budget as "p95 < 60 ms cold" and measures fresh-process samples with a warm page cache;
+the ADR 0001 matrix row for Q6 says "under 60 ms warm". This plan defines both terms below,
+applies the 60 ms budget to each column separately, and does not decide which one the
+published claim means. The owner picks one and the other documents are aligned.
+
+#### 13A. Hook-internal latency
+
+What it measures: the wall time of one hook process (spawn, imports, repo discovery,
+normalisation, spool append), outside Cursor, on each OS claimed in
+[platform-support](platform-support.md).
+
+- Definitions: **warm** = repeated samples in a loop with the OS file cache populated (what
+  `hook-latency.md` measured). **Cold** = the first call after the file cache for the
+  interpreter and the package has been dropped or the machine has been idle and rebooted.
+  Cache-drop methods differ by OS (Linux needs root, for example in a throwaway VM; macOS
+  has `purge`; Windows has no simple equivalent, so a reboot or the first run after boot).
+  If a cold state cannot be produced on an OS, record "cold not measured" there; do not
+  extrapolate.
+- Procedure: `python scripts/bench_hook.py -n 100` per hook name and per OS for the warm
+  numbers (the existing tool, run by hand); for cold, at least 20 samples, each after a
+  cache drop. Use the exact command line that `cursorfleet init` would write into the hook
+  entry, not only the console script. Record the interpreter version, installation method
+  and whether antivirus scanning is on. Add the Windows check that
+  `python .cursor/hooks/capture_hook.py <event>` works from Cursor's shell. Record `timeout`
+  behaviour: is the hook killed at the limit and what does Cursor log.
+- Report per OS, hook name, and warm or cold: sample size, p50, p95 and max in milliseconds.
+  For fewer than 100 samples label p95 as indicative (it is near the max); never report a
+  p95 without the sample size.
+- Budget: p95 under 60 ms ([hook-latency](hook-latency.md)).
+- Pass: p95 under 60 ms for every hook name of the product set, on every OS the docs claim,
+  for each of warm and cold that was measured. Refute: any p95 at or over 60 ms, or an OS
+  claimed without a measurement; then that OS is not claimed, or the hot path is slimmed, or
+  the budget in `hook-latency.md` changes (an owner decision).
+
+Table 13A (all OPEN; one row per OS and state):
+
+| OS | State | Samples | p50 ms | p95 ms | max ms | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| Linux | warm | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Linux | cold | OPEN | OPEN | OPEN | OPEN | OPEN |
+| macOS | warm | OPEN | OPEN | OPEN | OPEN | OPEN |
+| macOS | cold | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Windows | warm | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Windows | cold | OPEN | OPEN | OPEN | OPEN | OPEN |
+
+#### 13B. End-to-end overhead inside Cursor
+
+What it measures: the extra time a user waits for a Cursor action because hooks are
+registered, including Cursor's own spawn, stdin delivery and reply handling. This is not
+the same as 13A and can be much larger or smaller.
+
+- **Tolerance: OWNER DECISION.** No ADR defines an acceptable end-to-end overhead; the 60 ms
+  budget is a hook-internal figure. Until the owner sets one, row 13B reports the measured
+  overhead and the noise floor and gives no pass or refute against a number. Suggested
+  inputs for the decision: the median per-tool-call overhead and its confidence interval.
+- Scripted task: fixed prompt for a scratch repo that triggers a known sequence (for
+  example 10 sequential `Read` calls of scratch files, then 10 `echo` shell calls). Use
+  headless `agent -p` (row 3) with `--output-format stream-json` where available so the
+  event timestamps, if the stream carries them, give per-tool-call times; otherwise compare
+  whole-run wall-clock medians over many repetitions.
+- Conditions (interleaved in ABAB order, not run in blocks, at least N=10 each; N=20 where
+  the noise floor is high):
+  - **C0**: no hooks file (baseline).
+  - **C0b**: A/A control, a second baseline run, to measure the noise floor.
+  - **C1**: the product hook set (nine hooks).
+  - **C2**: a no-op hook that exits at once with the right reply, on the same events, to
+    separate Cursor's hook mechanism from our code.
+- Blocking versus non-blocking: for each hook name, register a stub that waits a fixed
+  delay D (for example 500 ms and 2 s) before replying, one hook name at a time. If the
+  action's per-call time grows by about D, Cursor waited for that hook; if it does not, the
+  hook is non-blocking. Record this per hook name (the open question in `questions.md` Q6 is
+  `postToolUse` and `afterFileEdit`). The stub is throwaway tooling outside the repository.
+- Parallel hooks: register k = 1, 3 and 5 identical stubs (each waiting D) on one event. If
+  the added time stays near D, they run in parallel; near k times D, sequentially. Record
+  per hook name; ADR 0007's hook count and the sum over a tool call depend on this.
+- Report per OS and condition: N, median, p95 and max of the per-call (or per-run) time,
+  the difference to C0 with a bootstrap or simple min-max range, and the A/A spread. A
+  difference smaller than the A/A spread is reported as "not detectable at this N".
+
+Table 13B (all OPEN):
+
+| OS | Condition | N | Median | p95 | max | Overhead vs C0 | A/A spread |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Linux | C1 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Linux | C2 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| macOS | C1 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| macOS | C2 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Windows | C1 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+| Windows | C2 | OPEN | OPEN | OPEN | OPEN | OPEN | OPEN |
+
+Table 13C: blocking and parallel behaviour (record `waits`, `does not wait`, or `unknown`;
+all OPEN):
+
+| Hook | Blocks the action? | k=3 parallel or sequential? |
+| --- | --- | --- |
+| `preToolUse` | OPEN | OPEN |
+| `postToolUse` | OPEN | OPEN |
+| `postToolUseFailure` | OPEN | OPEN |
+| `subagentStart` | OPEN | OPEN |
+| `subagentStop` | OPEN | OPEN |
+| `preCompact` | OPEN | OPEN |
+| `stop` | OPEN | OPEN |
+| `sessionStart` (fire-and-forget per docs) | OPEN | OPEN |
+| `sessionEnd` | OPEN | OPEN |
+
+- Artifacts: `spike/results/latency-<os>.json` for 13A (the repo location is a result
+  file, not raw capture); 13B and 13C timing tables kept with the evidence path; the
+  capture's `latency_ms` and `stdin_read_ms` from live runs (hint at how late Cursor writes
+  stdin).
+- Can change: ADR 0001 (Q6), [platform-support](platform-support.md),
+  [hook-latency](hook-latency.md), ADR 0007 (hook count if latency or sequencing is bad),
+  the claim wording "cold" or "warm".
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0001 Q6, 0007.
 
 ### 14. Rule, skill and nested `AGENTS.md` loading
