@@ -2,6 +2,9 @@
 
 Statuses: **PROVISIONAL** marks behavior that depends on Cursor facts not yet
 captured live ([ADR 0001](adr/0001-cursor-capabilities.md), section B).
+The kit is implemented, provisional and unvalidated against live Cursor; where it differs
+from an accepted ADR the difference is marked **Divergence** and listed in
+[follow-ups](follow-ups.md). Install ownership rules: [ADR 0009](adr/0009-install-uninstall-ownership.md).
 
 The kit is generated from `.cursorfleet/roster.toml` (default roster if absent)
 and `.cursorfleet/config.toml`. Output is deterministic: no timestamps, versions
@@ -28,6 +31,11 @@ Templates live in `templates/cursor/` and ship in the wheel as
 ## Hooks written
 
 Exactly the enabled subset of `ALLOWED_V01_HOOKS` (default: all 12), each as
+(**Divergence:** [ADR 0007](adr/0007-narrower-v01-hook-policy.md) decides nine hooks:
+`sessionStart`, `sessionEnd`, `preToolUse`, `postToolUse`, `postToolUseFailure`,
+`subagentStart`, `subagentStop`, `preCompact`, `stop`. The shell and file-edit hooks are to
+be dropped after the spike, and re-running `init` will need a migration that removes the
+old entries.)
 
 ```json
 { "command": "cursorfleet-hook", "timeout": 5 }
@@ -91,12 +99,25 @@ every artifact under the work dir. Findings in CursorFleet's own files are
 errors; findings in your own rules are warnings. Exit 1 on any error. `--json`
 schema: `cursorfleet.validate/1`.
 
-### Artifact frontmatter (PROVISIONAL, refines ADR 0006)
+### Artifact frontmatter (PROVISIONAL, see ADR 0006)
 
-ADR 0006 lists the fields but not the `schema` value or the file layout. The
-kit uses `schema: cursorfleet.artifact/1`, files at
-`<work dir>/<task>/<NN>-<kind>-<author_role>.md`, `task` equal to the directory,
-`created` as ISO 8601, `kind` one of the four artifact kinds, at most 50
-`context_refs` (workspace-relative), 64 KiB per file. Read-only agents (architect,
-scout, reviewer) cannot write files; they return the artifact text and the
-coordinator saves it. The parser is `cursorfleet.workflow.frontmatter`.
+**Decided ([ADR 0006](adr/0006-agent-declared-events.md)):** TOML frontmatter between `+++`
+fences, parsed with `tomllib`, schema `cursorfleet.artifact/0.1`. Fields: `schema`, `kind`,
+`task`, `artifact_id`, `revision`, optional `digest` (`blake2s:<64 hex>`, computed by the
+indexer, never trusted from the file), `author_role`, `created`, and for handoffs `to_role`,
+`issue_ref`, `context_refs`. Agents may not set the digest themselves in a way that changes
+trust: a mismatch is a problem. Every artifact event is self-reported and ineligible as gate
+evidence ([ADR 0011](adr/0011-evidence-trust-model.md)). YAML stays for Cursor's own agent,
+rule and skill files.
+
+**Divergence (current code, to change after the spike):** the parser
+(`cursorfleet.workflow.frontmatter`) reads a YAML subset between `---` fences with
+`schema: cursorfleet.artifact/1`, and has no `artifact_id`, `revision` or `digest`. The
+generated rule, skills and `AGENTS.md` templates teach that YAML form, and `emit` is not
+implemented. Treat the YAML description below as the interim format.
+
+Interim layout (both formats): files at `<work dir>/<task>/<NN>-<kind>-<author_role>.md`,
+`task` equal to the directory, `created` as ISO 8601, `kind` one of the four artifact kinds,
+at most 50 `context_refs` (workspace-relative), 64 KiB per file. Read-only agents
+(architect, scout, reviewer) cannot write files; they return the artifact text and the
+coordinator saves it.
