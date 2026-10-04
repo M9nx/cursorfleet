@@ -3,7 +3,11 @@
 > **Unofficial and pre-alpha.** CursorFleet is not affiliated with or endorsed by Anysphere or
 > Cursor. v0.1 only *observes* local Cursor agent sessions: no enforcement, no forced
 > approvals, no cloud-agent visibility. It has not yet been verified against a live Cursor
-> (see [status](../README.md#status)), so treat what the dashboard shows as provisional.
+> (see [status](status.md)), so treat what the dashboard shows as provisional.
+>
+> **Supported surface:** the local Cursor IDE (desktop) only, once the live spike has
+> confirmed it. The Cursor CLI, the Agents Window, worktrees opened by Cursor or by hand,
+> parallel subagents and cloud agents are not claimed to work.
 
 ## 1. Install
 
@@ -39,14 +43,23 @@ cursorfleet init --cursor --dry-run   # print the exact diff, write nothing
 cursorfleet init --cursor             # show the diff again and ask before writing
 ```
 
-This adds twelve passive hooks to `.cursor/hooks.json` (yours are preserved and merged), a
+This adds passive hooks to `.cursor/hooks.json` (yours are preserved and merged), a
 small roster of subagent files under `.cursor/agents/`, rules and skills, an `AGENTS.md`
 block, and `.cursorfleet/` configuration. Nothing is written without a visible diff and
 confirmation (`--yes` skips only the prompt). Hooks never read prompts, model thinking, file
 contents or command output; see [privacy](privacy.md).
 
+The installed hook set is currently twelve; the accepted decision is nine
+([ADR 0007](adr/0007-narrower-v01-hook-policy.md)), and the code will be changed after the
+live spike. Hook behaviour inside worktrees is unverified.
+
 Commit the generated `.cursor/` and `.cursorfleet/` files: Cursor-managed worktrees are
 checkouts of your branch, so untracked hook files would not exist there.
+
+Worktree caution: Cursor creates and deletes its own worktrees and, by default, cleans up
+beyond 25 per machine (`cursor.worktreeMaxCount`), which can remove a worktree that still
+holds unmerged work. CursorFleet never creates or deletes worktrees. Commit and push what
+you care about ([ADR 0012](adr/0012-roster-and-worktree-ownership.md)).
 
 ## 3. Check health
 
@@ -73,7 +86,7 @@ cursorfleet status            # the same data as plain text
 cursorfleet status --json     # stable machine-readable form, see docs/status-json.md
 ```
 
-TUI keys: `o` overview, `l` timeline, `w` worktrees, `g` gates (display-only), `e` evidence,
+TUI keys: `o` overview, `l` timeline, `w` worktrees, `g` gates (heuristic, non-authoritative), `e` evidence,
 `/` filter, `p` pin, `t` tiles (160+ columns), `r` re-read, `?` help, `q` quit. Silence shows
 as STALE or OFFLINE, never as idle. Details: [tui.md](tui.md).
 
