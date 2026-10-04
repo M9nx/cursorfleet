@@ -1,10 +1,11 @@
 # Follow-ups: where the docs and ADRs are ahead of the code
 
-Status: **task 16 is implemented** (runtime inheritance and the init repository-root
-overlap it required). Tasks 1–15 and 17+ are not done. New M2 and TUI work stays
-frozen ([`status.md`](status.md)). Each remaining task closes a divergence between an
-accepted or provisional ADR and the current implementation. Do them **after** the live
-spike ([`empirical-test-plan.md`](empirical-test-plan.md)), in this order.
+Status: **tasks 15 and 16 are implemented** (doctor/validate resolution reporting;
+runtime inheritance and the init repository-root overlap). Tasks 1–14 and 17+ are
+not done. New M2 and TUI work stays frozen ([`status.md`](status.md)). Each remaining
+task closes a divergence between an accepted or provisional ADR and the current
+implementation. Do them **after** the live spike
+([`empirical-test-plan.md`](empirical-test-plan.md)), in this order.
 
 How to read an entry:
 
@@ -204,9 +205,11 @@ How to read an entry:
 
 ## 15. Repository-root preconditions for `init` and `uninstall` (ADR 0009)
 
-- Implementation status: **partial.** The write-command root check (exit 2, no writes)
-  required by the task 16 owner contract is in `workspace_root`. Remaining: `doctor` /
-  `validate` printing the detected root, and any leftover task-15-only tests.
+- Implementation status: **implemented** (2026-10-04). Write-command root check (exit 2,
+  no writes) is in `workspace_root`. `doctor` and `validate` print the detected root and
+  boundary type from the Task 16 resolver (`inspect_repository`) without writing.
+  Live row 17 remains **OPEN**; Cursor behaviour is not claimed verified. M2/TUI stay
+  frozen.
 - Waits for: nothing technical (row 17 records Cursor behaviour in a non-git folder; the
   write-command contract does not depend on it). Still wait for the freeze to lift.
 - Decided (owner, 2026-10-04, documentation only): `init` and `uninstall` run only at a
@@ -222,7 +225,9 @@ How to read an entry:
   - `--path` help: "repository root", not "directory inside the git repo". Reject unknown
     `--allow-non-git` as an ordinary usage error (exit 2).
   - `doctor` / `validate`: keep resolving from a subdirectory; print the detected root they
-    used. Do not implement runtime inheritance here (that is task 16).
+    used (input path, realpath, root, common dir, marker path/status, boundary type,
+    diagnostic status and reason). Shared builder, two renderers. Never write.
+    **Done** (`inspect_repository`, `cli/commands/_resolution.py`).
 - Tests (required; no sleeps):
   - Non-git folder: `init --cursor --yes` and `--dry-run`, and `uninstall`, exit 2; snapshot
     empty; stderr says Git is required and nothing was changed. Replace
@@ -237,6 +242,7 @@ How to read an entry:
   - Unknown option `--allow-non-git`: exit 2, nothing changed.
 - Docs after: remove the Divergence notes in `kit.md`, `quickstart.md`, ADR 0002/0009.
 - Done when: the ADR 0009 amendment gate holds (exit 2, no changes) on the cases above.
+  **Done** for the in-repo cases (see Implementation status). Live spike still OPEN.
 
 ## 16. Runtime inheritance for nested non-Git directories (ADR 0002)
 
@@ -282,6 +288,6 @@ How to read an entry:
 - The git-common-dir runtime directory is kept (ADR 0002) unless row 5 or 6 refutes it.
 - No enforcement in v0.1 (ADR 0008).
 - No `--allow-non-git` flag in v0.1 (ADR 0009); the refuse-and-exit-2 write-command
-  check is in place (task 16 overlap). Remaining doctor/validate printing is task 15.
+  check is in place, and `doctor`/`validate` print the detected root (task 15).
 - Nested non-Git **runtime** inheritance is implemented (ADR 0002, task 16). `init`
   from an ordinary subdirectory still exits 2.

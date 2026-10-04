@@ -7,7 +7,7 @@
 - Supersedes: none
 - Superseded by: none
 - Related ADRs: 0001 (Q4, Q5), 0003 (event ids, worktree attribution), 0009 (uninstall leaves runtime data; init refuses ordinary subdirectories), 0010 (replay from spool), 0012 (worktree ownership)
-- Implementation status: Partly implemented. Implemented: git-common-dir layout, CRC-per-line spool, quarantine of a corrupt database, an indexer lock; the file-walk finds the nearest `.git` and treats an inner `.git`/gitfile/submodule as a new boundary; **runtime inheritance** (marker required before any runtime directory or event file; tool cwd else `CURSOR_PROJECT_DIR`; fail-open no-event cases; paths relative to the inherited root). The write-command repository-root check (exit 2, no writes) is implemented as required by the task 16 owner contract; `doctor`/`validate` still do not print the detected root (task 15 remainder). Divergent: segment fingerprint is CRC32 not BLAKE2s; `worktree_id` is a bare SHA-256 prefix not an HMAC; no lock for retention/purge; the lock cannot tell contention from an unsupported filesystem. Details in the amendments below and in ADR 0009. Live row 17b remains OPEN.
+- Implementation status: Partly implemented. Implemented: git-common-dir layout, CRC-per-line spool, quarantine of a corrupt database, an indexer lock; the file-walk finds the nearest `.git` and treats an inner `.git`/gitfile/submodule as a new boundary; **runtime inheritance** (marker required before any runtime directory or event file; tool cwd else `CURSOR_PROJECT_DIR`; fail-open no-event cases; paths relative to the inherited root). The write-command repository-root check (exit 2, no writes) is implemented; `doctor`/`validate` print the detected root and boundary type from that same walk (follow-ups task 15). Divergent: segment fingerprint is CRC32 not BLAKE2s; `worktree_id` is a bare SHA-256 prefix not an HMAC; no lock for retention/purge; the lock cannot tell contention from an unsupported filesystem. Details in the amendments below and in ADR 0009. Live row 17b remains OPEN.
 - Review trigger: Q4 or Q5 answered on any OS, or a reproduced torn or interleaved spool line, or a live row 17b result that refutes inheritance
 - Release gate: Q4 and Q5 answered on every OS claimed; BLAKE2s fingerprints, HMAC worktree ids and the maintenance lock implemented, or the claims in this ADR weakened to match the code; runtime inheritance (marker required, fail-open no-event cases, no nested state) implemented or the claims weakened
 
@@ -254,8 +254,8 @@ write commands:
 - Genuine nested repository: the nearest root wins; the outer repository is never
   consulted.
 - Linked-worktree root: valid. Runtime data stays at `<git-common-dir>/cursorfleet/`.
-- `doctor` and `validate` stay read-only and may resolve from a subdirectory; `doctor`
-  outside Git exits 1 (a check failed).
+- `doctor` and `validate` stay read-only and may resolve from a subdirectory; they print
+  the detected root and boundary type. `doctor` outside Git exits 1 (a check failed).
 
 Write-command preconditions: see ADR 0009. A directory with no enclosing Git working
 tree still records nothing

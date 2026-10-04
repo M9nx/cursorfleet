@@ -58,9 +58,9 @@ code in several places: the hook list, schema version, heuristic test events, co
 display default, hashing, locking, artifact format, gate derivation, attribution
 aggregation (the reducer keeps the strongest value; the rule is weakest-wins),
 `init`/`uninstall` repository-root preconditions (exit 2 at a non-root is implemented;
-`doctor`/`validate` still do not print the detected root), and remaining ADR follow-ups
-other than task 16. Runtime inheritance for a nested non-Git directory is implemented
-in code; live row 17b remains OPEN. They are listed in [`follow-ups.md`](follow-ups.md).
+`doctor`/`validate` print the detected root), and remaining ADR follow-ups
+other than tasks 15 and 16. Runtime inheritance for a nested non-Git directory is
+implemented in code; live rows 17 and 17b remain OPEN. They are listed in [`follow-ups.md`](follow-ups.md).
 New M2 and TUI implementation stays frozen.
 
 ## Gates before v0.1.0

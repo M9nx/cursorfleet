@@ -7,7 +7,7 @@
 - Supersedes: none
 - Superseded by: none
 - Related ADRs: 0007 (the hook set the installer emits), 0008 (no `failClosed`), 0006 (artifact rules and skills it generates), 0002 (runtime data is not removed by uninstall; nested non-Git runtime inheritance), 0005 (name changes touch every owned path)
-- Implementation status: Implemented-provisional for the rules below (`installer.py`, `hooksjson.py`, `blocks.py`, `lock.py`, `fsutil.py`; tests under `tests/integration/test_kit_*` and `tests/security/test_kit_installer_policy.py`). Divergent-from-code with ADR 0007: the installer emits 12 hooks and has no migration that removes the three dropped entries on re-`init`. Repository-root write-command preconditions (exit 2, no writes) are implemented as required by the task 16 owner contract; `doctor`/`validate` still do not print the detected root (task 15 remainder). Runtime inheritance (ADR 0002) is implemented in the hook; `init` still refuses ordinary subdirectories.
+- Implementation status: Implemented-provisional for the rules below (`installer.py`, `hooksjson.py`, `blocks.py`, `lock.py`, `fsutil.py`; tests under `tests/integration/test_kit_*` and `tests/security/test_kit_installer_policy.py`). Divergent-from-code with ADR 0007: the installer emits 12 hooks and has no migration that removes the three dropped entries on re-`init`. Repository-root write-command preconditions (exit 2, no writes) are implemented; `doctor`/`validate` print the detected root and boundary type (follow-ups task 15). Runtime inheritance (ADR 0002) is implemented in the hook; `init` still refuses ordinary subdirectories. Live row 17 remains OPEN.
 - Review trigger: Cursor changes how hooks.json is merged or reloaded; a user reports lost content after `uninstall`; the hook set changes (ADR 0007 follow-up)
 - Release gate: round-trip guarantee (below) passes on fixture repos on all three OSes in CI; a migration for removed hook entries exists; the diff-and-consent flow is the only write path; `init` and `uninstall` enforce the repository-root preconditions of the 2026-10-04 amendment (exit 2, no changes) with the tests listed in follow-ups task 15
 
@@ -116,8 +116,8 @@ tool reports each item and leaves it; it never guesses.
 ## Amendment 2026-10-04 (repository-root preconditions for `init` and `uninstall`)
 
 Architecture-owner decision. The write-command root check is implemented in
-`workspace_root` (exit 2, no writes). `doctor`/`validate` still do not print the
-detected root they used (task 15 remainder). Live row 17 remains OPEN. It adds a
+`workspace_root` (exit 2, no writes). `doctor`/`validate` print the detected root they
+used (follow-ups task 15). Live row 17 remains OPEN. It adds a
 precondition that runs before the consent-and-diff flow above and does not change any
 ownership rule. `init` and `uninstall` write into a repository the user owns, so they must
 never write into a repository the user did not name.
@@ -248,11 +248,12 @@ Nothing was changed. Run:  cd /home/me/proj && cursorfleet init --cursor
 - `--path` help text says "Repository root".
 - Unknown `--allow-non-git`: ordinary usage error, exit 2.
 - Bare repository / `.git` directory: exit 2, unreadable-root message.
-- Remaining (task 15): `doctor` and `validate` still do not print the detected root.
+- `doctor` and `validate` print the detected root, common dir, marker status and
+  boundary type from `inspect_repository` (follow-ups task 15). They never write.
 - Hooks record nothing outside Git. Nested non-Git inheritance is a hook-only contract
   (ADR 0002, implemented); `init` does not walk up.
 
-Live row 17 remains OPEN. Remaining doctor/validate printing is task 15.
+Live row 17 remains OPEN.
 
 ## Amendment 2026-10-04 (init versus runtime for nested directories)
 
@@ -272,5 +273,5 @@ collapsed into one walk-up rule. Implemented in code; live row 17b remains OPEN.
   the marker is present and the detected root is that enclosing initialized repository.
 
 **Implementation status of this amendment.** Init refuses ordinary subdirectories (exit 2,
-no writes). Runtime inheritance is implemented in ADR 0002 (follow-ups task 16). Live
-row 17b remains OPEN. `doctor`/`validate` still do not print the detected root (task 15).
+no writes). Runtime inheritance is implemented in ADR 0002 (follow-ups task 16).
+`doctor`/`validate` print the detected root (follow-ups task 15). Live row 17b remains OPEN.

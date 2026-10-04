@@ -1234,7 +1234,7 @@ Question: what happens when Cursor opens a folder that is not a git repository (
 requires git: ADR 0002 says hooks record nothing and exit open, and `doctor` explains)?
 Three parts: what Cursor does (unverified); what our hook and read-only commands do
 (designed, not live-verified); and the write-command repository-root contract (decided
-2026-10-04, **not implemented**, describe only in this pass).
+2026-10-04, **implemented in code**; live verdict remains OPEN).
 
 Cases (scratch folders only; no real project):
 
@@ -1316,7 +1316,8 @@ a synthetic CLI run as a Cursor verification.
 exit 2 with no diff. `--path` must itself be a repository root.
 
 The write-command root check is implemented (`workspace_root` exit 2). Follow-ups task 15
-remainder: `doctor`/`validate` still do not print the detected root. Live row 17 stays OPEN.
+is implemented in code: `doctor`/`validate` print the detected root and boundary type
+and never write. Live row 17 stays OPEN.
 
 - Pass: 17a part 2 matches every row of the table (exit 0, right reply, nothing written,
   clear `doctor` message); 17b matches every row of the expected table above; part 3 is
