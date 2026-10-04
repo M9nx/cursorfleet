@@ -1005,6 +1005,88 @@ Result grid (all OPEN; one status each from RELIABLE, UNRELIABLE, NOT LOADED):
 - Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0006, 0009, 0012.
 
+### 15. Privacy-boundary release gate
+
+**Release-blocking.** CursorFleet promises never to persist prompts, thinking or response
+text, file contents, command output, environment variables, user emails or transcript paths
+([privacy](privacy.md), AGENTS.md). Existing security tests plant secrets in synthetic
+payloads; this gate repeats the check with planted canaries on every place data can
+surface, using payloads from live runs as well as synthetic ones.
+
+Planted canaries (synthetic; token form `CF-CANARY-<class>-<random hex>`, a fresh set per
+gate run, stored in a registry file outside the repository with mode `0600`):
+
+| Class | Planted where | Must never appear in |
+| --- | --- | --- |
+| P | the user prompt text of a live run | any surface below |
+| F | the contents of a file the agent reads and writes | any surface |
+| D | an edit's old and new strings (diagnostic `afterFileEdit` payload and synthetic payloads) | any surface |
+| O | the output of a shell command the agent runs | any surface |
+| C | a command-line argument (`--token CF-CANARY-C-...`) | any surface (a keyed hash and a redacted display string, if enabled, are the only allowed traces; the token itself must not remain) |
+| E | an environment variable inherited by the hook (`CF_CANARY_E`) | any surface |
+| M | `user_email` and `CURSOR_USER_EMAIL` in a synthetic payload | any surface |
+| T | `transcript_path` and `agent_transcript_path` values in a synthetic payload | any surface |
+| X | an absolute path outside the workspace (`/tmp/CF-CANARY-X-.../f.txt`) | any surface (only `<external>` is allowed) |
+| R | an error message in a `postToolUseFailure` payload, and task or summary text in `subagentStart` and `subagentStop` payloads | any surface |
+| H | the real account email, home directory path and user name, supplied to the scanner through environment variables and never printed or written | any surface |
+
+The scanner (throwaway tooling outside the repository) looks for each token as raw bytes and
+in these forms: JSON-escaped, URL-encoded, base64 (three alignments), hex, UTF-16LE, and
+case-folded. It also looks for the unkeyed SHA-256 and MD5 of each token (ADR 0003 allows
+only a keyed hash). It prints counts and file paths, never the matched text.
+
+Surfaces scanned (every one, after a live IDE run, a CLI run, and a synthetic payload
+replay):
+
+| Surface | What is scanned |
+| --- | --- |
+| Spool | every file under `<git-common-dir>/cursorfleet/spool/`, including rotated segments, `.capped` markers and torn tails |
+| SQLite | `state.sqlite`, its `-wal` and `-shm` files as raw bytes, and a text dump; free pages are covered by the raw scan |
+| Runtime directory | everything else under `<git-common-dir>/cursorfleet/` (the `hmac.key` content is not a canary; only its permissions matter) |
+| Fixtures | `tests/fixtures/cursor/**` and any candidate fixture, before commit |
+| JSON outputs | `status --json`, `replay --json`, `index --json`, `validate --json`, `doctor --json` |
+| Text outputs | `doctor`, `status`, `replay` and `events export --sanitized` text and files |
+| TUI | the rendered text of every screen and filter state, captured with a Textual `run_test()` pilot (text only) and once from a real terminal |
+| Logs and streams | stderr and stdout of hooks and commands, any log file, crash dumps |
+| Repository | `git grep` over the scratch repository and this repository, committed config and generated kit files |
+| Spike captures | `captures.jsonl` (the kit records key names, types and ids only; a hit is a kit bug) |
+
+Method for validity: before scanning, run the scanner on a positive-control directory that
+holds each canary in each encoding; the scanner must find every one (100% detection), or the
+gate run is invalid. Also run it on an empty directory (zero hits).
+
+- Pass: **0 occurrences** of any canary, in any encoding, on every surface, and the scanner
+  self-test passed. Stored paths are workspace-relative or `<external>`; nothing else.
+- Failure: any occurrence is **release-blocking**. Stop, do not publish or share the capture,
+  treat it as a security bug (report privately per [SECURITY.md](../SECURITY.md)), purge the
+  affected data (row 16), fix the allowlist parser at the boundary, add a regression test,
+  regenerate the canaries and rerun the **entire** gate, not only the failing surface.
+- When: on the final release configuration, after the live and synthetic runs, and again
+  after any change to `hook_normalize`, the sanitizer, the store or the views (add to the
+  [release checklist](release-checklist.md)).
+
+Gate record (all OPEN):
+
+| Surface | Occurrences | Scanner self-test | Result |
+| --- | --- | --- | --- |
+| Spool | OPEN | OPEN | OPEN |
+| SQLite (db, WAL, SHM) | OPEN | OPEN | OPEN |
+| Runtime directory | OPEN | OPEN | OPEN |
+| Fixtures | OPEN | OPEN | OPEN |
+| JSON outputs | OPEN | OPEN | OPEN |
+| Text outputs and export | OPEN | OPEN | OPEN |
+| TUI text | OPEN | OPEN | OPEN |
+| Logs and streams | OPEN | OPEN | OPEN |
+| Repository | OPEN | OPEN | OPEN |
+| Spike captures | OPEN | OPEN | OPEN |
+
+- Artifacts: scanner output (counts and file paths only) kept with the evidence path; never
+  the raw captures.
+- Can change: ADR 0003 (sanitization), ADR 0004 and ADR 0007 (hook set), ADR 0002
+  (retention), [privacy](privacy.md), [threat-model](threat-model.md), the release.
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
+  reviewer sign-off: -; ADRs affected: 0002, 0003, 0004, 0007.
+
 ## After the run
 
 - Fill in `spike/questions.md` results and the ADR 0001 matrix (move the row from NOT RUN to
