@@ -1,17 +1,29 @@
 <div align="center">
 
 <a href="https://m9nx.github.io/cursorfleet/">
-  <img src="public-docs/assets/logo-circle.png" alt="CursorFleet logo" width="96" />
+  <img
+    src="public-docs/assets/og-card.png"
+    alt="CursorFleet — local observe-only harness for Cursor agent teams"
+    width="640"
+  />
 </a>
-<br />
-<a href="https://m9nx.github.io/cursorfleet/">
-  <img src="public-docs/assets/cursorfleet-wordmark.png" alt="CursorFleet" width="360" />
-</a>
-<br />
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)
-![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+<p>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
+  <img src="https://img.shields.io/badge/status-pre--alpha-orange.svg" alt="Status: pre-alpha" />
+  <img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+" />
+  <a href="https://m9nx.github.io/cursorfleet/"><img src="https://img.shields.io/badge/docs-GitHub_Pages-222?style=flat-square&logo=github" alt="Documentation site" /></a>
+</p>
+
+<p>
+  <a href="https://m9nx.github.io/cursorfleet/">Website</a>
+  ·
+  <a href="docs/quickstart.md">Quickstart</a>
+  ·
+  <a href="docs/demo.md">Demo</a>
+  ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
 
 </div>
 
