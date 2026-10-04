@@ -68,6 +68,8 @@ def default_view() -> str:
     if mode in {"overview", "legacy", "sessions"}:
         return "overview"
     return "active_run"
+
+
 MAX_CARDS_PER_LANE = 100
 MAX_LIST = 40
 
@@ -86,6 +88,8 @@ GUIDANCE_KIT_PARTIAL = (
     f"Run `{INIT_HINT}` or `{DOCTOR_HINT}`."
 )
 HONEST_UNKNOWN = "Without telemetry the state is UNKNOWN; CursorFleet never infers inactivity."
+
+
 def _timeline_empty_message(data: FleetData) -> str:
     lines = overview_guidance_lines(data)
     return lines[0] if lines else GUIDANCE_NO_KIT
@@ -228,24 +232,18 @@ def active_run_rows(data: FleetData, ui: UiState) -> list[Row]:
     )
     if run.branch or run.commit:
         commit_label = short_sha(run.commit) if run.commit else "-"
-        rows.append(
-            _note("ar:git", f"branch={safe(run.branch or '-', 40)}  commit={commit_label}")
-        )
+        rows.append(_note("ar:git", f"branch={safe(run.branch or '-', 40)}  commit={commit_label}"))
     for group in run.groups:
         key = f"grp:{group.role}"
         search = f"{group.role} {group.summary_lane} {group.confidence}"
         rows.append(Row(key, _group_label(group, data, ui), search.lower()))
     if run.suggested_session_ids:
-        rows.append(
-            Row("ar:sug:h", _t(("Suggested sessions (not attached)", "bold")), header=True)
-        )
+        rows.append(Row("ar:sug:h", _t(("Suggested sessions (not attached)", "bold")), header=True))
         for sid in run.suggested_session_ids[:MAX_LIST]:
             hint = f"  attach: cursorfleet run attach <run> --session {sid}"
             rows.append(_note(f"sug:{sid}", hint))
     if run.unassociated_session_ids:
-        rows.append(
-            Row("ar:un:h", _t(("Other live sessions (unscoped)", "bold")), header=True)
-        )
+        rows.append(Row("ar:un:h", _t(("Other live sessions (unscoped)", "bold")), header=True))
         for sid in run.unassociated_session_ids[:MAX_LIST]:
             rows.append(_note(f"un:{sid}", f"  session {safe(sid, 48)}"))
     rows.append(_note("ar:nav", "Press u for all runs; o for full session archive."))

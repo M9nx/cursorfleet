@@ -15,7 +15,24 @@ from cursorfleet.tui.layout import layout_for
 from cursorfleet.tui.watch import watchfiles_available
 
 runner = CliRunner()
-DOCUMENTED_KEYS = ["/", "j", "k", "Enter", "p", "t", "a", "u", "g", "w", "e", "r", "?", "q", "o", "l"]
+DOCUMENTED_KEYS = [
+    "/",
+    "j",
+    "k",
+    "Enter",
+    "p",
+    "t",
+    "a",
+    "u",
+    "g",
+    "w",
+    "e",
+    "r",
+    "?",
+    "q",
+    "o",
+    "l",
+]
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 

@@ -134,10 +134,7 @@ def evidence_from_events(events: Iterable[Event]) -> list[GateEvidence]:
             exit_label = _outcome_label(event.outcome)
             note = "heuristic observation; not proof of pass or fail"
             if len(gates) > 1 and not (exit_label == "ok" and all_and):
-                note = (
-                    "chained command: exit code does not identify which step ran; "
-                    + note
-                )
+                note = "chained command: exit code does not identify which step ran; " + note
             elif len(gates) > 1:
                 note = "chained && command; " + note
             shown = cmd.display or " ".join(p for p in (cmd.argv0, cmd.subcommand) if p)
