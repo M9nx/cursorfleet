@@ -209,23 +209,99 @@ scenario was run on that surface: rows 1 to 4 supply the cells. All cells OPEN.
 
 ### 2. CLI interactive `agent`
 
-- Procedure: README 4, interactive session, label `cli-interactive`.
+- Procedure: README 4, interactive session, label `cli-interactive`. Run the surface-grid
+  subset of row 1 (scenarios 1.1, 1.2, 1.4, 1.7, 1.9, 1.14, 1.17) and fill the "CLI
+  interactive" column.
+- Optional diagnostic: add a `workspaceOpen` entry to the scratch repo's `hooks.json` (not
+  to `spike/`). Per docs that hook runs in the desktop app and the CLI; the kit accepts the
+  name and drops its content. It shows whether the CLI loaded project hooks at all.
 - Artifacts: events per label; fixtures in `tests/fixtures/cursor/cli/`.
 - Pass: the set of hooks that fire is recorded per hook name, each on a documented-field
   payload, and `cursor_version` is meaningful.
 - Fail or partial: the README and platform docs keep "CLI not supported".
 - Can change: ADR 0001 (Q3 verdict), platform-support, product-contract supported surface.
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
   reviewer sign-off: -; ADRs affected: 0001 Q3.
 
-### 3. CLI headless `agent -p`
+### 3. CLI headless `agent -p`: without and with `--force`
 
-- Procedure: README 4 (`agent -p --force ...`, label `cli`).
-- Artifacts: as row 2, fixtures in `tests/fixtures/cursor/cli-print/`, recorded separately.
-- Pass and fail criteria as row 2.
-- Can change: the same documents as row 2; whether CI or scripted agent runs can be observed.
-- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence: -;
-  reviewer sign-off: -; ADRs affected: 0001 Q3.
+Docs (headless page, "File modification in scripts"): `--print` is non-interactive; without
+`--force` (or `--yolo`) "changes are only proposed, not applied"; with it the agent changes
+files directly. The page says nothing about hooks (ADR 0001 A12). This row tests three
+variants with the same prompt, each under its own label, run from the scratch repo root.
+
+- Setup: README 0 and 1, then README 4. Authenticate with `agent login`, or with
+  `CURSOR_API_KEY` set in the environment only: never on a command line, in a committed
+  script, or in notes. The kit records environment variable *names* that match `CURSOR_*`
+  or `CLAUDE_*` (so the name `CURSOR_API_KEY` can appear in `env_names`, never its value).
+- Safety: scratch repo only; start each run from a clean `git status`; wrap each run in a
+  5-minute wall-clock limit so a hang cannot linger; use only the documented flags `-p`,
+  `--force`, `--output-format` and `--stream-partial-output` (not `--yolo`).
+- Prompt P (harmless, identical in every variant): "Create notes/p1.txt containing the single
+  line hello. Then run 'git status' in the shell. Then use the cf-reviewer subagent to review
+  README.md. Reply done." Failure prompt F: "Run `cat does-not-exist.txt` and report its exit
+  code."
+- Set the label first, one per variant: `cli-print-noforce`, `cli-print-force`,
+  `cli-print-stream`.
+
+**3a. Without `--force`** (`agent -p "<P>"`, then `agent -p "<F>"`)
+
+- Record side effects: `git status --porcelain` afterwards, whether `notes/p1.txt` exists, the
+  process exit code, whether anything prompted or hung.
+- Record hooks (scenarios 1.1, 1.2, 1.4, 1.7, 1.9, 1.14, 1.17): which of `preToolUse`,
+  `postToolUse`, `postToolUseFailure` and (diagnostic) `afterFileEdit` fire for the write that
+  is proposed but not applied, with `failure_type` if any; whether the read-only `git status`
+  Shell call ran at all (docs are silent); subagent hooks; `cursor_version`.
+- Classify what fires for the not-applied write, per repetition (3 repetitions):
+
+  | Code | Observation | Meaning if it holds |
+  | --- | --- | --- |
+  | W1 | no tool hook for the write | hooks do not see proposed edits |
+  | W2 | `preToolUse` only | the write is announced, never completed |
+  | W3 | `preToolUse` and `postToolUse` succeed, file absent | hooks report success while nothing was applied: a hook-derived `file.changed` would be a false positive here (ADR 0007, ADR 0003 mapping); only git can say a file changed |
+  | W4 | `preToolUse` and `postToolUseFailure` (for example `permission_denied`) | denied or not-applied writes show as failures; no `file.changed` |
+  | W5 | file applied without `--force` | the docs are refuted for this version |
+
+- Pass (3a): one code per repetition recorded, identical in 3 of 3 (otherwise PARTIAL with
+  the rates), and the file is absent. Refute: W5, or no hook fires at all in 3 of 3 (then
+  hooks do not run under `-p`; row 2's consequence applies).
+
+**3b. With `--force`** (`agent -p --force "<P>"`, then `"<F>"`)
+
+- Side effects must stay inside the scratch repo: check `git status --porcelain` lists only
+  `notes/p1.txt`, `git worktree list` is unchanged, and (with 3c) every tool-call path is
+  inside the scratch repo.
+- Record hooks for the same scenarios as 3a, plus whether the write gives `preToolUse` and
+  `postToolUse` with a write-class tool and `afterFileEdit` (diagnostic) in 3 of 3 runs.
+- Pass (3b): each hook that fires is recorded per hook name on a documented-field payload
+  with `cursor_version`, and the file exists. Refute: the file exists but no write-class
+  hook fired in 3 of 3 (hooks do not observe headless writes), or no hook fires at all.
+  The ADR 0001 matrix row "CLI headless `agent -p`" takes this result for PASS or FAIL; 3a
+  and 3c are extra columns.
+
+**3c. `--output-format stream-json`** (`agent -p --force --output-format stream-json "<P>"`,
+optionally with `--stream-partial-output`)
+
+- The stream carries message text and tool arguments including file paths (ADR 0001 A11), so
+  the output file is a raw capture (row 16): redirect it into the raw capture directory, never
+  to a shared log, and never commit it. Docs list the event types `system` (`init`),
+  `assistant`, `tool_call` (`started`, `completed`) and `result` (`duration_ms`).
+- Keep only: counts of `type` and `subtype`, tool-call kinds, `result.duration_ms`. Check
+  locally, without printing it, that the API key value does not occur in the file.
+- Compare with the capture of the same run: `tool_call` `started` count against `preToolUse`
+  count, and `completed` against `postToolUse` plus `postToolUseFailure`.
+- Pass (3c): the hook set and counts equal those of 3b, and the stream counts reconcile with
+  the hook counts (or each difference has a recorded cause, for example `Task`). Refute: the
+  output format changes which hooks fire, or hook counts are below stream counts (hooks missed
+  events, which bounds how much any CLI telemetry could be trusted).
+
+- Artifacts: events per label; fixtures in `tests/fixtures/cursor/cli-print/` (3b only, by the
+  row 16 review), recorded separately from row 2.
+- Can change: ADR 0001 (Q3 verdict), ADR 0007 (what `file.changed` can rely on), ADR 0003
+  (hook-to-kind mapping), platform-support, whether CI or scripted agent runs can be observed.
+  Stream ingestion stays a v0.2 non-goal regardless (ADR 0001 A11).
+- Result record: OPEN; date: -; Cursor version / OS / surface: -; evidence path: -;
+  reviewer sign-off: -; ADRs affected: 0001 Q3, 0003, 0007.
 
 ### 4. Agents Window
 
