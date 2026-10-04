@@ -528,11 +528,18 @@ Rules for classification:
   PARTIAL for role-only, REFUTED for parent-only or nothing, OPEN when only unclassified
   candidates exist) but it does not replace the hand classification; keep its raw outputs
   (`tool_hook_keys_with_agent_identity`, `tool_conversation_id_relation`, and the
-  Task / `parent_tool_call_id` / stop-id / child-conversation equality counters) as
-  artifacts. Q1 and Q2 remain **OPEN**. One sequential Cursor 3.22.7 observation is
-  UNVERIFIED and does not fill this row: it saw optional `subagent_id` and
-  `child_conversation_id` on `subagentStop` (not guaranteed) and inner hooks using a
-  child `conversation_id`. Concurrent repetitions below are still required.
+  linkage evidence structures — observed / comparable / matches / mismatches /
+  unavailable / collisions — for Task / `parent_tool_call_id` / stop-id /
+  child-conversation). Missing fields are unavailable, never a 0-match refutation.
+  `session_id` is session-level correlation, not a Q1 identity candidate. Q1 and Q2
+  remain **OPEN**. One sequential Cursor 3.22.7 observation is UNVERIFIED and does
+  not fill this row: it saw optional `subagent_id` and `child_conversation_id` on
+  `subagentStop` (not guaranteed) and inner hooks using a child `conversation_id`.
+  That first capture also dropped scalar `parent_tool_call_id` and
+  `child_conversation_id` at the hook. Copy the updated `capture_hook.py`, start a
+  **fresh labeled** capture, and do not append formal row-8 evidence to the older
+  jsonl. Concurrent repetitions below are still required; do not start them until
+  the new capture retains those two ID values.
 
 - Procedure: README 2 and 3, extended to three run types, each with its own label.
   - R8.1: two concurrent subagents of the same type (`cf-writer` twice, README 3), 5 runs.

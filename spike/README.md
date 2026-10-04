@@ -5,9 +5,15 @@
 > any CursorFleet schema is frozen. It is **not** the v0.1 hook entrypoint.
 
 **Status:** the kit is built and self-tested. One sequential Cursor 3.22.7
-observation exists and is **UNVERIFIED** (not a row-8 result). Q1 and Q2 stay
-**OPEN**. Everything in `docs/adr/0001-cursor-capabilities.md` marked UNVERIFIED
-stays provisional until row-8 repetitions classify it.
+observation exists and is **UNVERIFIED** (not a row-8 result). That first live
+capture is **incomplete**: it was taken before `parent_tool_call_id` and
+`child_conversation_id` were on the ID allowlist, so those scalars were
+dropped. Copy the **updated** `capture_hook.py` into the scratch repo and start
+a **fresh labeled** capture. Do **not** append to the older `captures.jsonl`.
+Do **not** start formal row 8 until the new capture actually retains those two
+ID values. Q1 and Q2 stay **OPEN**. Everything in
+`docs/adr/0001-cursor-capabilities.md` marked UNVERIFIED stays provisional
+until row-8 repetitions classify it.
 
 ## What the kit does and does not record
 
@@ -15,10 +21,13 @@ stays provisional until row-8 repetitions classify it.
 `captures.jsonl`. It records event name, timings (wall + monotonic latency),
 pid/ppid, key names and value **types**, and values only for IDs
 (`conversation_id`, `generation_id`, `session_id`, `subagent_id`,
-`subagent_type`, `parent_conversation_id`, `tool_use_id`, `tool_call_id`,
+`subagent_type`, `parent_conversation_id`, `parent_tool_call_id`,
+`child_conversation_id`, `tool_use_id`, `tool_call_id`,
 `tool_name`, `git_branch`, `cursor_version`), small enums, booleans and
-counters. Paths are reduced to a basename plus a git kind
-(`main | linked-worktree | submodule-or-other | none`).
+counters. `parent_tool_call_id` and `child_conversation_id` are optional
+opaque scalars, stored only when they are valid bounded identifier strings
+(same treatment as `tool_call_id` / `subagent_id`). Paths are reduced to a
+basename plus a git kind (`main | linked-worktree | submodule-or-other | none`).
 
 It never writes prompts, thinking, file contents, commands, tool inputs or
 outputs, edits, summaries, emails, transcript paths or full paths. It prints
@@ -61,6 +70,9 @@ git init -q && git commit -q --allow-empty -m "init"
 mkdir -p .cursor/hooks .cursor/agents
 cp /path/to/cursorfleet/spike/capture_hook.py .cursor/hooks/capture_hook.py
 cp /path/to/cursorfleet/spike/hooks.json.example .cursor/hooks.json
+# Must be the updated hook (parent_tool_call_id + child_conversation_id on the
+# ID allowlist). After recopying, start a NEW labeled capture directory/label.
+# Do not append to an older captures.jsonl that predates this allowlist.
 ```
 
 Windows (PowerShell): copy `hooks.windows.json.example` instead (it calls
@@ -134,11 +146,19 @@ separately: `direct_current_identity` (a unique current-instance id, for example
 confirm identity) and `unclassified_identity_candidates` (id-like keys with undocumented
 meaning, an id that does not link to a start, or a deterministic-link candidate such as
 `parent_tool_call_id`; never auto-promoted). `parent_tool_call_id` is **not** parent-only
-and is **not** EXACT until row 8 concurrent repetitions verify it. Its VERDICT line
+and is **not** EXACT until row 8 concurrent repetitions verify it. `session_id` is
+session-level correlation only; it is not a Q1 identity candidate. Its VERDICT line
 follows CONFIRMED (direct only), PARTIAL (role only), OPEN (only unclassified candidates,
 or no data) and REFUTED (parent only, or nothing found inside subagent windows) and is a
 hint: classify by hand per `docs/empirical-test-plan.md` row 8. Q2 asks whether
 `subagent_type` shows `cf-reviewer`, `cf-writer`, or only `generalPurpose`.
+
+Linkage is reported as evidence (`observed` / `comparable` / `matches` /
+`mismatches` / `unavailable` / `collisions`), not bare equality counters. A
+missing field is **unavailable**, never "0 matches" as a refutation. The first
+Cursor 3.22.7 capture dropped `parent_tool_call_id` and `child_conversation_id`
+at the hook, so those relationships are unavailable there. Re-analyze only after
+a fresh labeled capture with the updated hook.
 
 One unverified sequential Cursor 3.22.7 observation saw optional `subagent_id` and
 `child_conversation_id` on `subagentStop` (docs list neither). The analyzer pairs
@@ -146,7 +166,8 @@ start/stop by that optional id when present, else by type+order; it associates i
 tool events by `parent_tool_call_id`, then `child_conversation_id`, then temporal
 fallback (temporal is never treated as exact). Inner hooks may use a child
 `conversation_id`, so a parent-`conversation_id` window match alone will miss them.
-Do not promote Q1 or Q2 from OPEN on that single run.
+Do not promote Q1 or Q2 from OPEN on that single run. Do not start formal row 8
+until a new capture retains the two ID values.
 
 ## 3. Run B: two subagents in parallel with worktree isolation (Q3, Q4, Q5)
 
@@ -221,9 +242,11 @@ git worktree list && git worktree prune
 - `hooks.json.example`, `hooks.windows.json.example`: passive hooks only.
 - `analyze.py`: per-event key shapes, identity evidence in four separate categories (direct
   current identity, role only, parent only, unclassified candidates including
-  `parent_tool_call_id`; the verdict is a hint), start/stop pairing by optional stop
-  `subagent_id` else type+order, inner-tool association by task/child ids then temporal
-  (never exact), latency percentiles, worktree flags, interleaving evidence. Tolerates torn
+  `parent_tool_call_id`; `session_id` is reported only as session correlation), the verdict
+  is a hint, start/stop pairing by optional stop `subagent_id` else type+order, inner-tool
+  association by task/child ids then temporal (never exact), linkage evidence
+  (matches / mismatches / unavailable / collisions; missing is never a 0-match
+  refutation), latency percentiles, worktree flags, interleaving evidence. Tolerates torn
   lines and odd records. Unit-tested with synthetic records in
   `tests/unit/test_spike_analyze.py`.
 - `bench_latency.py`: steady-state process wall-clock latency (fresh process, warm cache); results in `results/`.

@@ -39,14 +39,19 @@ Result values: `CONFIRMED`, `REFUTED`, `PARTIAL`, `OPEN`. Always record the
   `role_only_identity`, `parent_only_identity` (`parent_conversation_id` or the parent's
   `conversation_id` only ever lands here) and `unclassified_identity_candidates`
   (undocumented or unlinked id-like keys, or `parent_tool_call_id` as a link candidate;
-  never auto-promoted); the "Q1" VERDICT, which is a hint requiring manual classification
+  never auto-promoted). `session_id` is session-level correlation only and is not a Q1
+  identity candidate. The "Q1" VERDICT is a hint requiring manual classification
   per row 8 (CONFIRMED only from direct, PARTIAL for role only, REFUTED for parent only or
-  nothing found, OPEN for unclassified candidates or no data); the relationship counters
-  (`Task.tool_use_id` / `parent_tool_call_id` / stop `subagent_id` / child
-  `conversation_id` equalities); the raw `tool_hook_keys_with_agent_identity` and
-  `tool_conversation_id_relation`; the share of in-window tool events with the same
-  conversation+generation as the main agent. Temporal inner-tool association is never
-  treated as exact.
+  nothing found, OPEN for unclassified candidates or no data). Linkage is reported as
+  evidence (`observed` / `comparable` / `matches` / `mismatches` / `unavailable` /
+  `collisions`) for Task.tool_use_id, start ids, inner `parent_tool_call_id`, stop
+  `subagent_id`, and child `conversation_id`; a missing field is **unavailable**, never
+  "0 matches" as a refutation. The first Cursor 3.22.7 capture dropped the two new
+  scalars, so those relationships are unavailable there — recopy the hook and start a
+  fresh labeled capture before treating them as evidence. Also: the raw
+  `tool_hook_keys_with_agent_identity` and `tool_conversation_id_relation`; the share of
+  in-window tool events with the same conversation+generation as the main agent.
+  Temporal inner-tool association is never treated as exact.
 - Fallbacks if the instance is NOT identifiable (all would be `inferred`): temporal
   attribution (unsafe with parallel subagents), worktree/`workspace_roots` as the identity (only with isolation),
   `tool_use_id` linkage of the `Task` call to `subagentStart.tool_call_id`,

@@ -17,11 +17,17 @@ self-test.
    README section 0.
 2. From this repository: `python3 spike/capture_hook.py --selftest` and
    `python3 spike/bench_latency.py -n 40` (no Cursor needed).
-3. Create a **scratch git repo** (one commit, no real secrets). Copy
-   `spike/capture_hook.py` and `spike/hooks.json.example` as in README section 1.
-   Commit `.cursor/`. Open that folder in Cursor and trust the workspace.
-4. Label the run (`--set-label ide-main`), run README sections 2–5, then analyze
-   with `python3 spike/analyze.py`.
+3. Create a **scratch git repo** (one commit, no real secrets). Copy the
+   **updated** `spike/capture_hook.py` (the allowlist now keeps scalar
+   `parent_tool_call_id` and `child_conversation_id`) and
+   `spike/hooks.json.example` as in README section 1. Commit `.cursor/`. Open
+   that folder in Cursor and trust the workspace.
+4. Start a **fresh labeled** capture (`--set-label ide-main-<date>` or similar).
+   Do **not** append to the older `captures.jsonl` from the first Cursor 3.22.7
+   run: that file lacks the two new ID scalars. Run README sections 2–5, then
+   analyze with `python3 spike/analyze.py`. Do **not** start formal row 8 until
+   the new capture actually retains `parent_tool_call_id` and
+   `child_conversation_id`.
 5. Repeat the surface subset the test plan names for CLI, Agents Window, and
    worktrees. Keep an out-of-band terminal for cleanup.
 6. After analysis: fill `spike/questions.md` and the ADR 0001 matrix. Leave every
@@ -37,14 +43,19 @@ Q1 reports four buckets separately; do not collapse them:
 - `unclassified_identity_candidates` (includes `parent_tool_call_id` as a
   deterministic-link candidate, not EXACT until row 8 concurrent repetitions)
 
+`session_id` is session-level correlation only; it is not reported in any of
+the four Q1 buckets. Linkage equalities are evidence structures
+(matches / mismatches / unavailable / collisions). Missing values are
+**unavailable**, never "0 matches".
+
 The VERDICT line is a hint only. Classify by hand per empirical-test-plan row 8.
 `parent_conversation_id` never confirms current-subagent identity. Q1 and Q2
 remain **OPEN**. One sequential Cursor 3.22.7 observation is UNVERIFIED; do not
 promote it. That run also showed optional `subagent_id` and `child_conversation_id`
 on `subagentStop` (not guaranteed) and inner tool hooks using a child
-`conversation_id` plus `parent_tool_call_id`. Re-run `analyze.py` on the existing
-scratch `captures.jsonl` after this analyzer fix; do not treat that replay as
-row-8 confirmation.
+`conversation_id` plus `parent_tool_call_id`, but the first capture hook dropped
+those two scalars. Copy the updated hook and start a **fresh labeled** capture;
+do not append to or re-analyze the older jsonl as row-8 evidence.
 
 ## Row 17 / 17b (expected cases; verdict OPEN)
 
