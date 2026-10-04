@@ -85,7 +85,6 @@ def tool(
     extra_keys: dict[str, str] | None = None,
     extra_ids: dict[str, Any] | None = None,
     event: str = "preToolUse",
-    vals: dict[str, Any] | None = None,
 ) -> Rec:
     keys = {
         "conversation_id": "str",
@@ -96,10 +95,7 @@ def tool(
     keys.update(extra_keys or {})
     ids = {"conversation_id": conversation_id, "generation_id": "gen-1", "tool_use_id": "tu-1"}
     ids.update(extra_ids or {})
-    out = rec(event, t, ids, keys)
-    if vals is not None:
-        out["vals"] = vals
-    return out
+    return rec(event, t, ids, keys)
 
 
 def window(*tools: Rec) -> list[Rec]:
@@ -500,13 +496,14 @@ def task_tool(
     tool_use_id: str = TC,
     run_in_background: bool | None = None,
 ) -> Rec:
-    vals = None if run_in_background is None else {"run_in_background": run_in_background}
-    return tool(
+    out = tool(
         t=t,
         extra_ids={"tool_name": "Task", "tool_use_id": tool_use_id},
         extra_keys={"tool_name": "str"},
-        vals=vals,
     )
+    if run_in_background is not None:
+        out["vals"] = {"run_in_background": run_in_background}
+    return out
 
 
 def test_parent_tool_call_id_is_unclassified_not_parent_only_or_exact(az: ModuleType) -> None:
