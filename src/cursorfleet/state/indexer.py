@@ -21,6 +21,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 
+from pydantic import ValidationError
+
 from cursorfleet.events.ids import fs_name_for
 from cursorfleet.events.models import Event
 from cursorfleet.state.event_store import (
@@ -227,7 +229,7 @@ class Indexer:
                 row[0]: SessionAcc.model_validate_json(row[1])
                 for row in conn.execute("SELECT session_id, state FROM sessions ORDER BY 1")
             }
-        except (sqlite3.DatabaseError, ValueError):
+        except (sqlite3.DatabaseError, ValueError, ValidationError):
             return {}
         finally:
             conn.close()
@@ -335,7 +337,11 @@ class Indexer:
         row = conn.execute(
             "SELECT state FROM sessions WHERE session_id=?", (session_id,)
         ).fetchone()
-        acc = SessionAcc.model_validate_json(row[0]) if row else None
+        try:
+            acc = SessionAcc.model_validate_json(row[0]) if row else None
+        except (ValueError, ValidationError) as exc:
+            # pydantic_core.ValidationError is not always a ValueError (Windows/3.14).
+            raise ValueError("stored session row does not validate") from exc
         out_of_order = acc is not None and sort_key(fresh[0]) <= (
             acc.watermark_ts,
             acc.watermark_id,
