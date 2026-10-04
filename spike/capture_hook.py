@@ -19,9 +19,12 @@ What is recorded (allowlist, nothing else):
 - key-shape: key names (lowercase snake_case only) and value TYPES; for a few
   structural keys (tool_input, edits, ...) also nested key names and types
 - values ONLY for: IDs (conversation_id, generation_id, session_id,
-  subagent_id, subagent_type, parent_conversation_id, tool_use_id,
-  tool_call_id, tool_name, git_branch, cursor_version), small enums
-  (status, reason, ...), booleans, and numbers (durations/counters)
+  subagent_id, subagent_type, parent_conversation_id, parent_tool_call_id,
+  child_conversation_id, tool_use_id, tool_call_id, tool_name, git_branch,
+  cursor_version), small enums (status, reason, ...), booleans, and
+  numbers (durations/counters). parent_tool_call_id and child_conversation_id
+  are optional opaque scalars, stored only when they are valid bounded
+  identifier strings (same treatment as tool_call_id / subagent_id).
 - cwd / workspace_roots / CURSOR_PROJECT_DIR reduced to basename + git kind
   (main | linked-worktree | submodule-or-other | none)
 
@@ -93,6 +96,8 @@ ID_FIELDS = (
     "subagent_id",
     "subagent_type",
     "parent_conversation_id",
+    "parent_tool_call_id",
+    "child_conversation_id",
     "tool_use_id",
     "tool_call_id",
     "tool_name",
@@ -473,9 +478,10 @@ def _synthetic_payloads():
         mk("sessionStart", session_id="conv-selftest-1", is_background_agent=False,
            composer_mode="agent"),
         mk("preToolUse", tool_name="Shell", tool_use_id="tu-1", cwd="/home/alice-synthetic/private",
+           parent_tool_call_id="tc_synthetic_selftest",
            tool_input={"command": "curl -H 'Authorization: %s' https://x" % s[0],
                        "working_directory": s[6], s[0]: "weird-key-with-secret-name"},
-           agent_message=s[8]),
+           agent_message=s[8], task=s[7], prompt=s[7]),
         mk("postToolUse", tool_name="Shell", tool_use_id="tu-1", cwd="/tmp/" + s[2],
            tool_input={"command": s[3]}, tool_output=json.dumps({"stdout": s[1]}), duration=12),
         mk("postToolUseFailure", tool_name="Shell", tool_use_id="tu-2", error_message=s[0],
@@ -483,7 +489,8 @@ def _synthetic_payloads():
         mk("subagentStart", subagent_id="sub-1", subagent_type="my-custom-agent",
            task=s[7], parent_conversation_id="conv-selftest-1", tool_call_id="tc-1",
            subagent_model="m", is_parallel_worker=True, git_branch="feature/" + s[2]),
-        mk("subagentStop", subagent_type="my-custom-agent", status="completed", task=s[7],
+        mk("subagentStop", subagent_id="sub-1", subagent_type="my-custom-agent",
+           status="completed", task=s[7], child_conversation_id="ses_synthetic_child",
            description=s[8], summary=s[0] + s[5], duration_ms=10, message_count=2,
            tool_call_count=1, loop_count=0, modified_files=[s[6] + "/a.py"],
            agent_transcript_path=s[6] + "/t.txt"),
@@ -506,6 +513,21 @@ def _synthetic_payloads():
         # hostile: invalid IDs / enums / event name carrying secrets
         mk("preToolUse", tool_name=s[2], tool_use_id="tu 3 with spaces " + s[3], cwd=s[6]),
         mk(s[0], status=s[7], reason=s[8]),
+        # optional opaque IDs: valid scalars kept; invalid / oversized / non-string rejected
+        mk("preToolUse", tool_name="Read", tool_use_id="tu-inner-ok",
+           parent_tool_call_id="tc_synthetic_ok",
+           tool_input={"command": s[3], "path": s[6] + "/secret.txt"},
+           prompt=s[7], task=s[7], user_email=s[2]),
+        mk("subagentStop", subagent_type="explore", status="completed",
+           child_conversation_id="ses_synthetic_ok", task=s[7], summary=s[8]),
+        mk("preToolUse", tool_name="Read", tool_use_id="tu-inner-bad",
+           parent_tool_call_id=s[2],
+           child_conversation_id="ses " + s[3]),
+        mk("subagentStop", subagent_type="explore", status="completed",
+           child_conversation_id="x" * 129, parent_tool_call_id=12345, task=s[7]),
+        mk("preToolUse", tool_name="Read", tool_use_id="tu-inner-obj",
+           parent_tool_call_id={"wrapped": "tc_synthetic_nested", "task": s[7]},
+           child_conversation_id=["ses_synthetic_list", s[2]]),
     ]
 
 
@@ -575,14 +597,43 @@ def selftest():
         check(ptu["cwd"]["base"] == "private", "cwd reduced to basename")
         check(ptu["workspace_roots"][0]["base"] == "proj", "workspace root reduced to basename")
         check(ptu["workspace_roots"][1]["base"] == "<redacted-name>", "email-like basename redacted")
+        check(ptu["ids"]["parent_tool_call_id"] == "tc_synthetic_selftest",
+              "valid parent_tool_call_id retained")
+        stop0 = by_event["subagentStop"]
+        check(stop0["ids"]["child_conversation_id"] == "ses_synthetic_child",
+              "valid child_conversation_id retained")
+        check(stop0["ids"]["subagent_id"] == "sub-1", "optional stop subagent_id retained")
+        check("task" not in stop0.get("vals", {}), "stop task value not stored")
+        ok_ptc = [r for r in recs if (r.get("ids") or {}).get("parent_tool_call_id") == "tc_synthetic_ok"]
+        check(len(ok_ptc) == 1, "second valid parent_tool_call_id retained")
+        ok_child = [r for r in recs if (r.get("ids") or {}).get("child_conversation_id") == "ses_synthetic_ok"]
+        check(len(ok_child) == 1, "second valid child_conversation_id retained")
+        for rec in recs:
+            ids = rec.get("ids") or {}
+            for banned in ("task", "prompt", "tool_input", "tool_output", "user_email",
+                           "file_path", "command", "summary", "description"):
+                check(banned not in ids, "payload field %s must not be stored in ids" % banned)
+        check("tc_synthetic_nested" not in text, "object parent_tool_call_id value not copied")
+        check("ses_synthetic_list" not in text, "list child_conversation_id value not copied")
+        invalid_new = []
+        for rec in recs:
+            ids = rec.get("ids") or {}
+            if ids.get("parent_tool_call_id") == "<invalid>" or ids.get("child_conversation_id") == "<invalid>":
+                invalid_new.append(rec)
+        check(len(invalid_new) >= 3, "invalid/oversized/non-string new IDs rejected (%d)" % len(invalid_new))
+        oversize = [r for r in recs if (r.get("ids") or {}).get("child_conversation_id") == "<invalid>"
+                    and (r.get("ids") or {}).get("parent_tool_call_id") == "<invalid>"
+                    and r["hook_event_name"] == "subagentStop"]
+        check(len(oversize) == 1, "oversized child_conversation_id and non-string parent_tool_call_id rejected")
         check(by_event["preCompact"]["vals"]["context_tokens"] == 1000, "preCompact numerics recorded")
         check("<unknown>" in by_event, "unknown/hostile event name masked")
         hostile = [r for r in recs if r["hook_event_name"] == "<unknown>"][0]
         check(hostile["vals"]["status"] == "<other>", "hostile enum masked")
         check(hostile["hook_event_name_valid"] is False, "invalid event flagged")
-        bad_tool = [r for r in recs if r["hook_event_name"] == "preToolUse"][-1]
-        check(bad_tool["ids"]["tool_name"] == "<invalid>", "email-like tool_name rejected")
-        check(bad_tool["ids"]["tool_use_id"] == "<invalid>", "spaced tool_use_id rejected")
+        bad_tool = [r for r in recs if r["hook_event_name"] == "preToolUse"
+                    and (r.get("ids") or {}).get("tool_name") == "<invalid>"
+                    and (r.get("ids") or {}).get("tool_use_id") == "<invalid>"]
+        check(len(bad_tool) == 1, "email-like tool_name and spaced tool_use_id rejected")
 
         # ---- 2. malformed / empty / truncated stdin: fail open, permission hint honoured
         cap2 = os.path.join(tmp, "cap2")
