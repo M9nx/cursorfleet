@@ -313,7 +313,9 @@ def test_validate_clean_install(installed: Path) -> None:
     assert code == 0, report
     assert report["schema"] == "cursorfleet.validate/1" and report["ok"] is True
     assert report["counts"] == {"error": 0, "warning": 0}
-    assert set(report) == {"schema", "ok", "counts", "stats", "findings"}
+    assert set(report) == {"schema", "ok", "counts", "stats", "resolution", "findings"}
+    assert report["resolution"]["boundary"] == "repository-root"
+    assert report["resolution"]["status"] == "ok"
 
 
 def test_validate_not_installed_warns_but_passes(repo: Path, home: Path) -> None:
