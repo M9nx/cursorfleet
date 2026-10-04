@@ -1,5 +1,7 @@
 # Docs site plan
 
+The public documentation site lives in `public-docs/`.
+
 Status: **plan only.** No site, workflow file or dependency has been added, and none should
 be until the naming gate below is passed. This is the author's own evaluation, written on
 2026-10-04; it is not an independent review. Facts about third-party tools were checked

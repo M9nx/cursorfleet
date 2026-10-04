@@ -1,0 +1,36 @@
+# Zensical keeps every setting under [project] (not MkDocs-style top-level keys).
+# Official keys: https://zensical.org/docs/setup/basics/
+# Explicit nav (sections and titled entries): https://zensical.org/docs/setup/navigation/
+# Default UI only: no theme features, extra_css, extra_js, or custom templates.
+
+[project]
+site_name = "CursorFleet"
+site_url = "https://m9nx.github.io/cursorfleet/"
+docs_dir = "public-docs"
+site_dir = "site"
+nav = [
+  { "Home" = "index.md" },
+  { "Getting Started" = [
+    { "Installation" = "getting-started/installation.md" },
+    { "Quickstart" = "getting-started/quickstart.md" },
+  ] },
+  { "Concepts" = [
+    { "Sessions" = "concepts/sessions.md" },
+    { "Agents and events" = "concepts/agents-and-events.md" },
+    { "Worktrees" = "concepts/worktrees.md" },
+  ] },
+  { "CLI" = [
+    { "init" = "cli/init.md" },
+    { "status" = "cli/status.md" },
+    { "doctor" = "cli/doctor.md" },
+    { "validate" = "cli/validate.md" },
+  ] },
+  { "TUI" = [
+    { "Overview" = "tui/overview.md" },
+    { "Current status" = "tui/current-status.md" },
+  ] },
+  { "Privacy and security" = "privacy-and-security.md" },
+  { "Known limitations" = "known-limitations.md" },
+  { "Contributing" = "contributing.md" },
+  { "Changelog" = "changelog.md" },
+]

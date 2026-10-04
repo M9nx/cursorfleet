@@ -1,3 +1,6 @@
+# Generated public docs site (zensical.toml site_dir)
+site/
+
 # Python
 __pycache__/
 *.py[cod]
