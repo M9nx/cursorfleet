@@ -59,6 +59,7 @@ dev = [
     "hypothesis>=6",
     "ruff>=0.5",
     "mypy>=1.10",
+    "zensical>=0.0.67",
 ]
 
 [tool.hatch.build.targets.wheel]
