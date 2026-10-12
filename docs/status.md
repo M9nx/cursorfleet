@@ -1,6 +1,7 @@
 # Project status
 
-Last updated: 2026-10-12. CursorFleet is unofficial and pre-release; nothing is published on PyPI yet.
+Last updated: 2026-10-12. CursorFleet is unofficial; **v0.1.0** is tagged on GitHub. PyPI publish
+awaits `RELEASE_ENABLED` and owner approval (see [v01-release-ready.md](evidence/v01-release-ready.md)).
 Everything here was written and reviewed by the same author: it is a self-review, not an
 independent audit.
 

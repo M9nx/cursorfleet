@@ -2,7 +2,8 @@
 
 Status: **not started** (2026-10-12).
 
-v0.1.0 release decision: external alpha is **post-tag** (see [`../status.md`](../status.md)).
+v0.1.0 is **tagged**; run external alpha after PyPI install path is available (see
+[`../external-alpha.md`](../external-alpha.md), [`v0.1.1-backlog.md`](v0.1.1-backlog.md)).
 Metrics from [`../external-alpha.md`](../external-alpha.md) will be recorded here when testers run.
 
 | Metric | Target | Result |
