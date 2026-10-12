@@ -8,16 +8,16 @@ CursorFleet is an unofficial tool: it is not affiliated with or endorsed by Anys
 
 ## [Unreleased]
 
-Nothing has been released. The version in `pyproject.toml` is `0.0.1.dev0`. v0.1 is *Observe*
-only: no enforcement, no forced approvals, no cloud-agent visibility. Linux Cursor IDE maintainer
-smoke is documented in
-[docs/evidence/live-validation-index.md](docs/evidence/live-validation-index.md); ADR 0001 Q1/Q2
-remain OPEN.
+Development version `0.1.1.dev0` (post-v0.1.0). Planned: TUI attach picker, external alpha metrics.
+
+## [0.1.0] - 2026-10-12
+
+First public pre-alpha on PyPI (when `RELEASE_ENABLED` is approved). **Observe-only:** no
+enforcement, no cloud-agent visibility. External user validation and B0 live scenarios 1/2/5
+remain documented in [docs/evidence/v01-release-ready.md](docs/evidence/v01-release-ready.md).
 
 ### Added
 
-- **v0.1.0 prep (2026-10-12):** hook privacy default OFF without config; run-scoped git on Active
-  run; post-M2.5 sanitized fixture; ADR amendments and release truth table.
 - **Active run TUI** (default): participant groups/instances, runs list (`u`), sessions archive (`o`).
 - **`cursorfleet run`** start/list/attach/archive; run files under git common dir ([ADR 0013](docs/adr/0013-run-metadata-and-association.md)).
 - **`status --json` `runs[]`** when telemetry exists (`cursorfleet.status/0.2`).
@@ -100,9 +100,16 @@ remain OPEN.
   escaped terminal control characters in error and doctor output, `O_NOFOLLOW` artifact reads,
   non-blocking spool open, drive-letter refs refused, attached `mysql -p` passwords redacted.
 
-### Known limitations
+### Known limitations (0.1.0)
 
-- Not published; not on PyPI or TestPyPI. No tags or GitHub releases exist.
+- Run association requires explicit `cursorfleet run` / env attach; TUI picker planned for 0.1.1.
+- Observations screen is non-authoritative (ADR 0011); artifacts are self-reported (ADR 0006 amendment).
+- Twelve passive observe hooks (ADR 0007 amendment 2026-10-12).
+- ADR 0001 Q1/Q2 OPEN; end-to-end latency 13B may be OPEN — see evidence index.
+- SO-01 live permission-hook confirmation may be pending — see [so01-permission-hooks.md](docs/evidence/so01-permission-hooks.md).
+
+### Known limitations (historical pre-0.1.0 notes)
+
 - The TUI derives PASS/FAIL gate tiles from heuristic command classification. This is
   non-authoritative and contradicts ADR 0003 rule R1; fix pending after the spike.
 - The code registers twelve hooks; ADR 0007 decides nine.
