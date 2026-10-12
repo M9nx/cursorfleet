@@ -2,14 +2,19 @@
 
 Status: **GitHub configured** (2026-10-12): `pypi` environment with required reviewer `M9nx`, `RELEASE_ENABLED=true`. **PyPI pending publisher** still required in UI (see below).
 
-## PyPI project (first time)
+## PyPI project (first time) — **you must do this in the browser**
 
-1. Create project **`cursorfleet`** on PyPI (or let first Trusted Publishing upload create it).
-2. Publishing → **Add a new pending publisher**:
-   - Owner: `M9nx`
-   - Repository: `cursorfleet`
-   - Workflow: `release.yml`
-   - Environment: `pypi`
+Log in at [pypi.org](https://pypi.org) as **M9nx**, then **Account settings → Publishing** (or [manage/account/publishing](https://pypi.org/manage/account/publishing/)) → **Add a new pending publisher**. Values must match GitHub OIDC exactly (from failed run `38301917759`):
+
+| Field | Value |
+| --- | --- |
+| PyPI Project Name | `cursorfleet` (new project; created on first upload) |
+| Owner | `M9nx` |
+| Repository name | `cursorfleet` |
+| Workflow name | `release.yml` |
+| Environment name | `pypi` |
+
+Save the publisher, then re-run the failed **publish to PyPI** job on the latest [Release workflow](https://github.com/M9nx/cursorfleet/actions/workflows/release.yml) for tag `v0.1.0` and approve the **`pypi`** environment again.
 
 ## GitHub repository
 
