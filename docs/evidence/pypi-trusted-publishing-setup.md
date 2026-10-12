@@ -1,6 +1,6 @@
 # PyPI Trusted Publishing setup (owner)
 
-Status: **configure in GitHub/PyPI UI** before setting `RELEASE_ENABLED=true`.
+Status: **GitHub configured** (2026-10-12): `pypi` environment with required reviewer `M9nx`, `RELEASE_ENABLED=true`. **PyPI pending publisher** still required in UI (see below).
 
 ## PyPI project (first time)
 
@@ -13,11 +13,12 @@ Status: **configure in GitHub/PyPI UI** before setting `RELEASE_ENABLED=true`.
 
 ## GitHub repository
 
-1. **Settings → Environments → New environment:** `pypi`
-2. Enable **Required reviewers** (protected deployment).
-3. **Settings → Secrets and variables → Actions → Variables:**
-   - `RELEASE_ENABLED` = `true` **only** when ready to publish (kill switch in [release.yml](../../.github/workflows/release.yml)).
-4. Optional: tag ruleset for `v*`.
+Done on `M9nx/cursorfleet`:
+
+1. Environment **`pypi`** with required reviewer **M9nx**.
+2. Repository variable **`RELEASE_ENABLED`** = **`true`** (kill switch in [release.yml](../../.github/workflows/release.yml)).
+
+Optional: tag ruleset for `v*`.
 
 ## Release sequence
 
