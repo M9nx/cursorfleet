@@ -5,9 +5,9 @@
 > approvals, no cloud-agent visibility. It has not yet been verified against a live Cursor
 > (see [status](status.md)), so treat what the dashboard shows as provisional.
 >
-> **Supported surface:** the local Cursor IDE (desktop) only, once the live spike has
-> confirmed it. The Cursor CLI, the Agents Window, worktrees opened by Cursor or by hand,
-> parallel subagents and cloud agents are not claimed to work.
+> **Supported surface:** local Cursor IDE (desktop) on Linux for maintainer smoke; see
+> [evidence/live-validation-index.md](evidence/live-validation-index.md). CLI, Agents Window,
+> worktrees, parallel subagents, and cloud agents are not claimed until matrix PASS.
 
 ## 1. Install
 
@@ -58,9 +58,9 @@ block, and `.cursorfleet/` configuration. Nothing is written without a visible d
 confirmation (`--yes` skips only the prompt). Hooks never read prompts, model thinking, file
 contents or command output; see [privacy](privacy.md).
 
-The installed hook set is currently twelve; the accepted decision is nine
-([ADR 0007](adr/0007-narrower-v01-hook-policy.md)), and the code will be changed after the
-live spike. Hook behaviour inside worktrees is unverified.
+The installed hook set is **twelve** passive observe hooks
+([ADR 0007 amendment 2026-10-12](adr/0007-narrower-v01-hook-policy.md)). Hook behaviour inside
+worktrees is unverified.
 
 Commit the generated `.cursor/` and `.cursorfleet/` files: Cursor-managed worktrees are
 checkouts of your branch, so untracked hook files would not exist there.
@@ -83,23 +83,42 @@ Cursor would merge. A warning that your Cursor version is not in `[cursor].valid
 is expected until you have verified one yourself. Exit code 1 means a check *failed*; warnings
 exit 0. `cursorfleet validate` checks config, roster, generated files and work artifacts.
 
-## 4. Use Cursor as usual, then watch
+## 4. Task-centric runs (multi-chat)
+
+Membership is **never silent**: each Cursor chat must be linked to a run explicitly.
+
+```bash
+# Start a run for one task slug (repeat for a second simultaneous task)
+cursorfleet run start --task my-feature
+cursorfleet run list
+
+# Attach the current chat's session_id (from status or TUI suggested list)
+cursorfleet run attach <run-id> --session <session-id>
+
+# Optional: env token so the hook attaches on first event (shell where Cursor runs agents)
+export CURSORFLEET_ACTIVE_RUN=<run-id>
+```
+
+Re-run `cursorfleet run start` for a **second** task when working two chats in parallel; attach
+each chat to the correct run id. See [B0 evidence](evidence/b0-run-association-spike.md).
+
+## 5. Use Cursor as usual, then watch
 
 Open the repository in Cursor, trust the workspace (project hooks only run in trusted
 workspaces) and start agents. Hooks append small sanitized events to
 `<git-common-dir>/cursorfleet/` (inside `.git`, never in the working tree).
 
 ```bash
-cursorfleet tui               # the dashboard (needs an interactive terminal)
+cursorfleet tui               # Active run default (a); needs an interactive terminal
 cursorfleet status            # the same data as plain text
 cursorfleet status --json     # stable machine-readable form, see docs/status-json.md
 ```
 
-TUI keys: `o` overview, `l` timeline, `w` worktrees, `g` gates (heuristic, non-authoritative), `e` evidence,
-`/` filter, `p` pin, `t` tiles (160+ columns), `r` re-read, `?` help, `q` quit. Silence shows
-as STALE or OFFLINE, never as idle. Details: [tui.md](tui.md).
+TUI keys: `a` active run, `u` runs, `o` sessions archive, `l` timeline, `w` worktrees,
+`g` observations (non-authoritative), `e` evidence, `/` filter, `p` pin, `t` tiles (160+ cols),
+`r` re-read, `?` help, `q` quit. Details: [tui.md](tui.md).
 
-## 5. Replay, export and purge
+## 6. Replay, export and purge
 
 ```bash
 cursorfleet replay <session-id>              # rebuild one session from the spool twice; must match
@@ -109,7 +128,7 @@ cursorfleet events purge --older-than 7d     # delete older spool data
 cursorfleet events purge --all --yes         # delete every event and rotate the hash key
 ```
 
-## 6. Uninstall
+## 7. Uninstall
 
 ```bash
 cd /path/to/your/repo             # same repository-root rule as init

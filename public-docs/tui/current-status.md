@@ -24,6 +24,7 @@ the session archive.
 
 - Run association requires explicit `cursorfleet run start` / `attach` or `CURSORFLEET_ACTIVE_RUN`.
 - TUI attach picker deferred to v0.1.1; see [B0 evidence](https://github.com/M9nx/cursorfleet/blob/main/docs/evidence/b0-run-association-spike.md).
+- Maintainer screenshot (when added): [active-run-screenshot.png](https://github.com/M9nx/cursorfleet/blob/main/docs/evidence/active-run-screenshot.png) (optional pre-tag).
 - Many separate Cursor chats produce many sessions until runs are linked.
 
 See [known limitations](../known-limitations.md).

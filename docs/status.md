@@ -9,7 +9,7 @@ independent audit.
 Tracking: [`evidence/v01-release-baseline.md`](evidence/v01-release-baseline.md),
 [`evidence/v01-adr-truth-table.md`](evidence/v01-adr-truth-table.md).
 
-**Baseline SHA:** `31c8c2f` (plus v0.1.0 prep commits on `main`).
+**Baseline SHA:** see [v01-release-baseline.md](evidence/v01-release-baseline.md) (CI green on `2b0debf+`).
 
 **Phase 7 decision (2026-10-12):** External alpha (M2.5-I) and Product Hunt are **not**
 blocking the first `v0.1.0` tag; they continue immediately after PyPI publish. Maintainer

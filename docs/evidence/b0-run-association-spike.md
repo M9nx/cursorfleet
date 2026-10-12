@@ -46,7 +46,7 @@ Suggested session→run links may be computed; **membership is never silent**.
 
 **Attach picker decision (2026-10-12):** defer TUI picker to v0.1.1; document CLI + env in quickstart for v0.1.0.
 
-**Live maintainer re-run:** Repeat scenarios 1–2 and 5 on Linux Cursor IDE after each release candidate; update this table with Cursor version.
+**Live maintainer re-run:** Use [b0-live-validation-2026-10-12.md](b0-live-validation-2026-10-12.md) before tag; scenarios **1, 2, 5** must be PASS for go/no-go.
 
 **Chosen UX for B2:** CLI `run start` / `run attach` + optional env token; artifact task slug
 → suggested sessions on Active run screen only.
