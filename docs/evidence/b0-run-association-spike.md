@@ -1,6 +1,6 @@
 # B0: Run-association feasibility spike
 
-Date: 2026-10-05. Status: **procedure approved**; execute on maintainer machine.
+Date: 2026-10-05 (procedure); results updated 2026-10-12 (engineering + code validation).
 
 ## Invariant
 
@@ -31,17 +31,22 @@ Suggested session→run links may be computed; **membership is never silent**.
 <git-common-dir>/cursorfleet/runs/index.json   # active pointers
 ```
 
-## Results (2026-10-05 code path)
+## Results (2026-10-12)
 
 | # | Result | Notes |
 | --- | --- | --- |
-| 1 | PARTIAL | `run attach` + env `CURSORFLEET_ACTIVE_RUN` on hook path; TUI picker not yet |
-| 2 | PARTIAL | Separate run files; user must not attach to wrong id |
+| 1 | PARTIAL | `run attach` + env `CURSORFLEET_ACTIVE_RUN` on hook path; TUI picker not implemented |
+| 2 | PARTIAL | Separate run files; user must attach correct run id (CLI ceremony) |
 | 3 | OPEN | Per-repo common dir only; linked worktree cwd not re-tested live |
 | 4 | PARTIAL | Env token attach on first indexed hook event |
-| 5 | OPEN | No TUI picker yet |
-| 6 | PARTIAL | JSON under `cursorfleet/runs/` survives restarts |
+| 5 | OPEN | No TUI picker; CLI/env only |
+| 6 | PARTIAL | JSON under `cursorfleet/runs/` survives restarts (unit/integration paths) |
 | 7 | PARTIAL | `run archive` + TUI hides archived from active list |
+| 4b | PASS (code) | Run-scoped branch/commit/worktree from **linked sessions only** (`run_builder` + unit test) |
+
+**Attach picker decision (2026-10-12):** defer TUI picker to v0.1.1; document CLI + env in quickstart for v0.1.0.
+
+**Live maintainer re-run:** Repeat scenarios 1–2 and 5 on Linux Cursor IDE after each release candidate; update this table with Cursor version.
 
 **Chosen UX for B2:** CLI `run start` / `run attach` + optional env token; artifact task slug
 → suggested sessions on Active run screen only.

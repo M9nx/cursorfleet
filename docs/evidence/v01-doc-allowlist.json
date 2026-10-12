@@ -1,0 +1,25 @@
+{
+  "product_facing": [
+    "README.md",
+    "docs/status.md",
+    "docs/quickstart.md",
+    "docs/tui.md",
+    "docs/status-json.md",
+    "public-docs/index.md",
+    "public-docs/tui/overview.md",
+    "public-docs/tui/current-status.md",
+    "public-docs/getting-started/quickstart.md",
+    "public-docs/known-limitations.md",
+    "CHANGELOG.md"
+  ],
+  "navigation": {
+    "default_view": "active_run",
+    "keys": {
+      "a": "Active run",
+      "u": "Runs",
+      "o": "Sessions archive",
+      "g": "Observations"
+    },
+    "removed": ["v"]
+  }
+}
