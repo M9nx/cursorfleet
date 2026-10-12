@@ -16,6 +16,12 @@ NOW_MS = 1_790_000_000_000
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "cursor" / "legacy_test_completed.jsonl"
 )
+POST_M25 = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "cursor"
+    / "post_m25_verification_observed.jsonl"
+)
 
 
 def test_legacy_test_completed_replays_and_matches_verification_observed(
@@ -58,3 +64,12 @@ def test_fixture_is_sanitized_no_paths_outside_workspace() -> None:
     assert "@" not in blob
     assert "/home/" not in blob
     assert "prompt" not in blob.lower()
+
+
+def test_post_m25_live_fixture_replays() -> None:
+    """Sanitized post-M2.5 spool line (verification.observed); cursor_version in producer metadata."""
+    line = POST_M25.read_text(encoding="utf-8").strip()
+    event = Event.model_validate(json.loads(line))
+    assert event.kind == "verification.observed"
+    reduced = reduce_events([event])
+    assert reduced["sanitized-post-m25-session"].agents["main"].last_test is not None
