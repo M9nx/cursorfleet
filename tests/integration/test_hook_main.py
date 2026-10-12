@@ -239,6 +239,34 @@ def test_posix_permissions_are_private(repo: Path) -> None:
     assert stat.S_IMODE(os.stat(paths.hmac_key).st_mode) == 0o600
 
 
+def test_missing_config_omits_command_display(repo: Path) -> None:
+    """Default privacy: config without [privacy] must not persist command display (ADR 0003)."""
+    marker = repo / ".cursorfleet" / "config.toml"
+    marker.write_text("# cursorfleet install marker only\n", encoding="utf-8")
+    run_hook(payload_for("beforeShellExecution", repo))
+    events = [
+        e
+        for e in spool_events(repo)
+        if e.get("kind") == "tool.started" and e.get("tool_name") == "Shell"
+    ]
+    assert events
+    command = events[-1]["command"]
+    allowed = {"argv0", "subcommand", "command_hash", "exit_code", "duration_ms"}
+    assert set(command) <= allowed
+    assert "display" not in command
+
+
+def test_privacy_config_can_enable_display(repo: Path) -> None:
+    cfg = repo / ".cursorfleet"
+    cfg.mkdir(exist_ok=True)
+    (cfg / "config.toml").write_text(
+        "[privacy]\nstore_command_display = true\n", encoding="utf-8"
+    )
+    run_hook(payload_for("preToolUse", repo))
+    (event,) = spool_events(repo)
+    assert "display" in event["command"]
+
+
 def test_privacy_config_can_disable_display_and_hash(repo: Path) -> None:
     cfg = repo / ".cursorfleet"
     cfg.mkdir(exist_ok=True)

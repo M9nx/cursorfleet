@@ -161,7 +161,7 @@ class Settings:
     __slots__ = ("display_max", "hash_commands", "max_session_bytes", "store_display")
 
     def __init__(self) -> None:
-        self.store_display = True
+        self.store_display = False
         self.display_max = 200
         self.hash_commands = True
         self.max_session_bytes = DEFAULT_MAX_SESSION_BYTES
@@ -191,7 +191,9 @@ def load_settings(top_level: str, environ: Mapping[str, str]) -> Settings:
         privacy = parsed.get("privacy", {})
         retention = parsed.get("retention", {})
         if isinstance(privacy, dict):
-            if privacy.get("store_command_display") is False:
+            if privacy.get("store_command_display") is True:
+                settings.store_display = True
+            elif privacy.get("store_command_display") is False:
                 settings.store_display = False
             if privacy.get("hash_commands") is False:
                 settings.hash_commands = False
