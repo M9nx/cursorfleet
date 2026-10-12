@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cursorfleet"
-version = "0.1.1"
+version = "0.1.2.dev0"
 description = "Unofficial local TUI and workflow harness (observe-only) for Cursor agent teams."
 readme = "README.md"
 license = "MIT"
