@@ -15,9 +15,8 @@ Per event (see [ADR 0003](adr/0003-event-model-and-sanitization.md) and `schemas
 - Commands: argv0 (basename), subcommand, exit code, duration, a keyed hash, and an
   optional redacted display string (at most 200 characters). The decision
   ([ADR 0003](adr/0003-event-model-and-sanitization.md)) is that the display string is
-  **OFF by default**. **Divergence:** the code currently stores it by default
-  (`store_command_display = true`); until fixed, set it to `false` in
-  `.cursorfleet/config.toml`.
+  **OFF by default** (opt-in via `[privacy] store_command_display = true` in
+  `.cursorfleet/config.toml`).
 - Paths: workspace-relative, symlink-resolved; anything outside the workspace
   roots is stored as `<external>`.
 - Git context: branch name, commit SHA, optional `issue_ref`.

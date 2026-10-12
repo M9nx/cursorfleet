@@ -31,7 +31,7 @@ Install from a git checkout. See [Installation](getting-started/installation.md)
   (in-repo).
 - **Q1** and **Q2** (subagent identity on tool hooks; custom subagent names) remain
   **OPEN**. Parallel classification is **BLOCKED/OPEN** on the exercised Linux surface.
-- **M2.5** ships an **Active Run** default dashboard; the session archive remains on **o**.
+- **Active Run** is the default TUI screen (**a**); session archive is **o**; runs list is **u**.
   See [TUI current status](tui/current-status.md).
 - **CI** runs on GitHub Actions; **documentation** is published via GitHub Pages.
 - Linux is the primary tested platform; macOS and Windows are CI-tested only.
@@ -54,7 +54,7 @@ Git is required for `init`. There is no `--allow-non-git` flag.
 | --- | --- |
 | Kit | `cursorfleet init --cursor`, `uninstall`, `doctor`, `validate` |
 | Observer | Fail-open `cursorfleet-hook`, local spool and projection, `status --json` |
-| Dashboard | `cursorfleet tui` — observe-only; Active Run UX in development (M2.5) |
+| Dashboard | `cursorfleet tui` — observe-only; Active Run default (explicit run attach) |
 | Scope | One Git repository; runtime state under that repo's Git common directory |
 
 ## License

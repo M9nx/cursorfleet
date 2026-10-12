@@ -7,16 +7,16 @@ anything, and `.github/workflows/release.yml` has never run.
 Legend: **BLOCKING** = do not tag `v0.1.0` before this is done. *Non-blocking* = can follow
 (or be skipped with a conscious decision).
 
-## 0. Process freeze (2026-10-04)
+## 0. M2.5 charter and v0.1.0 truth table (2026-10-12)
 
-New M2 and TUI implementation is **frozen** until the live Cursor spike has been run and the
-ADR 0001 questions are answered ([`status.md`](status.md)). The existing code is
-implemented, provisional and unvalidated against live Cursor. After the spike, the code is
-brought in line with the accepted ADRs in the order given in [`follow-ups.md`](follow-ups.md);
-only then does the rest of this checklist apply.
+M2.5 task-centric observe work is **active**. Implementation and release tracking use
+[`evidence/v01-adr-truth-table.md`](evidence/v01-adr-truth-table.md) and
+[`evidence/v01-release-baseline.md`](evidence/v01-release-baseline.md). The M0 process
+freeze (2026-10-04) is **superseded for product direction**; ADR 0001 Q1–Q6 and latency
+rows still gate **supported-surface claims**, not all engineering.
 
-- **BLOCKING:** every release gate listed in the [ADR index](adr/README.md) is met or its ADR
-  is explicitly weakened by a new decision.
+- **BLOCKING:** every release gate listed in the [ADR index](adr/README.md) is **met** or
+  **explicitly amended** with date (see ADR amendments 2026-10-12 where applicable).
 - **BLOCKING:** the supported-surface claims in the README, quickstart and
   [`platform-support.md`](platform-support.md) match the empirical test matrix in ADR 0001
   (local Cursor IDE only unless a row passed).

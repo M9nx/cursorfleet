@@ -20,20 +20,19 @@ scripts use [`cursorfleet status --json`](../cli/status.md).
 | `--no-git` | off | Skip the Git collector (worktrees and gates show unknown). |
 | `--no-watch` | off | Poll only, even if the optional `watchfiles` extra is installed. |
 
-Telemetry is best-effort. Any view can be incomplete. The dashboard is
-implemented, provisional, and unvalidated against live Cursor. New TUI work
-is frozen until the live spike runs.
+Telemetry is best-effort. Any view can be incomplete.
 
 ## Keys
 
 | Key | Action |
 | --- | --- |
-| `o` | Overview (default) |
+| `a` | Active run (**default**) |
+| `u` | Runs list |
+| `o` | Sessions (archive / overview lanes) |
 | `l` | Timeline |
 | `w` | Worktrees |
-| `g` | Gates |
+| `g` | Observations (non-authoritative; ADR 0011) |
 | `e` | Evidence |
-| `v` | Violations (**planned:** policy engine in v0.2; placeholder only) |
 | `j` / `k`, arrows | Move |
 | Enter | Open detail |
 | Esc | Back, close, or clear the filter |
@@ -50,12 +49,13 @@ is frozen until the live spike runs.
 
 | Screen | What it shows |
 | --- | --- |
-| Overview | Agents in lanes: QUEUED, LOADING CONTEXT, PLANNING, WORKING, VERIFYING, AWAITING REVIEW, PATCHING, BLOCKED, DONE, STALE / OFFLINE, UNKNOWN / NO TELEMETRY. Enter opens agent detail. |
+| Active run | Task-centric run: participants, suggested sessions, run-scoped git, declared handoffs/blockers. |
+| Runs | Active and archived runs (`cursorfleet run`). |
+| Sessions | Agents in lanes: QUEUED through UNKNOWN / NO TELEMETRY. Enter opens agent detail. |
 | Timeline | Events newest first, with source/attribution, agent, summary, and risk. |
-| Worktrees | Branch, HEAD, dirty files, ahead/behind, stale or prunable, owning agent, last activity. `r` only re-reads. |
-| Gates | Ten heuristic, non-authoritative signals per worktree. Not proof that anything passed. |
-| Evidence | Heuristic test/lint/type observations, and separately what agents DECLARED in work artifacts. |
-| Violations | **Planned / under development.** Placeholder: policy engine arrives in v0.2. |
+| Worktrees | Branch, HEAD, dirty files, ahead/behind, stale or prunable, owning agent, last activity. |
+| Observations | Heuristic verification signals per worktree; not proof anything passed. |
+| Evidence | Heuristic observations plus what agents DECLARED in work artifacts. |
 | Help | Keys, layouts, honesty rules, setup hints. |
 
 Agent detail shows role, task, issue refs, context sources, status and its
@@ -78,22 +78,4 @@ size.
 
 ## Filter (`/`)
 
-On the timeline, space-separated terms are ANDed: `agent:`, `session:`,
-`kind:` (exact or prefix, e.g. `kind:tool`), `risk:`, `source:`,
-`attribution:`, `file:`, `since:`, `until:` (relative `15m`, `2h`, `1d`, or
-an ISO time), and bare words that match the summary. A bad term shows a
-filter-problem line and is ignored. On other screens `/` filters rows by
-text. Enter applies; Esc clears.
-
-## Honesty
-
-- Silence is **not** idle. See [current status](current-status.md).
-- Timeline tags: `obs` (hook), `drv` (derived), `SELF` (artifact).
-- Attribution is `exact`, `inferred`, or `unknown`. A role-only identity is
-  `inferred`.
-- Gate tiles are heuristic and non-authoritative.
-
-Every state has a text label and an ASCII marker. `NO_COLOR` (any value)
-drops colour for bold, dim, and reverse only.
-
-Implemented versus planned: [current status](current-status.md).
+Same as in-repo [`docs/tui.md`](https://github.com/M9nx/cursorfleet/blob/main/docs/tui.md).

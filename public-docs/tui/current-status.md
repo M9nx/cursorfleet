@@ -1,8 +1,8 @@
 # TUI current status
 
 The dashboard works against **live hook telemetry** (Linux Cursor IDE 3.22.7 maintainer
-smoke) and against synthetic fixtures. **M2.5** is improving the default experience toward
-**Active Run** (task-centric) is the default TUI screen; press **o** for the session archive.
+smoke) and against synthetic fixtures. **Active Run** (`a`) is the default screen; **o** opens
+the session archive.
 
 ## Empirical gates
 
@@ -13,21 +13,17 @@ smoke) and against synthetic fixtures. **M2.5** is improving the default experie
 
 ## Implemented
 
-- Overview lanes, agent detail, timeline (paged), worktrees, gates/evidence, help.
+- Active run default, runs list (`u`), sessions archive (`o`), observations (`g`).
+- Overview lanes, agent detail, timeline (paged), worktrees, evidence, help.
 - Observe-only: no allow/deny/ask, no network, no fetch, no prompt or thinking display.
 - Live refresh against spool + projection; optional `watchfiles`; corrupt DB rebuild from spool.
 - Work artifacts under `.cursorfleet/work/` shown as self-reported; body never displayed.
+- Run-scoped git context on Active run when sessions are linked to a run.
 
-## M2.5 in progress
+## Known limitations
 
-- **Active Run** default screen and stale-session hiding (prototype behind env flag during B1).
-- **Observations** replacing misleading PASS/FAIL gate tiles (A3/E).
-- **Violations** placeholder will be **removed** from alpha navigation (v0.2 Guard is separate).
-- Plain trust labels on primary rows (Observed / Declared / Inferred / Unavailable / Conflict).
-
-## Known live-smoke limitations
-
-- Many separate Cursor chats produce many sessions; overview becomes noisy until Active Run ships.
-- Observed and declared role cards can duplicate until reconciliation (M2.5-C).
+- Run association requires explicit `cursorfleet run start` / `attach` or `CURSORFLEET_ACTIVE_RUN`.
+- TUI attach picker deferred to v0.1.1; see [B0 evidence](https://github.com/M9nx/cursorfleet/blob/main/docs/evidence/b0-run-association-spike.md).
+- Many separate Cursor chats produce many sessions until runs are linked.
 
 See [known limitations](../known-limitations.md).

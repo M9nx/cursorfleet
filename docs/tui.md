@@ -6,10 +6,9 @@ enforces, approves or blocks anything, never fetches, never touches the network,
 holds or shows prompts, thinking text, responses, file contents or command output (see
 [privacy](privacy.md)).
 
-> **Status: implemented, provisional, unvalidated against live Cursor.** New TUI work is
-> frozen until the live spike runs ([status](status.md)). Where this page and the code
-> differ from an accepted ADR, the difference is marked **Divergence** and tracked in
-> [follow-ups](follow-ups.md). Telemetry is best-effort, so any view can be incomplete.
+> **Status:** M2.5 task-centric views on `main`; live Linux IDE smoke documented in
+> [evidence/live-validation-index.md](evidence/live-validation-index.md). Telemetry is
+> best-effort, so any view can be incomplete.
 
 ```bash
 cursorfleet tui [--path DIR] [--refresh SECONDS] [--no-git] [--no-watch]
@@ -29,12 +28,13 @@ The command needs an interactive terminal and exits with status 2 otherwise; in 
 
 | Key | Screen | What it shows |
 | --- | --- | --- |
-| `o` | Overview (default) | Agents grouped into lanes: QUEUED, LOADING CONTEXT, PLANNING, WORKING, VERIFYING, AWAITING REVIEW, PATCHING, BLOCKED, DONE, STALE / OFFLINE, and UNKNOWN / NO TELEMETRY. Lanes sort by blockers, then recency. Enter opens the agent detail. |
+| `a` | Active run (default) | Task-centric run: participant groups, suggested sessions, run-scoped git context, handoff/blocker hints from artifacts. |
+| `u` | Runs | Active and archived run list. |
+| `o` | Sessions (archive) | Session-centric overview lanes (legacy layout): QUEUED through UNKNOWN / NO TELEMETRY. |
 | `l` | Timeline | Events, newest first, with `source/attribution`, agent, summary and risk. Filterable (below). Large histories are paged: 200 rows at first, `m` loads more. |
 | `w` | Worktrees | Branch, HEAD, dirty files, ahead/behind, stale or prunable, owning agent, last activity. `r` only re-reads. |
-| `g` | Gates | Ten heuristic, non-authoritative signals per worktree (below). |
+| `g` | Observations | Heuristic verification observations per worktree; **not** authoritative PASS/FAIL gates (ADR 0011). |
 | `e` | Evidence | Heuristic test/lint/type observations, and, separately, what agents DECLARED in work artifacts. |
-| `v` | Violations | Placeholder: "policy engine arrives in v0.2". |
 | `?` | Help | Keys, layouts, honesty rules, setup hints. |
 
 **Agent detail** shows role, task, issue refs, context sources, status and the basis for it,
@@ -176,5 +176,4 @@ older database is reindexed once from the spool. `status --json` is unchanged.
   (it can be; ADR 0006).
 - Gate command classification, which is a heuristic over sanitized commands and is
   non-authoritative (see Gates).
-- Command text display. The decision is default OFF ([ADR 0003](adr/0003-event-model-and-sanitization.md));
-  **Divergence:** the code stores a sanitized command string by default.
+- Command text display is opt-in ([ADR 0003](adr/0003-event-model-and-sanitization.md)); default OFF on the hook hot path.
