@@ -11,8 +11,9 @@
 
 ## 1. Install
 
-CursorFleet needs Python 3.11 or newer and `git`. It is **not on PyPI yet**; until the owner
-publishes it, install from a checkout or a built wheel.
+CursorFleet needs Python 3.11 or newer and `git`. **v0.1.0** is tagged on GitHub; PyPI publish
+awaits owner approval (`RELEASE_ENABLED`). Until then, install from a checkout, the draft release
+assets, or a local wheel.
 
 ```bash
 # from a checkout (needs uv: https://docs.astral.sh/uv/)

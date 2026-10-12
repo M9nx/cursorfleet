@@ -1,7 +1,7 @@
 # B0 live validation (maintainer)
 
-Status: **checklist for owner** — fill during Linux Cursor IDE session before calling v0.1.0
-**product-accepted** for scenarios 1, 2, and 5.
+Status: **checklist for owner** — fill during Linux Cursor IDE session before **PyPI publish**
+(`RELEASE_ENABLED`). Tag `v0.1.0` is already on GitHub; scenarios 1, 2, and 5 gate product claims.
 
 | Field | Value |
 | --- | --- |
