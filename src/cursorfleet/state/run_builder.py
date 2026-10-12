@@ -101,10 +101,13 @@ def build_active_run(  # noqa: PLR0913, PLR0912
     branch = None
     commit = None
     linked = linked_session_ids or frozenset()
-    git_sources = ((sid, session_views[sid]) for sid in linked if sid in session_views)
-    if not linked:
-        git_sources = session_views.items()
-    for _sid, sview in git_sources:
+    if linked:
+        git_pairs: list[tuple[str, SessionView]] = [
+            (sid, session_views[sid]) for sid in linked if sid in session_views
+        ]
+    else:
+        git_pairs = list(session_views.items())
+    for _sid, sview in git_pairs:
         if sview.worktree_ids and primary_wt is None:
             primary_wt = sview.worktree_ids[0]
         if sview.branch and branch is None:
