@@ -8,7 +8,21 @@ CursorFleet is an unofficial tool: it is not affiliated with or endorsed by Anys
 
 ## [Unreleased]
 
-Development version `0.1.1.dev0` (post-v0.1.0). Planned: TUI attach picker, external alpha metrics.
+Development on `main` after v0.1.1. Planned: external alpha metrics, evidence closure.
+
+## [0.1.1] - 2026-10-13
+
+PyPI/README refresh and small UX fixes after the v0.1.0 launch.
+
+### Added
+
+- TUI: attach suggested sessions from Active run (Enter).
+- Optional `ghcr.io/m9nx/cursorfleet` container for GitHub Packages visibility.
+
+### Changed
+
+- README and [docs site](https://m9nx.github.io/cursorfleet/) document PyPI install and v0.1.0 release status.
+- PyPI `project.urls` Homepage/Documentation point at GitHub Pages.
 
 ## [0.1.0] - 2026-10-12
 

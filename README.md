@@ -39,7 +39,7 @@ are doing what, from passive hooks and read-only git, without sending anything a
 
 **Pre-alpha.** **[v0.1.0](https://github.com/M9nx/cursorfleet/releases/tag/v0.1.0)** is on
 [PyPI](https://pypi.org/project/cursorfleet/) and
-[GitHub Releases](https://github.com/M9nx/cursorfleet/releases); `main` tracks **0.1.1.dev0**.
+[GitHub Releases](https://github.com/M9nx/cursorfleet/releases). Latest on PyPI: **0.1.1**; `main` may be ahead.
 
 - v0.1 is **Observe**: no enforcement, no forced approvals, and no cloud-agent visibility
   (local Cursor sessions only). It is not a security boundary: a malicious or prompt-injected
