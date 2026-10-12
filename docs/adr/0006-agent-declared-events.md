@@ -156,3 +156,12 @@ A follow-up (after the spike, see [`../follow-ups.md`](../follow-ups.md)) must c
   care on Windows. Kept as fallback.
 - Local MCP server first: typed and robust but heavy and an extra moving part. v0.2.
 - Parse agent responses or transcripts: forbidden by ADR 0007 and the privacy rules.
+
+## Amendment 2026-10-12 (v0.1.0 scope)
+
+For **v0.1.0**, artifact files are scanned with TOML frontmatter where present; **`artifact_id`,
+revision, digest deduplication, and `cursorfleet migrate artifacts --yes` are deferred** to a
+patch release. Public copy must state that artifacts are **self-reported, non-authoritative**,
+and **never gate evidence** ([ADR 0011](0011-evidence-trust-model.md)). Generated kit templates
+teach TOML frontmatter; legacy YAML may still parse until migrated manually or via a future
+`--yes` implementation.

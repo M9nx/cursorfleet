@@ -295,3 +295,13 @@ are real and are not fixed by this documentation pass; see
   `docs/privacy.md` and `docs/threat-model.md` describe display storage as the default.
   `tui/gates.py:classify_command` and `hook_sanitize.is_verify_command` read the display
   string; they must be reworked to run without it.
+
+## Amendment 2026-10-12 (v0.1.0)
+
+- **Command display:** hot-path default is **OFF** when `[privacy]` is absent
+  (`hook_main.Settings.store_display = false`); opt-in via `store_command_display = true`.
+- **Status JSON:** `cursorfleet.status/0.2` with optional `runs[]` is the v0.1.0 contract
+  (schema id `0.1` rename deferred).
+- **Gates:** tier 1–3 data must not produce PASS/FAIL gate tiles ([ADR 0011](0011-evidence-trust-model.md));
+  implemented in `tui/gates.py` as of M2.5.
+- **Attribution per-value counts:** deferred; weakest-wins aggregation remains for v0.1.0.

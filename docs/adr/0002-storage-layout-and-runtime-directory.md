@@ -323,3 +323,11 @@ remains OPEN.
 
 Empirical cases remain in [empirical-test-plan](../empirical-test-plan.md) row 17, case 17b.
 Tests: `tests/integration/test_runtime_inheritance.py`.
+
+## Amendment 2026-10-12 (v0.1.0 release gate)
+
+**v0.1.0 ships without** BLAKE2s spool fingerprints, HMAC-derived worktree ids, or the
+maintenance lock described in the full ADR body. The implementation continues to use CRC32
+fingerprints and unkeyed worktree ids. Public docs must **not** claim keyed or HMAC worktree
+identity or maintenance-lock safety properties. Full ADR 0002 storage hardening remains a
+follow-up; see [`../evidence/v01-adr-truth-table.md`](../evidence/v01-adr-truth-table.md).

@@ -169,3 +169,15 @@ files; this pass changes none of them.
   still reaches the process for matching calls and the reply risk is unchanged.
 - Drop `subagentStart` too (it is a permission hook): rejected, it is the only source of
   documented subagent identity; kept with the allow reply and flagged as a release gate.
+
+## Amendment 2026-10-12 (v0.1.0, supersedes nine-hook body for observe set)
+
+Per [`../evidence/a2-contract-decision-matrix.md`](../evidence/a2-contract-decision-matrix.md),
+**v0.1.0 registers twelve passive observe hooks** (the set in `hook_policy.ALLOWED_V01_HOOKS`):
+the nine hooks above plus `beforeShellExecution`, `afterShellExecution`, and `afterFileEdit`.
+They remain fail-open on the hot path; permission replies apply only to `preToolUse` and
+`subagentStart`. The nine-hook list in this ADR is historical context for the privacy
+trade-off discussion, not the installer contract for v0.1.0.
+
+**Release gate (v0.1.0):** installer registers exactly those twelve hooks; tests assert the set;
+permission-hook reply confirmed on live Cursor (SO-01) for claimed surfaces.

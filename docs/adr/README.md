@@ -61,16 +61,16 @@ release gate in one line. The full gate text is in each ADR.
   - Gate: lane basis shown everywhere; no reducer output used as gate evidence.
 - [0011: Evidence trust model](0011-evidence-trust-model.md)
   - Status: accepted. Supersedes: none.
-  - Implementation: Divergent-from-code (TUI derives gates from heuristics).
+  - Implementation: Implemented (observations; no PASS/FAIL from tier 1–3).
   - Gate: no v0.1 gate satisfied by tier 1 to 3 data; tiers labelled in the UI.
 - [0012: Roster and worktree ownership](0012-roster-and-worktree-ownership.md)
-- [0013: Run metadata and explicit association](0013-run-metadata-and-association.md)
-  - Status: accepted (M2.5). Supersedes: none.
-  - Implementation: Implemented-provisional (`run` CLI, hook env attach, TUI Active run).
-  - Gate: B0 scenarios exercised; external alpha metrics (M2.5-I).
   - Status: provisional. Supersedes: none.
   - Implementation: Implemented-provisional.
   - Gate: owners shown with attribution labels; no isolation or cleanup claims; worktree claims match the spike.
+- [0013: Run metadata and explicit association](0013-run-metadata-and-association.md)
+  - Status: accepted (M2.5). Supersedes: none.
+  - Implementation: Implemented-provisional (`run` CLI, hook env attach, TUI Active run).
+  - Gate: B0 exercised; external alpha post-v0.1.0 (amendment 2026-10-12).
 
 ## Supersession links
 
@@ -80,33 +80,20 @@ release gate in one line. The full gate text is in each ADR.
 
 ## Release gates summary (before v0.1.0 is tagged)
 
-Spike and facts:
+Authoritative row-level status: [`../evidence/v01-adr-truth-table.md`](../evidence/v01-adr-truth-table.md).
 
-- ADR 0001: spike run, Q1 to Q6 and secondary questions answered, real sanitized fixtures
-  committed, permission-hook reply shape confirmed.
-- ADR 0002: Q4 and Q5 answered on every OS claimed.
-- ADR 0007: installer registers exactly the nine hooks.
+- **0001 / SO-01:** Live spike + sanitized fixtures; permission reply; latency for claimed surfaces.
+- **0002:** Full storage hardening **or** amendment 2026-10-12 (ship without HMAC/BLAKE2s claims).
+- **0003:** Display default off; `verification.observed`; status/0.2; gates per 0011.
+- **0005:** Naming gate (owner).
+- **0006:** Full identity/digest **or** amendment 2026-10-12 (self-reported artifacts only).
+- **0007:** Twelve observe hooks (amendment 2026-10-12).
+- **0009:** Round-trip CI; repo-root preconditions.
+- **0013:** B0 + B1; external alpha after tag (amendment 2026-10-12).
 
-Code brought in line with the decisions:
-
-- ADR 0002: BLAKE2s segment fingerprints, HMAC worktree ids, maintenance lock;
-  runtime inheritance (marker required, fail-open no-event cases, no nested state).
-- ADR 0003: schema `0.1`; `verification.observed`; command display default off; attribution
-  never shows inferred as exact.
-- ADR 0006: TOML artifacts with identity, revision and digest.
-- ADR 0009: migration that removes hook entries for hooks no longer registered;
-  repository-root preconditions (exit 2, no changes).
-- ADR 0010 and 0011: lane basis shown; no gate satisfied by heuristic or self-reported data.
-
-Project and legal:
-
-- ADR 0005: public name chosen and checked (PyPI, npm, GitHub), trademark review done.
-- ADR 0008: docs and code say observe only, no enforcement.
-- ADR 0012: no isolation or cleanup claims.
-
-The ordered implementation tasks are in [`../follow-ups.md`](../follow-ups.md); the live
-tests are in [`../empirical-test-plan.md`](../empirical-test-plan.md); the owner steps are in
-[`../release-checklist.md`](../release-checklist.md).
+Legacy ordered tasks remain in [`../follow-ups.md`](../follow-ups.md) for post-v0.1.0 hardening.
+Owner steps: [`../release-checklist.md`](../release-checklist.md),
+[`../evidence/v01-release-ready.md`](../evidence/v01-release-ready.md).
 
 Related documents: [project status](../status.md), [product contract](../product-contract.md),
 [threat model](../threat-model.md), [privacy](../privacy.md), [architecture](../architecture.md).

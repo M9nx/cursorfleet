@@ -25,3 +25,10 @@ group sessions and declared artifacts for one task without mutating git or agent
 - Multi-chat workflows need an explicit linking step until automatic association is proven.
 - TUI **Active run** reads run files + projection; B1 in-memory fallback uses declared task
   slugs when no run file exists.
+
+## Amendment 2026-10-12 (v0.1.0 gate)
+
+**External alpha metrics (M2.5-I) are not required to tag v0.1.0.** B0 engineering validation,
+run-scoped git, and B1 sign-off are required. External alpha and Product Hunt follow the first
+PyPI publish. Session-level attach remains the persistence model (no per-agent-instance run
+membership in v0.1.0).
