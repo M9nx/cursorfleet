@@ -83,6 +83,13 @@ uv tool install .
 See the [installation guide](https://m9nx.github.io/cursorfleet/getting-started/installation/)
 on the docs site and the [release checklist](docs/release-checklist.md).
 
+Optional container (shows under [GitHub Packages](https://github.com/M9nx?tab=packages&repo_name=cursorfleet);
+install with pip for normal use):
+
+```bash
+docker run --rm ghcr.io/m9nx/cursorfleet:0.1.0 --help
+```
+
 ## Quickstart
 
 ```bash

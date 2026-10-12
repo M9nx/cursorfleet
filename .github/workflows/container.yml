@@ -1,0 +1,50 @@
+name: Container (GHCR)
+
+# PyPI wheels do not appear under github.com/.../packages; this workflow publishes
+# ghcr.io/<owner>/cursorfleet so the repo shows a linked container package.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "cursorfleet PyPI version (e.g. 0.1.0)"
+        required: true
+        default: "0.1.0"
+      tag:
+        description: "Extra GHCR tag (defaults to version; use latest to also tag latest)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: publish ghcr.io image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve image tags
+        id: meta
+        run: |
+          version="${{ inputs.version }}"
+          extra="${{ inputs.tag }}"
+          tags="ghcr.io/${GITHUB_REPOSITORY,,}:${version}"
+          if [ "${extra}" = "latest" ] || [ "${version}" = "0.1.0" ]; then
+            tags="${tags},ghcr.io/${GITHUB_REPOSITORY,,}:latest"
+          elif [ -n "${extra}" ]; then
+            tags="${tags},ghcr.io/${GITHUB_REPOSITORY,,}:${extra}"
+          fi
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: CURSORFLEET_VERSION=${{ inputs.version }}
