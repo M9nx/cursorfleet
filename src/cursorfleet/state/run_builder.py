@@ -101,11 +101,7 @@ def build_active_run(  # noqa: PLR0913, PLR0912
     branch = None
     commit = None
     linked = linked_session_ids or frozenset()
-    git_sources = (
-        (sid, session_views[sid])
-        for sid in linked
-        if sid in session_views
-    )
+    git_sources = ((sid, session_views[sid]) for sid in linked if sid in session_views)
     if not linked:
         git_sources = session_views.items()
     for _sid, sview in git_sources:

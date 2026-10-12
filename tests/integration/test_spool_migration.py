@@ -67,7 +67,7 @@ def test_fixture_is_sanitized_no_paths_outside_workspace() -> None:
 
 
 def test_post_m25_live_fixture_replays() -> None:
-    """Sanitized post-M2.5 spool line (verification.observed); cursor_version in producer metadata."""
+    """Sanitized post-M2.5 spool line (verification.observed)."""
     line = POST_M25.read_text(encoding="utf-8").strip()
     event = Event.model_validate(json.loads(line))
     assert event.kind == "verification.observed"

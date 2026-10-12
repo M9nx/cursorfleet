@@ -259,9 +259,7 @@ def test_missing_config_omits_command_display(repo: Path) -> None:
 def test_privacy_config_can_enable_display(repo: Path) -> None:
     cfg = repo / ".cursorfleet"
     cfg.mkdir(exist_ok=True)
-    (cfg / "config.toml").write_text(
-        "[privacy]\nstore_command_display = true\n", encoding="utf-8"
-    )
+    (cfg / "config.toml").write_text("[privacy]\nstore_command_display = true\n", encoding="utf-8")
     run_hook(payload_for("preToolUse", repo))
     (event,) = spool_events(repo)
     assert "display" in event["command"]
