@@ -587,7 +587,8 @@ def untrusted_reason(root: str) -> str | None:  # noqa: PLR0911
     if getattr(info, "st_file_attributes", 0) & _FILE_ATTRIBUTE_REPARSE_POINT:
         return "is a reparse point (junction)"
     if os.name == "posix":
-        if info.st_uid != os.geteuid():
+        geteuid = getattr(os, "geteuid", None)
+        if geteuid is not None and info.st_uid != geteuid():
             return "is owned by another user"
         if info.st_mode & 0o022:
             return "is writable by group or others"
@@ -628,7 +629,9 @@ def write_private_file(path: str | os.PathLike[str], data: bytes, *, exclusive: 
         return False
     try:
         if os.name == "posix":
-            os.fchmod(fd, FILE_MODE)
+            fchmod = getattr(os, "fchmod", None)
+            if fchmod is not None:
+                fchmod(fd, FILE_MODE)
         os.write(fd, data)
     finally:
         os.close(fd)

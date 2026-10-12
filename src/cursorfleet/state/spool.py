@@ -146,7 +146,9 @@ def append_event(  # noqa: PLR0911, PLR0912
         try:
             size = os.fstat(fd).st_size
             if size == 0 and os.name == "posix":
-                os.fchmod(fd, FILE_MODE)  # explicit, not umask-dependent
+                fchmod = getattr(os, "fchmod", None)
+                if fchmod is not None:
+                    fchmod(fd, FILE_MODE)  # explicit, not umask-dependent
             if size == 0 or size >= rotate_bytes:
                 if size >= rotate_bytes:
                     os.close(fd)
@@ -154,7 +156,9 @@ def append_event(  # noqa: PLR0911, PLR0912
                     _rotate(path, now_ms)
                     fd = _open_append(path)
                     if os.name == "posix":
-                        os.fchmod(fd, FILE_MODE)
+                        fchmod = getattr(os, "fchmod", None)
+                        if fchmod is not None:
+                            fchmod(fd, FILE_MODE)
                 if _cap_reached(directory, max_session_bytes):
                     return False
             written = os.write(fd, data)
