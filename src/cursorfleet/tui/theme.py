@@ -151,7 +151,7 @@ def fmt_age(now: datetime, then: datetime | None) -> str:
         return "never"
     seconds = int((utc(now) - utc(then)).total_seconds())
     if seconds < 0:
-        return "in the future"
+        return "clock skew"
     if seconds < 60:
         return f"{seconds}s ago"
     if seconds < 3600:
