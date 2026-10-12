@@ -81,3 +81,42 @@ def test_build_active_run_two_reviewer_instances() -> None:
     )
     reviewer = next(g for g in run.groups if g.role == "reviewer")
     assert len(reviewer.instances) == 2
+
+
+def test_git_fields_scoped_to_linked_sessions_only() -> None:
+    events = [
+        Event.model_validate(
+            make_event(
+                "s-linked",
+                1,
+                kind="session.started",
+                branch="feature-a",
+                commit="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                ts="2026-10-04T12:01:00.000Z",
+            )
+        ),
+        Event.model_validate(
+            make_event(
+                "s-other",
+                2,
+                kind="session.started",
+                branch="feature-b",
+                commit="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                ts="2026-10-04T12:02:00.000Z",
+            )
+        ),
+    ]
+    sessions = reduce_events(events)
+    fleet = snapshot(sessions, now=T0 + timedelta(minutes=5))
+    session_views = {s.session_id: s for s in fleet.sessions}
+    run = build_active_run(
+        task_slug="task-a",
+        run_id="run-a",
+        sessions=sessions,
+        session_views=session_views,
+        records=[],
+        linked_session_ids=frozenset({"s-linked"}),
+        now=T0 + timedelta(minutes=5),
+    )
+    assert run.branch == "feature-a"
+    assert run.commit == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

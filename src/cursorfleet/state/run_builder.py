@@ -100,11 +100,21 @@ def build_active_run(  # noqa: PLR0913, PLR0912
     primary_wt = None
     branch = None
     commit = None
-    for sview in session_views.values():
-        if sview.worktree_ids:
+    linked = linked_session_ids or frozenset()
+    git_sources = (
+        (sid, session_views[sid])
+        for sid in linked
+        if sid in session_views
+    )
+    if not linked:
+        git_sources = session_views.items()
+    for _sid, sview in git_sources:
+        if sview.worktree_ids and primary_wt is None:
             primary_wt = sview.worktree_ids[0]
-        branch = sview.branch or branch
-        commit = sview.commit or commit
+        if sview.branch and branch is None:
+            branch = sview.branch
+        if sview.commit and commit is None:
+            commit = sview.commit
 
     return RunSnapshot(
         run_id=run_id,
