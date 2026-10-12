@@ -240,13 +240,26 @@ def active_run_rows(data: FleetData, ui: UiState) -> list[Row]:
     if run.suggested_session_ids:
         rows.append(Row("ar:sug:h", _t(("Suggested sessions (not attached)", "bold")), header=True))
         for sid in run.suggested_session_ids[:MAX_LIST]:
-            hint = f"  attach: cursorfleet run attach <run> --session {sid}"
-            rows.append(_note(f"sug:{sid}", hint))
+            rows.append(
+                Row(
+                    f"sug:{sid}",
+                    _t(
+                        (safe(sid, 48), "bold"),
+                        "  Enter attach",
+                    ),
+                    sid.lower(),
+                )
+            )
     if run.unassociated_session_ids:
         rows.append(Row("ar:un:h", _t(("Other live sessions (unscoped)", "bold")), header=True))
         for sid in run.unassociated_session_ids[:MAX_LIST]:
             rows.append(_note(f"un:{sid}", f"  session {safe(sid, 48)}"))
-    rows.append(_note("ar:nav", "Press u for all runs; o for full session archive."))
+    rows.append(
+        _note(
+            "ar:nav",
+            "Suggested: select session, Enter to attach. u all runs; o session archive.",
+        )
+    )
     return rows
 
 
@@ -285,8 +298,29 @@ def active_runs_rows(data: FleetData, ui: UiState) -> list[Row]:
 
 def active_run_detail(data: FleetData, ui: UiState, key: str) -> Text:
     run = data.primary_run
-    if run is None or not key.startswith("grp:"):
-        return Text("Select a role group to see instances.", style="dim")
+    if run is None:
+        return Text("No active run.", style="dim")
+    if key.startswith("sug:") and key != "ar:sug:h":
+        sid = key[4:]
+        doc = _Doc(ui.theme)
+        doc.title(f"Suggested session {safe(sid, 48)}", "bold")
+        doc.line("Run", safe(run.run_id, 40))
+        doc.line("Task", safe(run.task_slug, 60))
+        doc.raw("")
+        if run.run_id.startswith("inferred:"):
+            doc.raw(
+                "Persist a run first: `cursorfleet run start --task <slug>`, then attach.",
+                "bold",
+            )
+        else:
+            doc.raw("Press Enter to attach this session to the active run.", "bold")
+            doc.raw(
+                f"CLI: cursorfleet run attach {run.run_id} --session {sid}",
+                "dim",
+            )
+        return doc.text
+    if not key.startswith("grp:"):
+        return Text("Select a role group or suggested session.", style="dim")
     role = key[4:]
     group = next((g for g in run.groups if g.role == role), None)
     if group is None:

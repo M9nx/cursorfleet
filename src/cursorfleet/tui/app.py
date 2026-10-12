@@ -26,6 +26,7 @@ from cursorfleet import __version__
 from cursorfleet.adapters.cursor.kit_probe import HooksKitState
 from cursorfleet.events.models import Event
 from cursorfleet.state.event_store import DEFAULT_PAGE, MAX_PAGE, EventFilter
+from cursorfleet.state.run_store import attach_session
 from cursorfleet.tui import views
 from cursorfleet.tui.data import DataSource, FleetData
 from cursorfleet.tui.filters import parse_timeline_filter
@@ -522,10 +523,34 @@ class CursorFleetApp(App[None]):
         widget.action_cursor_down() if step > 0 else widget.action_cursor_up()
 
     def action_open_detail(self) -> None:
+        key = self._selected_key()
+        if (
+            self.view == "active_run"
+            and key is not None
+            and key.startswith("sug:")
+            and key != "ar:sug:h"
+        ):
+            self._attach_suggested_session(key[4:])
+            return
         if self._mode == SINGLE:
             self.detail_open = True
             self._apply_layout(self._width)
         self.query_one("#detail", VerticalScroll).focus()
+
+    def _attach_suggested_session(self, session_id: str) -> None:
+        run = self.data.primary_run
+        runtime = self.data.runtime_dir
+        if run is None or runtime is None:
+            self.flash("no active run")
+            return
+        if run.run_id.startswith("inferred:"):
+            self.flash("start a run first: cursorfleet run start --task <slug>")
+            return
+        if not attach_session(runtime, run.run_id, session_id):
+            self.flash("attach failed (archived or missing run)")
+            return
+        self.flash(f"attached {safe(session_id, 32)}")
+        self.run_worker(self.refresh_data(), exclusive=False)
 
     def action_pin(self) -> None:
         key = self._selected_key()

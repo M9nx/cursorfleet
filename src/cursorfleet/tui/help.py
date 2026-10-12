@@ -21,7 +21,7 @@ KEYS: tuple[tuple[str, str], ...] = (
     ("g", "Observations: verification signals, display-only (no pass/fail score)"),
     ("e", "Evidence: observed runs vs SELF-REPORTED declarations"),
     ("j / k, arrows", "Move down / up (scrolls the detail when it has focus)"),
-    ("Enter", "Open the detail for the selected item"),
+    ("Enter", "Open detail; on Active run, attach a suggested session"),
     ("Esc", "Back: leave detail, close or clear the filter"),
     ("/", "Filter (timeline: agent: session: kind: risk: source: file: since: until: words)"),
     ("m", "Timeline: load more events"),

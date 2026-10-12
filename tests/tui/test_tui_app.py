@@ -11,6 +11,7 @@ import pytest
 from rich.style import Style
 from textual.widgets import Input
 
+from cursorfleet.state.run_store import RunRecord, load_run, save_run
 from cursorfleet.tui.app import CursorFleetApp
 from cursorfleet.tui.help import KEYS, HelpScreen
 from cursorfleet.tui.theme import LANE_TAG
@@ -615,6 +616,47 @@ async def test_large_history_is_paginated(tmp_path: Path) -> None:
         assert len(app.data.timeline.events) == 400 and app.ui.timeline_limit == 400
         await pilot.press("o", "m")
         assert "loads more events in the timeline" in app.flash_message
+
+
+# ------------------------------------------------------------------------ active run attach
+
+
+async def test_attach_suggested_session_from_active_run(tmp_path: Path) -> None:
+    repo = new_repo(tmp_path)
+    fleet = build_fleet(repo)
+    write_artifact(repo, "smoke", "plan.md", "plan.created", "implementer")
+    save_run(
+        fleet.paths.root,
+        RunRecord(
+            run_id="run-smoke",
+            task_slug="smoke",
+            created_at="2026-10-04T12:00:00+00:00",
+            session_ids=["s-active"],
+        ),
+    )
+    common = {"worktree_id": fleet.wt_id, "branch": "main", "commit": fleet.head}
+    fleet.add("s-suggest", "session.started", "2026-10-04T12:04:30.000Z", **common)
+    fleet.add(
+        "s-suggest",
+        "subagent.started",
+        "2026-10-04T12:04:35.000Z",
+        agent_role="scout",
+        agent_instance_id="x1",
+        attribution="exact",
+        **common,
+    )
+    app = make_app(repo)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("a")
+        await settle(app, pilot)
+        assert "s-suggest" in app.rendered_text()
+        await goto(app, pilot, "sug:s-suggest")
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert "attached" in app.flash_message
+        record = load_run(fleet.paths.root, "run-smoke")
+        assert record is not None
+        assert "s-suggest" in record.session_ids
 
 
 # ------------------------------------------------------------------------ refresh / watch
