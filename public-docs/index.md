@@ -18,8 +18,10 @@ Cursor. "Cursor" is a trademark of its respective owner. The name
 
 ## Status
 
-**Pre-alpha, not released.** There is no PyPI package, tag, or GitHub release.
-Install from a git checkout. See [Installation](getting-started/installation.md).
+**Pre-alpha.** [v0.1.0](https://github.com/M9nx/cursorfleet/releases/tag/v0.1.0) is on
+[PyPI](https://pypi.org/project/cursorfleet/) and
+[GitHub Releases](https://github.com/M9nx/cursorfleet/releases). See
+[Installation](getting-started/installation.md) (`pipx` / `uv tool install cursorfleet`).
 
 - v0.1 is **Observe** only: no enforcement, no forced approvals, and no
   cloud-agent visibility (local Cursor sessions only). It is not a security

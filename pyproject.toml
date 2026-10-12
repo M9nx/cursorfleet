@@ -40,12 +40,13 @@ dependencies = [
 watch = ["watchfiles>=0.21"]
 
 [project.urls]
-Homepage = "https://github.com/M9nx/cursorfleet"
-Documentation = "https://github.com/M9nx/cursorfleet/tree/main/docs"
+Homepage = "https://m9nx.github.io/cursorfleet/"
+Documentation = "https://m9nx.github.io/cursorfleet/"
 Source = "https://github.com/M9nx/cursorfleet"
 Issues = "https://github.com/M9nx/cursorfleet/issues"
 Changelog = "https://github.com/M9nx/cursorfleet/blob/main/CHANGELOG.md"
 Security = "https://github.com/M9nx/cursorfleet/blob/main/SECURITY.md"
+"Release notes" = "https://github.com/M9nx/cursorfleet/releases/tag/v0.1.0"
 
 [project.scripts]
 cursorfleet = "cursorfleet.cli.main:app"

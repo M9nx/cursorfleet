@@ -1,25 +1,31 @@
 # Installation
 
-CursorFleet needs **Python 3.11+** and **git**. It is **not on PyPI**. Until a
-release exists, install from a git checkout.
+CursorFleet needs **Python 3.11+** and **git**.
 
 **Unofficial and pre-alpha.** CursorFleet is not affiliated with or endorsed by
 Anysphere or Cursor.
 
-## From a checkout
+## From PyPI (recommended)
+
+[v0.1.0](https://pypi.org/project/cursorfleet/) and later:
 
 ```bash
-git clone https://github.com/M9nx/cursorfleet && cd cursorfleet
-uv tool install .            # or: pipx install .
+uv tool install cursorfleet    # or: pipx install cursorfleet
 cursorfleet --version
 ```
 
 `uv` is documented at [docs.astral.sh/uv](https://docs.astral.sh/uv/). `pipx`
 is an alternative for the same console scripts.
 
-Once a first release exists, the intended commands are
-`uv tool install cursorfleet` or `pipx install cursorfleet`. Those are **not**
-available yet.
+## From a checkout
+
+For contributors or unreleased `main`:
+
+```bash
+git clone https://github.com/M9nx/cursorfleet && cd cursorfleet
+uv tool install .            # or: pipx install .
+cursorfleet --version
+```
 
 ## Check the hook entry point
 

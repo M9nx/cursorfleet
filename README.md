@@ -12,13 +12,16 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
   <img src="https://img.shields.io/badge/status-pre--alpha-orange.svg" alt="Status: pre-alpha" />
   <img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+" />
-  <a href="https://m9nx.github.io/cursorfleet/"><img src="https://img.shields.io/badge/docs-GitHub_Pages-222?style=flat-square&logo=github" alt="Documentation site" /></a>
+  <a href="https://pypi.org/project/cursorfleet/"><img src="https://img.shields.io/pypi/v/cursorfleet.svg" alt="PyPI version" /></a>
+  <a href="https://m9nx.github.io/cursorfleet/"><img src="https://img.shields.io/badge/docs-m9nx.github.io-222?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation site" /></a>
 </p>
 
 <p>
-  <a href="https://m9nx.github.io/cursorfleet/">Website</a>
+  <a href="https://m9nx.github.io/cursorfleet/">Documentation</a>
   ·
-  <a href="docs/quickstart.md">Quickstart</a>
+  <a href="https://pypi.org/project/cursorfleet/">PyPI</a>
+  ·
+  <a href="https://m9nx.github.io/cursorfleet/getting-started/quickstart/">Quickstart</a>
   ·
   <a href="docs/demo.md">Demo</a>
   ·
@@ -34,7 +37,9 @@ are doing what, from passive hooks and read-only git, without sending anything a
 
 ## Status
 
-**Pre-alpha, not released.** There is no PyPI package, tag or GitHub release yet.
+**Pre-alpha.** **[v0.1.0](https://github.com/M9nx/cursorfleet/releases/tag/v0.1.0)** is on
+[PyPI](https://pypi.org/project/cursorfleet/) and
+[GitHub Releases](https://github.com/M9nx/cursorfleet/releases); `main` tracks **0.1.1.dev0**.
 
 - v0.1 is **Observe**: no enforcement, no forced approvals, and no cloud-agent visibility
   (local Cursor sessions only). It is not a security boundary: a malicious or prompt-injected
@@ -61,16 +66,22 @@ are doing what, from passive hooks and read-only git, without sending anything a
 
 ## Install
 
-Needs Python 3.11+ and git. Until it is published, install from a checkout:
+Needs Python 3.11+ and git.
 
 ```bash
-git clone https://github.com/M9nx/cursorfleet && cd cursorfleet
-uv tool install .            # or: pipx install .
+uv tool install cursorfleet    # or: pipx install cursorfleet
 cursorfleet --version
 ```
 
-(Once released: `uv tool install cursorfleet` or `pipx install cursorfleet`; see the
-[release checklist](docs/release-checklist.md).)
+From a git checkout (contributors or unreleased `main`):
+
+```bash
+git clone https://github.com/M9nx/cursorfleet && cd cursorfleet
+uv tool install .
+```
+
+See the [installation guide](https://m9nx.github.io/cursorfleet/getting-started/installation/)
+on the docs site and the [release checklist](docs/release-checklist.md).
 
 ## Quickstart
 
@@ -85,8 +96,9 @@ cursorfleet status --json             # stable machine-readable snapshot for scr
 cursorfleet uninstall                 # remove exactly what init added
 ```
 
-Full walkthrough: [docs/quickstart.md](docs/quickstart.md). No Cursor handy? Run the
-[synthetic demo](docs/demo.md): `scripts/demo.sh`.
+Full walkthrough: [Quickstart on the docs site](https://m9nx.github.io/cursorfleet/getting-started/quickstart/)
+(in-repo: [docs/quickstart.md](docs/quickstart.md)). No Cursor handy? Run the
+[synthetic demo](docs/demo.md) (`scripts/demo.sh`).
 
 Dashboard keys: `o` overview, `l` timeline, `w` worktrees, `g` gates, `e` evidence, `v`
 violations (v0.2 placeholder), `/` filter, `p` pin, `t` tiles (160+ columns), `r` re-read,
@@ -96,7 +108,10 @@ gate tiles are heuristic and non-authoritative, not proof that anything passed. 
 
 ## Documentation
 
-[Quickstart](docs/quickstart.md) · [governance model](docs/governance.md) ·
+**[Docs site (GitHub Pages)](https://m9nx.github.io/cursorfleet/)** — start with
+[Getting started](https://m9nx.github.io/cursorfleet/getting-started/installation/).
+
+In-repo: [Quickstart](docs/quickstart.md) · [governance model](docs/governance.md) ·
 [demo](docs/demo.md) · [kit reference](docs/kit.md) · [TUI](docs/tui.md) ·
 [`status --json`](docs/status-json.md) · [product contract](docs/product-contract.md) ·
 [architecture](docs/architecture.md) · [privacy](docs/privacy.md) ·
