@@ -2,7 +2,7 @@
 
 <a href="https://m9nx.github.io/cursorfleet/">
   <img
-    src="public-docs/assets/og-card.png"
+    src="https://m9nx.github.io/cursorfleet/assets/og-card.png"
     alt="CursorFleet — local observe-only harness for Cursor agent teams"
     width="640"
   />
@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/status-pre--alpha-orange.svg" alt="Status: pre-alpha" />
   <img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+" />
   <a href="https://pypi.org/project/cursorfleet/"><img src="https://img.shields.io/pypi/v/cursorfleet.svg" alt="PyPI version" /></a>
+  <a href="https://pepy.tech/projects/cursorfleet"><img src="https://static.pepy.tech/personalized-badge/cursorfleet?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads" /></a>
   <a href="https://m9nx.github.io/cursorfleet/"><img src="https://img.shields.io/badge/docs-m9nx.github.io-222?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation site" /></a>
 </p>
 

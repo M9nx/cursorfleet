@@ -28,7 +28,7 @@ def invoke(*args: str) -> tuple[int, str]:
 
 def _transient_git_lock(rel: str) -> bool:
     """Git may create short-lived lock files under ``.git/`` during maintenance."""
-    return rel.startswith(".git/") and rel.endswith(".lock")
+    return rel.endswith(".lock") and ".git/" in rel
 
 
 def tree_state(root: Path) -> dict[str, str]:
