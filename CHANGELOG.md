@@ -13,6 +13,12 @@ evidence closure, and the artifact-contract decision.
 
 ### Documentation (repo side, 2026-10-17)
 
+- Drafted the V012-03 artifact-contract decision proposal
+  ([docs/evidence/v012-03-artifact-contract-proposal.md](docs/evidence/v012-03-artifact-contract-proposal.md)):
+  verified shipped truth (dual-syntax scanner, legacy-taught templates, stale
+  "templates teach TOML" claim in the ADR 0006 amendment), options, recommendation
+  (dated deferral), and amendment text — **owner decision pending**; the gate stays
+  DEFERRED.
 - Recorded the v0.1.2 release-preparation baseline (objective, gate matrix, required
   order, issue sequence) in
   [docs/evidence/v012-baseline.md](docs/evidence/v012-baseline.md).

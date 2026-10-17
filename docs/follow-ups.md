@@ -158,6 +158,12 @@ How to read an entry:
 
 ## 10. TOML artifacts with identity, revision and digest (ADR 0006)
 
+- Stays OPEN (identity/revision/digest/dedupe, template switch). A v0.1.2 deferral
+  proposal is drafted in [`evidence/v012-03-artifact-contract-proposal.md`](evidence/v012-03-artifact-contract-proposal.md)
+  (recommendation: keep the consistent legacy-taught state in v0.1.x; migration
+  reconsidered after external-alpha evidence, with dry-run/safe-rewrite/rollback
+  requirements). Until a dated decision lands, do not treat the shipped legacy-taught
+  format as needing an urgent fix.
 - Waits for: row 14 (rule, skill and nested `AGENTS.md` loading) and the TOML-from-LLM
   conformance check.
 - Do: `workflow/frontmatter.py` and `workflow/artifacts.py` (`+++`, `tomllib`, `artifact_id`,

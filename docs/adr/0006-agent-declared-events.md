@@ -165,3 +165,13 @@ patch release. Public copy must state that artifacts are **self-reported, non-au
 and **never gate evidence** ([ADR 0011](0011-evidence-trust-model.md)). Generated kit templates
 teach TOML frontmatter; legacy YAML may still parse until migrated manually or via a future
 `--yes` implementation.
+
+## Draft amendment proposal (2026-10-17) — under owner review, not decided
+
+The v0.1.2 gate "Artifact contract" (implement the migration, or amend this ADR with an
+explicit deferral) is drafted in
+[`v012-03-artifact-contract-proposal.md`](../evidence/v012-03-artifact-contract-proposal.md):
+code-truth inventory, options (A implement / B defer / C templates-only), a
+recommendation (B), and ready-to-fold amendment text including a dated correction of the
+"templates teach TOML" claim above. **No decision exists yet; the deferral is not
+recorded until the owner approves the amendment.**
