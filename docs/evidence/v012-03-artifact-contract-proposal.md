@@ -111,7 +111,7 @@ are mutually consistent; that consistent legacy state is the **recorded, accepte
 deviation** for v0.1.x.
 
 Unchanged invariants: artifacts remain self-reported, non-authoritative and never gate
-evidence ([ADR 0011](0011-evidence-trust-model.md)); the TUI labels them
+evidence ([ADR 0011](../adr/0011-evidence-trust-model.md)); the TUI labels them
 "self-reported"; identity and digest would not change the trust tier.
 
 Revisit triggers: empirical-test-plan row 14 result; a TOML-from-LLM conformance capture
