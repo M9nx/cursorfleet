@@ -1,11 +1,12 @@
 # Follow-ups: where the docs and ADRs are ahead of the code
 
 Status: **tasks 15 and 16 are implemented** (doctor/validate resolution reporting;
-runtime inheritance and the init repository-root overlap). Tasks 1–14 and 17+ are
-not done. New M2 and TUI work stays frozen ([`status.md`](status.md)). Each remaining
-task closes a divergence between an accepted or provisional ADR and the current
-implementation. Do them **after** the live spike
-([`empirical-test-plan.md`](empirical-test-plan.md)), in this order.
+runtime inheritance and the init repository-root overlap). Tasks 1 and 2 were **voided**
+by the ADR 0007 amendment (2026-10-12; see task 1). Tasks 3–14 and 17+ are
+not done. M2.5 task-centric observe is the active workstream, and the
+attribution-dependent tasks still wait on the live spike rows
+([`empirical-test-plan.md`](empirical-test-plan.md)); do the remaining tasks **after**
+the spike, in this order.
 
 How to read an entry:
 
@@ -16,7 +17,14 @@ How to read an entry:
 - **Done when:** the check that closes it, which is also the matching ADR release gate.
 - Run `uv run ruff check .`, `uv run mypy src` and `uv run pytest -q` after each task.
 
-## 1. Narrow the hook set to nine (ADR 0007)
+## 1. Narrow the hook set to nine (ADR 0007) — VOIDED 2026-10-12
+
+> **Voided by decision change, not implemented.** The
+> [ADR 0007 amendment (2026-10-12)](adr/0007-narrower-v01-hook-policy.md) supersedes the
+> nine-hook body for the observe set: `cursorfleet init --cursor` ships the **twelve**
+> observe hooks and that is the recorded decision. Tasks 1 and 2 below are historical
+> context; **do not** remove the three extra hooks without a new dated decision. The old
+> checklist body is kept so the task's origin stays auditable.
 
 - Waits for: rows 1 and 11 (hooks fire as documented; permission-hook reply accepted).
 - Do: stop registering `beforeShellExecution`, `afterShellExecution`, `afterFileEdit`.
@@ -39,7 +47,11 @@ How to read an entry:
   `product-contract.md`, `CHANGELOG.md`; remove the divergence notes added to them.
 - Done when: the installer registers exactly nine hooks (ADR 0007 gate).
 
-## 2. Migration for removed hook entries (ADR 0009)
+## 2. Migration for removed hook entries (ADR 0009) — VOIDED WITH TASK 1 (2026-10-12)
+
+- Voided together with task 1: no hook entries are being removed, so no re-`init`
+  migration for a shrinking set is planned. (Uninstall round-trip coverage for the
+  shipped twelve-hook set is already in `test_kit_*`.)
 
 - Waits for: task 1.
 - Do: on re-`init`, remove only CursorFleet-owned entries (`command == "cursorfleet-hook"`)

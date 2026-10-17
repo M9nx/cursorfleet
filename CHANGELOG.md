@@ -19,6 +19,10 @@ evidence closure, and the artifact-contract decision.
 - Added the owner run kit for the live gates — B0 scenarios 1/2/5, SO-01 permission-hook
   rows, and end-to-end latency row 13B
   ([docs/evidence/run-kit-v012-02.md](docs/evidence/run-kit-v012-02.md)).
+- Dated decision reconciliations (no code change): `follow-ups` tasks 1–2 (hook-set
+  narrowing to nine) marked voided by the ADR 0007 amendment; `architecture.md`,
+  `kit.md` and `empirical-test-plan.md` hook-set wording updated to the shipped
+  twelve-hook observe set.
 - Truth convergence (no claim upgraded): status page; B0 result rows note the v0.1.1
   attach picker, verdicts unchanged; evidence index, release-checklist header note,
   quickstart install/release claims, Pages site index/known-limitations/changelog/TUI

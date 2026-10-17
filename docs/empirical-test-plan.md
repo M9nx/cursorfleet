@@ -31,13 +31,16 @@ Human next steps (do not run the spike from an agent): [`spike-prep.md`](spike-p
 - **Model non-determinism.** The model chooses which tool to call. An attempt counts only if
   the Cursor transcript shows the intended tool call happened; otherwise discard and redo.
   Each row states how many repetitions it needs.
-- **Hook sets.** The *product set* is the nine hooks of ADR 0007 (`sessionStart`,
-  `sessionEnd`, `preToolUse`, `postToolUse`, `postToolUseFailure`, `subagentStart`,
-  `subagentStop`, `preCompact`, `stop`). The *diagnostic set* is the spike kit's
-  `hooks.json.example`: the nine plus `beforeShellExecution`, `afterShellExecution` and
-  `afterFileEdit`. The kit never registers `beforeMCPExecution`, `afterMCPExecution`,
-  `beforeReadFile`, `beforeSubmitPrompt`, `afterAgentResponse`, `afterAgentThought`, the Tab
-  hooks or `workspaceOpen`.
+- **Hook sets.** The *product set* was decided as the nine hooks of ADR 0007
+  (`sessionStart`, `sessionEnd`, `preToolUse`, `postToolUse`, `postToolUseFailure`,
+  `subagentStart`, `subagentStop`, `preCompact`, `stop`); as of the
+  [ADR 0007 amendment (2026-10-12)](adr/0007-narrower-v01-hook-policy.md) the shipped
+  observe set is **twelve** hooks — the nine plus `beforeShellExecution`,
+  `afterShellExecution` and `afterFileEdit` — and that is what "product set" / "hooks-on"
+  (rows 11 and 13B) must use today. The *diagnostic set* is the spike kit's
+  `hooks.json.example`: the nine plus the same three extras. The kit never registers
+  `beforeMCPExecution`, `afterMCPExecution`, `beforeReadFile`, `beforeSubmitPrompt`,
+  `afterAgentResponse`, `afterAgentThought`, the Tab hooks or `workspaceOpen`.
 - **Throwaway tooling** (scripts for stress, canaries, latency) lives outside this repository
   and is not committed. If one proves useful, a follow-up can propose adding it.
 - **Raw captures** follow the handling rules in row 16, for every row.
@@ -915,7 +918,8 @@ the same as 13A and can be much larger or smaller.
   single-action runs per the pair definition above.
 - Conditions (interleaved, not run in blocks):
   - **C0**: no hooks file (hooks-off baseline).
-  - **C1**: the product hook set (nine hooks), hooks-on. The contract compares C1 with C0.
+  - **C1**: the product hook set as shipped (**twelve** observe hooks per the ADR 0007
+    amendment 2026-10-12), hooks-on. The contract compares C1 with C0.
   - **C0b**: A/A control, a second baseline run, to measure the noise floor. Diagnostic only;
     it does not enter the verdict, but a C1 delta smaller than the A/A spread is reported as
     "not detectable at this N" next to the verdict.

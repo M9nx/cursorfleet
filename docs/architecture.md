@@ -34,8 +34,9 @@ flowchart LR
 - **Hook adapter** (`cursorfleet.adapters.cursor`): maps Cursor hook names to
   normalized events. `hook_policy.py` holds `ALLOWED_V01_HOOKS`,
   `FORBIDDEN_HOOKS` and the fail-open replies. Adapter-ready: a second IDE would
-  add a sibling package emitting the same events. **Divergence:**
-  [ADR 0007](adr/0007-narrower-v01-hook-policy.md) decides nine hooks; the code lists twelve.
+  add a sibling package emitting the same events. The shipped observe set is the **twelve**
+  hooks accepted by the [ADR 0007 amendment (2026-10-12)](adr/0007-narrower-v01-hook-policy.md);
+  `ALLOWED_V01_HOOKS` matches it. The ADR's original nine-hook body is historical.
 - **Hot path**: the `cursorfleet hook <event>` entrypoint (M2). Rules: stdlib
   only, lazy imports, no pydantic/typer/textual even transitively, no network,
   exits 0 with `{}` (`{"permission":"allow"}` for permission hooks) on any error,

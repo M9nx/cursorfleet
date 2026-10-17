@@ -30,12 +30,14 @@ Templates live in `templates/cursor/` and ship in the wheel as
 
 ## Hooks written
 
-Exactly the enabled subset of `ALLOWED_V01_HOOKS` (default: all 12), each as
-(**Divergence:** [ADR 0007](adr/0007-narrower-v01-hook-policy.md) decides nine hooks:
-`sessionStart`, `sessionEnd`, `preToolUse`, `postToolUse`, `postToolUseFailure`,
-`subagentStart`, `subagentStop`, `preCompact`, `stop`. The shell and file-edit hooks are to
-be dropped after the spike, and re-running `init` will need a migration that removes the
-old entries.)
+Exactly the enabled subset of `ALLOWED_V01_HOOKS` (default: all 12), each entry of the
+form shown below. The shipped observe set is the **twelve** hooks recorded by the
+[ADR 0007 amendment (2026-10-12)](adr/0007-narrower-v01-hook-policy.md): the original
+nine-hook plan (`sessionStart`, `sessionEnd`, `preToolUse`, `postToolUse`,
+`postToolUseFailure`, `subagentStart`, `subagentStop`, `preCompact`, `stop`) plus
+`beforeShellExecution`, `afterShellExecution` and `afterFileEdit`. The historical
+"drop the shell and file-edit hooks after the spike" plan and its removal migration are
+voided; removing them would now require a new dated decision.
 
 ```json
 { "command": "cursorfleet-hook", "timeout": 5 }
