@@ -14,7 +14,7 @@ when a gate only partially closes; do not upgrade verdicts to make records tidy.
 performs no tagging, no publishing and no README claim changes.
 
 Read alongside: [`spike/README.md`](../../spike/README.md) and
-[`empirical-test-plan.md`](../../empirical-test-plan.md) (rows 8–13 define the procedures
+[`empirical-test-plan.md`](../empirical-test-plan.md) (rows 8–13 define the procedures
 referenced here; row 11 case C1 and row 13B define the contracts).
 
 ## Ground rules (from the empirical test plan)

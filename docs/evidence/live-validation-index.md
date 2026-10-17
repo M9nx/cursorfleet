@@ -9,7 +9,7 @@ Two different validation tracks must not be conflated:
 
 | Track | Purpose | Status |
 | --- | --- | --- |
-| **M0a spike kit** (`spike/capture_hook.py`) | Answer ADR 0001 Q1–Q6 with sanitized captures | Kit self-tested; formal row-8 **BLOCKED/OPEN**; Q1/Q2 **OPEN** ([`spike/questions.md`](../spike/questions.md)) |
+| **M0a spike kit** (`spike/capture_hook.py`) | Answer ADR 0001 Q1–Q6 with sanitized captures | Kit self-tested; formal row-8 **BLOCKED/OPEN**; Q1/Q2 **OPEN** ([`spike/questions.md`](../../spike/questions.md)) |
 | **CursorFleet product hooks** (`cursorfleet-hook` after `init --cursor`) | End-to-end observer, TUI, artifacts | **Exercised** on Linux Cursor IDE (see below) |
 
 ## CursorFleet product hook smoke (maintainer)
@@ -33,7 +33,7 @@ Two different validation tracks must not be conflated:
 | Check | Evidence |
 | --- | --- |
 | GitHub Actions CI | Green on `main` (lint, format, mypy, cross-platform tests, wheel smoke) through the v0.1.1 tag (2026-10-13); re-verify at the v0.1.2 candidate |
-| GitHub Pages | Public docs site deployed ([README](../README.md) badge) |
+| GitHub Pages | Public docs site deployed ([README](../../README.md) badge) |
 | PyPI / tags | **0.1.0 and 0.1.1 published** (2026-10-12 UTC); tags `v0.1.0`, `v0.1.1`; no non-draft GitHub Releases page yet |
 
 ## Still OPEN or unverified
