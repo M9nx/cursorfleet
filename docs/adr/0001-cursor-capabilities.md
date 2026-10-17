@@ -360,24 +360,29 @@ None of the following has been observed. Each maps to `spike/questions.md`.
 
 ## C. Measured on this machine (not Cursor-measured)
 
-Measured with `python3 spike/bench_latency.py -n 60` on Linux 6.18 x86_64,
-CPython 3.14.7, 24 CPUs, run unsandboxed on 2026-10-04. These are **steady-state**
+Two runs of `python3 spike/bench_latency.py` on Linux 6.18 x86_64, CPython 3.14.7,
+24 CPUs, run unsandboxed: 2026-10-03 21:39 UTC (`-n 60`) and 2026-10-04 11:35 UTC
+(`-n 40`). `spike/results/latency-linux.json` holds the latest run; the 2026-10-03
+run is quoted in parentheses for continuity. These are **steady-state**
 numbers (section D): each run is a fresh process with a warm OS/page cache and a
 doc-derived `preToolUse` payload on stdin. Wall time is measured by the parent and
 includes fork/exec, interpreter start, imports, work and exit, so it is process wall
 time, not hook-internal time. It excludes Cursor's own spawn and IPC overhead. No
-first-run (cold-cache) number and no end-to-end number exists. Raw data:
-`spike/results/latency-linux.json`.
+first-run (cold-cache) number and no end-to-end number exists.
 
-- Interpreter floor, `python3 -c pass`: p50 14.4 ms, p95 20.4 ms.
-- Interpreter floor, `python3 -I -S -c pass`: p50 10.6 ms, p95 15.1 ms.
-- Capture hook, `python3 capture_hook.py preToolUse`: p50 24.2 ms, p95 27.7 ms,
-  max 30.5 ms (n=60).
-- Capture hook with `-I -S`: p50 22.9 ms, p95 26.4 ms (n=60).
+- Interpreter floor, `python3 -c pass`: p50 13.8 ms, p95 22.7 ms (2026-10-03 run:
+  14.4 / 20.4).
+- Interpreter floor, `python3 -I -S -c pass`: p50 10.7 ms, p95 16.2 ms
+  (2026-10-03 run: 10.6 / 15.1).
+- Capture hook, `python3 capture_hook.py preToolUse`: p50 25.1 ms, p95 30.1 ms,
+  max 32.8 ms (n=40; 2026-10-03 run: 24.2 / 27.7 / 30.5, n=60).
+- Capture hook with `-I -S`: p50 25.7 ms, p95 32.5 ms (2026-10-03 run: 22.9 / 26.4).
 - Hook-internal time recorded by the hook itself (excludes interpreter startup):
-  p50 7.7 ms, p95 8.7 ms. Most of it is `import json`, `import re`, regex
-  compilation and a git-dir walk, so a production hook can trim it.
-- An earlier sandboxed run of the same script gave capture p95 32.8 ms: expect
+  p50 7.8 ms, p95 11.2 ms (2026-10-03 run: 7.7 / 8.7). Most of it is
+  `import json`, `import re`, regex compilation and a git-dir walk, so a
+  production hook can trim it.
+- Between the two unsandboxed runs capture p95 moved 27.7 → 30.1 ms, and an
+  earlier sandboxed run of the same script gave capture p95 32.8 ms: expect
   a few ms of noise between runs and environments.
 - Reading: the steady-state target (p95 <= 60 ms process wall time, section D) is met
   on this Linux machine with margin for a stdlib-only hook. This says nothing yet about

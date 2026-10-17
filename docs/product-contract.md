@@ -134,7 +134,7 @@ From the reviewed plan, section 6. Each has a verification method.
   never crashes the TUI, and `replay` rebuilds identical state.
 - **Latency and fail-open:** steady-state hook p95 <= 60 ms process wall time (including
   interpreter startup, outside Cursor) on Linux, macOS and Windows (Linux steady-state
-  measured at 27.7 ms p95; others open), plus the end-to-end paired-delta contract of
+  measured at 27.5 to 31.2 ms p95 across hook variants; others open), plus the end-to-end paired-delta contract of
   [ADR 0001 section D](adr/0001-cursor-capabilities.md) (PASS: median <= 100 ms and p95
   <= 200 ms; not measured yet); hooks fail open on any internal error.
 - **Honest docs:** README and docs state no enforcement, no forced approvals, no

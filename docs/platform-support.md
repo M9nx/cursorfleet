@@ -6,7 +6,7 @@ anything stronger than the table.
 
 | OS | Level | What that means |
 | --- | --- | --- |
-| Linux | **Tested** | Developed and run here: full test suite, hook latency benchmark (27.7 ms steady-state p95 process wall time, outside Cursor, `spike/results/latency-linux.json`), the demo, the built wheel smoke-tested in a clean venv. Not verified against live Cursor. |
+| Linux | **Tested** | Developed and run here: full test suite, hook latency benchmark (capture p95 27.7 to 30.1 ms steady-state process wall time across two runs, outside Cursor, `spike/results/latency-linux.json`), the demo, the built wheel smoke-tested in a clean venv. Not verified against live Cursor. |
 | macOS | **CI-tested only** | The CI matrix runs the whole suite and the wheel smoke test on `macos-latest`. Nobody has run it by hand; hook latency is unmeasured. Not verified against live Cursor. |
 | Windows | **CI-tested only, least certain** | The CI matrix runs the suite and wheel smoke test on `windows-latest`. Several Windows behaviours below are reasoned about from documentation, not observed. Not verified against live Cursor. |
 

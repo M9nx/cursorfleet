@@ -4,7 +4,7 @@ The hook hot path (`cursorfleet-hook`, `cursorfleet.adapters.cursor.hook_main`) 
 fresh interpreter for every Cursor hook call. Target: **steady-state p95 <= 60 ms**,
 measured as **process wall time including interpreter startup** (spawn to exit), outside
 Cursor. It is not a hook-internal budget. The M0a spike measured the capture-only hook at
-about 27.7 ms steady-state p95 (ADR 0001, section C).
+27.7 to 30.1 ms steady-state p95 across two runs (ADR 0001, section C).
 
 Terms (owner decision 2026-10-04, defined in
 [ADR 0001 section D](adr/0001-cursor-capabilities.md)):
