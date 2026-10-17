@@ -15,9 +15,11 @@ uv run cursorfleet --version
 
 ```bash
 uv run ruff check .
-uv run ruff format --check .      # `uv run ruff format .` fixes it
-uv run mypy src
-uv run pytest                     # benchmark-marked tests are excluded by default
+uv run ruff format --check .      # `uv run ruff format .` fixes it; note that ruff
+                                  # 0.16 also format-checks Python fences inside
+                                  # markdown docs — run the fixer after adding
+                                  # code snippets to docs/
+uv run mypy srcuv run pytest                     # benchmark-marked tests are excluded by default
 ```
 
 CI runs the same on Linux, macOS and Windows with Python 3.11 to 3.14, plus a job that builds

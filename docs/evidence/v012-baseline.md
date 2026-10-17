@@ -125,6 +125,23 @@ The release candidate must also be installed into a clean environment and run
 through `scripts/smoke_wheel.py` and the synthetic demo. Do not use raw Cursor
 spools, prompts, transcripts, secrets, or private paths as committed evidence.
 
+## Progress log
+
+- **2026-10-17 (repo side).** Truth convergence landed (status, README, Pages site,
+  quickstart, evidence index, B0 rows, hook-set reconciliation in follow-ups/ADRs); the
+  owner run kit was added; local verification green (`ruff`,`format`, strict `mypy`,
+  pytest **1011 passed, 1 deselected**); a pre-flight build + `check_dist.py` +
+  clean-venv `scripts/smoke_wheel.py` + `scripts/demo.py` passed without recording any
+  gate. CI green on `dbdec03` (lint/format/types, cross-platform tests including Windows,
+  Pages, wheel build and smoke). One intermediate CI run failed because ruff 0.16
+  format-checks Python fences inside new markdown (fixed in `dbdec03`).
+- **Artifact contract.** The V012-03 decision is drafted for owner review
+  (`v012-03-artifact-contract-proposal.md`): code truth is a dual-syntax scanner with
+  legacy-taught templates, and the 2026-10-12 amendment's "templates teach TOML" claim
+  was never executed (correction of record drafted). The gate stays **DEFERRED** until
+  the owner approves an amendment.
+- **Next:** owner live session **V012-02** per `run-kit-v012-02.md`.
+
 ## Go / no-go
 
 **No-go** if any supported-surface claim lacks dated evidence, if package and
