@@ -154,8 +154,14 @@ Log each pair out-of-band as a line `batch,pair,order,T_on_ms,T_off_ms` in
 ```python
 # throwaway; run out-of-band. deltas.txt holds T_on-T_off (ms), one number per line.
 import math, sys
+
 v = sorted(float(x) for x in open(sys.argv[1]).read().split())
-nr = lambda a, q: a[max(0, math.ceil(q * len(a)) - 1)]   # nearest-rank
+
+
+def nr(a, q):
+    return a[max(0, math.ceil(q * len(a)) - 1)]  # nearest-rank
+
+
 print("n", len(v), "median", nr(v, 0.5), "p95", nr(v, 0.95), "max", max(v))
 ```
 
