@@ -1,6 +1,7 @@
 # B0: Run-association feasibility spike
 
-Date: 2026-10-05 (procedure); results updated 2026-10-12 (engineering + code validation).
+Date: 2026-10-05 (procedure); results updated 2026-10-12 (engineering + code validation);
+2026-10-17 doc truth sync (v0.1.1 attach picker noted; no verdict changed).
 
 ## Invariant
 
@@ -35,18 +36,19 @@ Suggested session→run links may be computed; **membership is never silent**.
 
 | # | Result | Notes |
 | --- | --- | --- |
-| 1 | PARTIAL | `run attach` + env `CURSORFLEET_ACTIVE_RUN` on hook path; TUI picker not implemented |
+| 1 | PARTIAL | `run attach` + env `CURSORFLEET_ACTIVE_RUN` on hook path; TUI picker not implemented then. **(2026-10-17 sync: the attach picker shipped in v0.1.1 — Enter on the Active run screen; live PASS still pending)** |
 | 2 | PARTIAL | Separate run files; user must attach correct run id (CLI ceremony) |
 | 3 | OPEN | Per-repo common dir only; linked worktree cwd not re-tested live |
 | 4 | PARTIAL | Env token attach on first indexed hook event |
-| 5 | OPEN | No TUI picker; CLI/env only |
+| 5 | OPEN | Code-validated with CLI/env only; the v0.1.1 picker covers simultaneous starts in code — live PASS pending |
 | 6 | PARTIAL | JSON under `cursorfleet/runs/` survives restarts (unit/integration paths) |
 | 7 | PARTIAL | `run archive` + TUI hides archived from active list |
 | 4b | PASS (code) | Run-scoped branch/commit/worktree from **linked sessions only** (`run_builder` + unit test) |
 
 **Attach picker decision (2026-10-12):** defer TUI picker to v0.1.1; document CLI + env in quickstart for v0.1.0.
+Delivered: the attach picker ships in v0.1.1 (Enter on the Active run screen).
 
-**Live maintainer re-run:** Use [b0-live-validation-2026-10-12.md](b0-live-validation-2026-10-12.md) before tag; scenarios **1, 2, 5** must be PASS for go/no-go.
+**Live maintainer re-run:** Use [b0-live-validation-2026-10-12.md](b0-live-validation-2026-10-12.md); scenarios **1, 2, 5** must be PASS for go/no-go. The owner run kit ([run-kit-v012-02.md](run-kit-v012-02.md)) sequences the whole session.
 
 **Chosen UX for B2:** CLI `run start` / `run attach` + optional env token; artifact task slug
 → suggested sessions on Active run screen only.

@@ -23,7 +23,9 @@ the session archive.
 ## Known limitations
 
 - Run association requires explicit `cursorfleet run start` / `attach` or `CURSORFLEET_ACTIVE_RUN`.
-- TUI attach picker deferred to v0.1.1; see [B0 evidence](https://github.com/M9nx/cursorfleet/blob/main/docs/evidence/b0-run-association-spike.md).
+- TUI attach picker shipped in v0.1.1 (Enter attaches a suggested session on the Active run
+  screen); see [B0 evidence](https://github.com/M9nx/cursorfleet/blob/main/docs/evidence/b0-run-association-spike.md).
+  Live PASS for scenarios 1/2/5 still gates v0.1.2 claims.
 - Maintainer screenshot (when added): [active-run-screenshot.png](https://github.com/M9nx/cursorfleet/blob/main/docs/evidence/active-run-screenshot.png) (optional pre-tag).
 - Many separate Cursor chats produce many sessions until runs are linked.
 

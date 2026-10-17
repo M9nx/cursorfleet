@@ -38,9 +38,10 @@ are doing what, from passive hooks and read-only git, without sending anything a
 
 ## Status
 
-**Pre-alpha.** **[v0.1.0](https://github.com/M9nx/cursorfleet/releases/tag/v0.1.0)** is on
-[PyPI](https://pypi.org/project/cursorfleet/) and
-[GitHub Releases](https://github.com/M9nx/cursorfleet/releases). Latest on PyPI: **0.1.1**; `main` may be ahead.
+**Pre-alpha.** Published on [PyPI](https://pypi.org/project/cursorfleet/): **0.1.0** and
+**0.1.1** (GitHub tags `v0.1.0` and `v0.1.1`; no
+[GitHub Releases](https://github.com/M9nx/cursorfleet/releases) page entry is published, so a
+tag is not the same as a published release). `main` is at `0.1.2.dev0` and may be ahead.
 
 - v0.1 is **Observe**: no enforcement, no forced approvals, and no cloud-agent visibility
   (local Cursor sessions only). It is not a security boundary: a malicious or prompt-injected
@@ -49,8 +50,9 @@ are doing what, from passive hooks and read-only git, without sending anything a
   telemetry, subagent lifecycle, and artifact scanning; see
   [live validation index](docs/evidence/live-validation-index.md). **Q1/Q2** (subagent identity
   on tool hooks, custom `subagent_type` naming) remain **OPEN**; M0a formal matrix is not complete.
-- **M2.5 active:** task-centric observer work (Active Run) is in progress; see
-  [status](docs/status.md). The M0a capture kit ([spike](spike/README.md)) remains separate.
+- **v0.1.2 in preparation:** release-truth and evidence closure (live B0 scenarios, SO-01,
+  latency 13B) tracked in [status](docs/status.md). The M0a capture kit
+  ([spike](spike/README.md)) remains separate.
 - **Supported surface for claims today:** local Cursor IDE (desktop) on Linux for the exercised
   smoke only; CLI, Agents Window, worktrees, and parallel subagents are not claimed until matrix PASS.
   The Cursor CLI, the Agents Window, Cursor-managed and manual worktrees, parallel

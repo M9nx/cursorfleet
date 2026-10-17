@@ -2,8 +2,9 @@
 
 > **Unofficial and pre-alpha.** CursorFleet is not affiliated with or endorsed by Anysphere or
 > Cursor. v0.1 only *observes* local Cursor agent sessions: no enforcement, no forced
-> approvals, no cloud-agent visibility. It has not yet been verified against a live Cursor
-> (see [status](status.md)), so treat what the dashboard shows as provisional.
+> approvals, no cloud-agent visibility. The only live surface exercised is the maintainer's
+> Linux IDE smoke (see [status](status.md)); nothing has an independent audit, so treat what
+> the dashboard shows as provisional.
 >
 > **Supported surface:** local Cursor IDE (desktop) on Linux for maintainer smoke; see
 > [evidence/live-validation-index.md](evidence/live-validation-index.md). CLI, Agents Window,
@@ -11,17 +12,16 @@
 
 ## 1. Install
 
-CursorFleet needs Python 3.11 or newer and `git`. **v0.1.0** is tagged on GitHub; PyPI publish
-awaits owner approval (`RELEASE_ENABLED`). Until then, install from a checkout, the draft release
-assets, or a local wheel.
+CursorFleet needs Python 3.11 or newer and `git`. **v0.1.0** and **v0.1.1** are published on
+[PyPI](https://pypi.org/project/cursorfleet/); tags `v0.1.0` and `v0.1.1` are on GitHub
+(no published GitHub Releases page yet). `main` may be ahead of the released versions.
 
 ```bash
-# from a checkout (needs uv: https://docs.astral.sh/uv/)
-git clone https://github.com/M9nx/cursorfleet && cd cursorfleet
-uv tool install .          # or: pipx install .
+uv tool install cursorfleet    # or: pipx install cursorfleet
 
-# once published (see docs/release-checklist.md), this will be:
-#   uv tool install cursorfleet     # or: pipx install cursorfleet
+# a checkout gives the current development version (needs uv: https://docs.astral.sh/uv/)
+git clone https://github.com/M9nx/cursorfleet && cd cursorfleet
+uv tool install .              # or: pipx install .
 ```
 
 Check it is on your `PATH`; the hooks call `cursorfleet-hook` by name, so Cursor must be able to

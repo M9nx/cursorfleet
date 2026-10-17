@@ -1,7 +1,9 @@
 # Known limitations
 
-CursorFleet is pre-alpha. Nothing is published. The name **CursorFleet is a
-working name**; the public name is a release gate.
+CursorFleet is pre-alpha. **0.1.0** and **0.1.1** are published on
+[PyPI](https://pypi.org/project/cursorfleet/) (2026-10-12); versions on `main` may be
+ahead. The name **CursorFleet is a working name**; the final-name gate stays tracked in
+[ADR 0005](https://github.com/M9nx/cursorfleet/blob/main/docs/adr/0005-naming-and-trademark.md).
 
 ## v0.1 is Observe only
 
@@ -9,20 +11,28 @@ No enforcement, no forced approvals, no allow / deny / ask. Hooks always
 fail open. It is not a security boundary. See
 [privacy and security](privacy-and-security.md).
 
-## Local IDE only until the spike
+## Local IDE only until matrix PASS
 
-The only intended v0.1 surface is the **local Cursor IDE (desktop)**, and
-even that is unverified until a live capture is reviewed. The Cursor CLI,
-the Agents Window, Cursor-managed and manual worktrees, parallel subagents,
-and cloud agents are not claimed.
+The intended v0.1 surface is the **local Cursor IDE (desktop)**. A maintainer smoke on
+Linux IDE 3.22.7 confirmed hook telemetry, subagent lifecycle and artifact scanning
+([live validation index](https://github.com/M9nx/cursorfleet/blob/main/docs/evidence/live-validation-index.md)),
+but the formal empirical matrix has not run. The Cursor CLI, the Agents Window,
+Cursor-managed and manual worktrees, parallel subagents, and cloud agents are not
+claimed.
 
-Development of new observer and TUI features is frozen until that spike
-runs.
+Live B0 run-security scenarios 1/2/5, the SO-01 live permission-hook rows and
+end-to-end latency row 13B are still recorded as open gates; see the
+[TUI current status](tui/current-status.md) and the in-repo v0.1.2 baseline.
 
-## No PyPI yet
+## Published, still early software
 
-There is no PyPI package, tag, or GitHub release. Install from a checkout
-until one exists.
+- PyPI releases: 0.1.0 and 0.1.1 (both 2026-10-12 UTC). Install with
+  `uv tool install cursorfleet` or `pipx install cursorfleet`
+  ([installation](getting-started/installation.md)).
+- GitHub: tags `v0.1.0` and `v0.1.1`; no published (non-draft) GitHub Releases page yet,
+  so a tag is not the same as a published release.
+- Nothing here has been reviewed by an author other than the maintainer; treat it as a
+  self-review, not an audit.
 
 ## Q1 and Q2 remain OPEN
 

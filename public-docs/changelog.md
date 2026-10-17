@@ -1,50 +1,44 @@
 # Changelog
 
-Nothing has been released. The version in the checkout is `0.0.1.dev0`.
+Released versions are public on [PyPI](https://pypi.org/project/cursorfleet/).
 CursorFleet is unofficial: it is not affiliated with or endorsed by Anysphere
 or Cursor.
 
 This page is a public summary. It does not list internal follow-up tasks.
 
+## 0.1.1 (2026-10-13)
+
+- TUI: attach suggested sessions from the Active run screen (Enter).
+- Optional `ghcr.io/m9nx/cursorfleet` container for GitHub Packages visibility.
+- README and the docs site document PyPI install and released status; PyPI
+  `project.urls` point at the docs site.
+
+## 0.1.0 (2026-10-12)
+
+**Observe-only:** no enforcement, no forced approvals, no cloud-agent
+visibility. Hooks fail open. Not a security boundary.
+
+- **Active run TUI** (default screen `a`): participant groups/instances, runs
+  list (`u`), sessions archive (`o`).
+- **`cursorfleet run`** start/list/attach/archive; run files under the git
+  common directory.
+- **`status --json` `runs[]`** when telemetry exists (`cursorfleet.status/0.2`).
+- Twelve observe-only hooks: the narrower nine-hook policy plan plus
+  `beforeShellExecution`, `afterShellExecution` and `afterFileEdit` for the
+  observe set ([ADR 0007 amendment](https://github.com/M9nx/cursorfleet/blob/main/docs/adr/0007-narrower-v01-hook-policy.md)).
+- Sanitized legacy spool fixture and doc-derived examples under
+  `tests/fixtures/cursor/`.
+
+Still true for v0.1.x: the maintainer's Linux IDE smoke is the only
+exercised live surface (no independent audit); the Cursor CLI, Agents
+Window, worktrees, and parallel subagents are unverified/not claimed;
+macOS and Windows hook latency are unmeasured; Linux steady-state
+latency outside Cursor is measured, and end-to-end inside-Cursor
+latency is not; `cursorfleet emit` is not implemented.
+
 ## Unreleased
 
-Pre-alpha. **Not verified against a live Cursor session.** v0.1 is *Observe*
-only: no enforcement, no forced approvals, no cloud-agent visibility.
-
-**Q1** (subagent identity inside tool hooks) and **Q2** (custom
-`subagent_type` naming) remain **OPEN**. Parallel-identity classification is
-**BLOCKED/OPEN** on tested Cursor 3.22.7 Linux.
-
-### In the development checkout
-
-- **Kit:** `cursorfleet init --cursor`, `uninstall`, `doctor`, and `validate`.
-  Git is required for `init`; there is no `--allow-non-git`. The checkout
-  currently registers twelve observe-only hooks; the accepted decision is nine.
-- **Observer:** a stdlib-only, fail-open `cursorfleet-hook`, a local append-only
-  spool, a SQLite projection, a read-only git/worktree collector, and
-  `cursorfleet status --json` (`cursorfleet.status/1`).
-- **Dashboard:** `cursorfleet tui` exists in the checkout and is **under
-  development**. It is provisional and unvalidated against live Cursor. Gate
-  tiles are heuristic and non-authoritative.
-- **Release prep:** cross-platform CI (Linux, macOS, Windows; Python 3.11 to
-  3.14) and an inactive PyPI/GitHub release workflow. No package, tag, or
-  GitHub release has been published.
-
-### Security (high level)
-
-The hook path is fail-open and drops prompts, thinking, file contents, command
-output, environment variables, emails, and transcript paths at the parser
-boundary. The runtime directory is refused when it is a symlink, a reparse
-point, owned by another user, or group/other-writable. Tools are resolved from
-absolute `PATH` entries only, never the current directory.
-
-### Not claimed
-
-- No PyPI or TestPyPI package.
-- Live Cursor behaviour (including the Cursor CLI, Agents Window, worktrees,
-  and parallel subagents) is unverified.
-- macOS and Windows hook latency are unmeasured; Linux has a process-wall
-  steady-state number taken *outside* Cursor.
-- `cursorfleet emit` is not implemented.
-
-See [Known limitations](known-limitations.md).
+Development on `main` is `0.1.2.dev0`: release-truth and evidence closure
+first (live B0 scenarios, SO-01 permission-hook rows, end-to-end latency row
+13B), then the external-alpha tracks. See
+[Known limitations](known-limitations.md).

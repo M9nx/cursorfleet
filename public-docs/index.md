@@ -18,9 +18,10 @@ Cursor. "Cursor" is a trademark of its respective owner. The name
 
 ## Status
 
-**Pre-alpha.** [v0.1.0](https://github.com/M9nx/cursorfleet/releases/tag/v0.1.0) is on
-[PyPI](https://pypi.org/project/cursorfleet/) and
-[GitHub Releases](https://github.com/M9nx/cursorfleet/releases). See
+**Pre-alpha.** [0.1.0](https://pypi.org/project/cursorfleet/0.1.0/) and
+[0.1.1](https://pypi.org/project/cursorfleet/0.1.1/) are on
+[PyPI](https://pypi.org/project/cursorfleet/); GitHub tags `v0.1.0` and `v0.1.1`
+(no non-draft GitHub Releases page yet). See
 [Installation](getting-started/installation.md) (`pipx` / `uv tool install cursorfleet`).
 
 - v0.1 is **Observe** only: no enforcement, no forced approvals, and no
@@ -43,7 +44,7 @@ Cursor. "Cursor" is a trademark of its respective owner. The name
 
 ## Get started
 
-1. [Install from a checkout](getting-started/installation.md)
+1. [Install](getting-started/installation.md) (PyPI recommended)
 2. [Quickstart](getting-started/quickstart.md) — `init`, `doctor`, `status`
 3. [CLI](cli/init.md), [privacy](privacy-and-security.md), and
    [known limitations](known-limitations.md)

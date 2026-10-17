@@ -42,8 +42,9 @@ subagent files, rules and skills, an `AGENTS.md` block, and `.cursorfleet/`
 configuration. Hooks record sanitized metadata only. Details:
 [`cursorfleet init`](../cli/init.md).
 
-The installed hook set in the current checkout is twelve; the accepted
-decision is nine. That change is not applied yet.
+The installed hook set is twelve observe-only hooks: the narrower nine-hook plan plus
+`beforeShellExecution`, `afterShellExecution` and `afterFileEdit` for the observe set
+([ADR 0007 amendment, 2026-10-12](https://github.com/M9nx/cursorfleet/blob/main/docs/adr/0007-narrower-v01-hook-policy.md)).
 
 Commit the generated `.cursor/` and `.cursorfleet/` files if you want them in
 worktrees that check out your branch.

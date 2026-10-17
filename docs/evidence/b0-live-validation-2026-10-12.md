@@ -1,7 +1,10 @@
 # B0 live validation (maintainer)
 
-Status: **checklist for owner** — fill during Linux Cursor IDE session before **PyPI publish**
-(`RELEASE_ENABLED`). Tag `v0.1.0` is already on GitHub; scenarios 1, 2, and 5 gate product claims.
+Status: **checklist for owner** — fill during a Linux Cursor IDE session as part of the
+v0.1.2 live-evidence closure (V012-02; sequencing in [run-kit-v012-02.md](run-kit-v012-02.md)).
+The filename date is the checklist's creation date. Scenarios 1, 2, and 5 gate
+supported-surface claims. Since v0.1.1, attaching accepts a suggested session from the
+Active run screen with Enter.
 
 | Field | Value |
 | --- | --- |

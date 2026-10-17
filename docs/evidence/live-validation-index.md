@@ -1,6 +1,6 @@
 # Live validation evidence index
 
-Last updated: 2026-10-05. Self-review by the maintainer; not an independent audit.
+Last updated: 2026-10-17 (truth sync; verdicts unchanged). Self-review by the maintainer; not an independent audit.
 Raw Cursor captures are **not** committed to this repository.
 
 ## What this index covers
@@ -32,24 +32,25 @@ Two different validation tracks must not be conflated:
 
 | Check | Evidence |
 | --- | --- |
-| GitHub Actions CI | Green on `main` (lint, format, mypy, cross-platform tests) as of 2026-10-04 |
+| GitHub Actions CI | Green on `main` (lint, format, mypy, cross-platform tests, wheel smoke) through the v0.1.1 tag (2026-10-13); re-verify at the v0.1.2 candidate |
 | GitHub Pages | Public docs site deployed ([README](../README.md) badge) |
+| PyPI / tags | **0.1.0 and 0.1.1 published** (2026-10-12 UTC); tags `v0.1.0`, `v0.1.1`; no non-draft GitHub Releases page yet |
 
 ## Still OPEN or unverified
 
 - **Q1 / Q2** ([ADR 0001](../adr/0001-cursor-capabilities.md)): identity on tool hooks; custom `subagent_type` naming
 - **Parallel / background subagent classification**: BLOCKED/OPEN on Cursor 3.22.7 Linux ([`spike/README.md`](../../spike/README.md))
 - **End-to-end hook latency inside Cursor** (ADR 0001 section D row 13B): not measured
-- **Sanitized fixtures in repo**: pending A3 (`tests/fixtures/cursor/`)
-- **PyPI / tags / releases**: none
+- **Sanitized real-capture fixtures**: legacy spool fixture and doc-derived examples exist under `tests/fixtures/cursor/` (since 0.1.0); the full real-capture corpus per A3 is still pending
+- **Live B0 / SO-01 / 13B gates**: open; owner run kit [`run-kit-v012-02.md`](run-kit-v012-02.md)
 
 ## M2.5 charter (replaces M0 process freeze for product work)
 
 M2.5 targets a **task-centric local observer** useful for daily Cursor work. Allowed: contract convergence (A2/A3), association spike (B0), in-memory Active Run prototype (B1), then persistence (B2+) per [rev. 2 plan](https://github.com/M9nx/cursorfleet) (internal).
 
 **Shipped (M2.5 B2/D, provisional):** JSON run files, `cursorfleet run` CLI, Active run default TUI,
-`CURSORFLEET_ACTIVE_RUN` hook attach. **Still blocked/OPEN:** SQLite run tables (not planned for alpha.1),
-TUI attach picker, external alpha metrics.
+`CURSORFLEET_ACTIVE_RUN` hook attach, TUI attach picker (v0.1.1). **Still blocked/OPEN:** SQLite run tables
+(not planned for the 0.1.x line), external alpha metrics.
 
 Observe-only boundaries unchanged: passive hooks, read-only git, TUI read-only; future run metadata lives under `<git-common-dir>/cursorfleet/runs/` only (see product contract amendment).
 

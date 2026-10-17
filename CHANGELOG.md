@@ -8,7 +8,23 @@ CursorFleet is an unofficial tool: it is not affiliated with or endorsed by Anys
 
 ## [Unreleased]
 
-Development on `main` after v0.1.1. Planned: external alpha metrics, evidence closure.
+Development on `main` after v0.1.1 (`0.1.2.dev0`). Planned: external alpha metrics,
+evidence closure, and the artifact-contract decision.
+
+### Documentation (repo side, 2026-10-17)
+
+- Recorded the v0.1.2 release-preparation baseline (objective, gate matrix, required
+  order, issue sequence) in
+  [docs/evidence/v012-baseline.md](docs/evidence/v012-baseline.md).
+- Added the owner run kit for the live gates — B0 scenarios 1/2/5, SO-01 permission-hook
+  rows, and end-to-end latency row 13B
+  ([docs/evidence/run-kit-v012-02.md](docs/evidence/run-kit-v012-02.md)).
+- Truth convergence (no claim upgraded): status page; B0 result rows note the v0.1.1
+  attach picker, verdicts unchanged; evidence index, release-checklist header note,
+  quickstart install/release claims, Pages site index/known-limitations/changelog/TUI
+  status refreshed; ADR 0001 §C re-cites the committed 2026-10-04 latency re-run.
+  Local verification: ruff/format clean, strict `mypy` clean, pytest 1011 passed,
+  1 deselected (earlier record had a skip in another environment).
 
 ## [0.1.1] - 2026-10-13
 

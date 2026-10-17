@@ -1,5 +1,11 @@
 # Release checklist (owner steps)
 
+> **2026-10-17 status note:** the v0.1.0 pass completed — `v0.1.0` and `v0.1.1` are tagged
+> and published on PyPI, the release workflow has run (including the `pypi` gate), and
+> `RELEASE_ENABLED` was set. The body below is kept unedited as the v0.1.0 record. For
+> v0.1.2 planning, the [`evidence/v012-baseline.md`](evidence/v012-baseline.md) gate matrix
+> supersedes this checklist.
+
 Release preparation is done; **publishing is the owner's decision** and is blocked on facts that
 only a live Cursor can supply. Nothing in this repository has published, tagged or pushed
 anything, and `.github/workflows/release.yml` has never run.
